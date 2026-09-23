@@ -13,13 +13,17 @@ import type { StageCode } from '../process/stages.ts';
 import type { RequestSnapshot } from '../process/transitions.ts';
 import type { StageRecord } from '../process/engine.ts';
 import type { Actor } from '../server/rbac.ts';
+import { toIsoDate, toIsoTimestamp } from '../domain/dates.ts';
 
 /* ------------------------------ пользователи ------------------------------ */
+
+/** Результат поиска: учётная запись, «нет такой» либо «закреплена за другим субъектом». */
+export type ActorLookup = Actor | null | 'subject_mismatch';
 
 export async function findActorByIdentity(
   db: Db,
   identity: { userId: string; email: string; displayName: string },
-): Promise<Actor | null> {
+): Promise<ActorLookup> {
   const row = await db.one<{
     id: string; user_id: string | null; email: string; full_name: string;
     branch_id: string | null; counterparty_id: string | null; is_active: boolean; roles: Role[] | null;
@@ -36,7 +40,9 @@ export async function findActorByIdentity(
   if (!row) return null;
 
   // Учётная запись закрепляется за первым вошедшим субъектом OIDC; подмена отклоняется.
-  if (row.user_id && row.user_id !== identity.userId) return null;
+  // Возвращаем отдельный признак: «адрес не заведён» и «адрес закреплён за другой
+  // записью входа» — разные ситуации, и администратору нужно их различать.
+  if (row.user_id && row.user_id !== identity.userId) return 'subject_mismatch';
   if (!row.user_id) {
     await db.query('UPDATE users SET oidc_subject = $1 WHERE id = $2 AND oidc_subject IS NULL',
       [identity.userId, row.id]);
@@ -80,6 +86,74 @@ export async function bootstrapAdmin(db: Db, email: string, fullName: string): P
   });
 }
 
+export function listUsers(db: Db, query?: string) {
+  const like = query ? `%${query}%` : null;
+  return db.query(
+    `SELECT u.id, u.email, u.full_name, u.position, u.department, u.is_active,
+            u.branch_id, b.name AS branch_name, u.counterparty_id, cp.name_full AS counterparty_name,
+            array_remove(array_agg(r.role), NULL) AS roles
+       FROM users u
+       LEFT JOIN user_roles r ON r.user_id = u.id
+       LEFT JOIN branches b ON b.id = u.branch_id
+       LEFT JOIN counterparties cp ON cp.id = u.counterparty_id
+      WHERE $1::text IS NULL OR u.email ILIKE $1 OR u.full_name ILIKE $1
+      GROUP BY u.id, b.name, cp.name_full
+      ORDER BY u.full_name`, [like]);
+}
+
+export type UserInput = {
+  email: string; fullName: string; position: string; department: string;
+  branchId: string | null; counterpartyId: string | null; isActive: boolean; roles: Role[];
+};
+
+/** Создание либо обновление учётной записи вместе с набором ролей. */
+export async function upsertUser(db: Db, input: UserInput): Promise<{ id: string; email: string; roles: Role[] }> {
+  return db.tx(async (t) => {
+    const row = await t.one<{ id: string }>(
+      `INSERT INTO users (email, full_name, position, department, branch_id, counterparty_id, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (email) DO UPDATE SET
+         full_name = excluded.full_name, position = excluded.position,
+         department = excluded.department, branch_id = excluded.branch_id,
+         counterparty_id = excluded.counterparty_id, is_active = excluded.is_active
+       RETURNING id`,
+      [input.email, input.fullName, input.position, input.department,
+       input.branchId, input.counterpartyId, input.isActive]);
+
+    await t.query('DELETE FROM user_roles WHERE user_id = $1', [row!.id]);
+    for (const role of input.roles) {
+      await t.query('INSERT INTO user_roles (user_id, role) VALUES ($1,$2)', [row!.id, role]);
+    }
+    return { id: row!.id, email: input.email, roles: input.roles };
+  });
+}
+
+export async function setUserActive(db: Db, id: string, active: boolean): Promise<boolean> {
+  const rows = await db.query('UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id', [id, active]);
+  return rows.length > 0;
+}
+
+export function searchEvents(
+  db: Db, filter: { entity?: string; actorId?: string; result?: string; limit?: number },
+) {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  const add = (clause: string, value: unknown) => {
+    params.push(value);
+    where.push(clause.replace('?', `$${params.length}`));
+  };
+  if (filter.entity) add('e.entity = ?', filter.entity);
+  if (filter.actorId) add('e.actor_id = ?', filter.actorId);
+  if (filter.result) add('e.result = ?', filter.result);
+  return db.query(
+    `SELECT e.occurred_at, e.actor_name, e.ip_address, e.action, e.entity, e.entity_id,
+            e.detail, e.result, e.regulation_ref
+       FROM events e
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY e.occurred_at DESC
+      LIMIT ${Math.min(filter.limit ?? 200, 1000)}`, params as never);
+}
+
 /* -------------------------------- справочники ------------------------------ */
 
 export type FacilityRow = {
@@ -117,10 +191,10 @@ export function listTariffs(db: Db, on: string) {
 
 export async function calendar(db: Db): Promise<{ holidays: string[]; workingDays: string[] }> {
   const rows = await db.query<{ day: Date; kind: string }>('SELECT day, kind FROM calendar_days');
-  const iso = (d: Date | string) => (typeof d === 'string' ? d : d.toISOString()).slice(0, 10);
+  // Через toISOString() праздничные дни сдвинулись бы на сутки назад: см. src/domain/dates.ts.
   return {
-    holidays: rows.filter((r) => r.kind === 'holiday').map((r) => iso(r.day)),
-    workingDays: rows.filter((r) => r.kind === 'working').map((r) => iso(r.day)),
+    holidays: rows.filter((r) => r.kind === 'holiday').map((r) => toIsoDate(r.day)!),
+    workingDays: rows.filter((r) => r.kind === 'working').map((r) => toIsoDate(r.day)!),
   };
 }
 
@@ -161,8 +235,8 @@ const SELECT_REQUEST = `
     JOIN facilities f ON f.id = r.facility_id
     JOIN branches b ON b.id = r.branch_id`;
 
-const iso = (v: unknown): string | null =>
-  v == null ? null : (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+/** Даты приводим через общий помощник: см. src/domain/dates.ts о сдвиге пояса. */
+const iso = toIsoDate;
 
 function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
   return {
@@ -183,7 +257,7 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     orderNumber: row.order_number,
     transferActApprovedDate: iso(row.transfer_act_date),
     avrApproved: row.avr_approved,
-    avrSentAt: row.avr_sent_at ? new Date(row.avr_sent_at).toISOString() : null,
+    avrSentAt: toIsoTimestamp(row.avr_sent_at),
     closingConfirmed: row.closing_confirmed,
     resultDelivered: row.result_delivered,
     openRemarks: Number(row.open_remarks ?? 0),
@@ -194,8 +268,8 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     branchId: row.branch_id,
     branchName: row.branch_name,
     totalAmount: row.total_amount === null ? null : Number(row.total_amount),
-    createdAt: new Date(row.created_at).toISOString(),
-    registeredAt: row.registered_at ? new Date(row.registered_at).toISOString() : null,
+    createdAt: toIsoTimestamp(row.created_at)!,
+    registeredAt: toIsoTimestamp(row.registered_at),
     version: row.version,
   };
 }
@@ -266,14 +340,18 @@ export type NewRequest = {
 export async function createRequest(db: Db, data: NewRequest, stage: StageRecord): Promise<RequestRow> {
   return db.tx(async (t) => {
     const number = await nextNumber(t, new Date().getFullYear());
+    // Дата регистрации вычисляется в коде: повторное использование одного
+    // параметра и как значения колонки, и в сравнении не даёт PostgreSQL
+    // вывести его тип («inconsistent types deduced for parameter»).
+    const isDraft = data.stageCode === 'draft';
     const created = await t.one<{ id: string }>(
       `INSERT INTO requests (number, counterparty_id, facility_id, branch_id, created_by,
                              stage_code, customer_status, free_of_charge, total_amount, registered_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $6 = 'draft' THEN NULL ELSE now() END)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
       [number, data.counterpartyId, data.facilityId, data.branchId, data.createdBy,
-       data.stageCode, data.stageCode === 'draft' ? 'draft' : 'registered',
-       data.freeOfCharge, data.totalAmount],
+       data.stageCode, isDraft ? 'draft' : 'registered',
+       data.freeOfCharge, data.totalAmount, isDraft ? null : new Date().toISOString()],
     );
     const id = created!.id;
 
@@ -312,7 +390,7 @@ export async function currentStageRecord(db: Db, requestId: string): Promise<Sta
   return {
     requestId: 0,
     stageCode: row.stage_code,
-    enteredAt: new Date(row.entered_at).toISOString().slice(0, 10),
+    enteredAt: iso(row.entered_at)!,
     leftAt: null,
     dueAt: iso(row.due_at),
     slaValue: row.sla_value,

@@ -53,11 +53,11 @@ const TARIFFS: [string, string, string, number, string][] = [
   ['ПСД', 'Сметная документация к РП', 'комплект', 210000, 'Прейскурант, п. 4.3'],
 ];
 
-const COUNTERPARTIES: [string, string][] = [
-  ['501400004114', 'ТОО «Спектр Телеком»'],
-  ['501400005251', 'АО «Транстелеком-Демо»'],
-  ['501400006398', 'ТОО «Алатау Медиа»'],
-  ['501400007435', 'ТОО «Каспий Сигнал»'],
+const COUNTERPARTIES: [string, string, string][] = [
+  ['501400004114', 'ТОО «Спектр Телеком»', 'info@spektr.kz'],
+  ['501400005251', 'АО «Транстелеком-Демо»', 'info@transtelecom.demo'],
+  ['501400006398', 'ТОО «Алатау Медиа»', 'info@alatau.demo'],
+  ['501400007435', 'ТОО «Каспий Сигнал»', 'info@kaspiy.demo'],
 ];
 
 try {
@@ -103,18 +103,27 @@ try {
       }
     }
 
-    for (const [bin, name] of COUNTERPARTIES) {
+    for (const [bin, name, email] of COUNTERPARTIES) {
       await t.query(
-        `INSERT INTO counterparties (bin, name_full, name_short, status)
-         VALUES ($1,$2,$2,'active')
-         ON CONFLICT (bin) DO UPDATE SET name_full = excluded.name_full`,
-        [bin, name]);
+        `INSERT INTO counterparties (bin, name_full, name_short, status, email)
+         VALUES ($1,$2,$2,'active',$3)
+         ON CONFLICT (bin) DO UPDATE SET name_full = excluded.name_full, email = excluded.email`,
+        [bin, name, email]);
     }
 
-    await t.query(
-      `INSERT INTO registry_versions (version, published_by, note)
-       SELECT to_char(now(), 'YYYY-MM-DD'), (SELECT id FROM users LIMIT 1), 'Демонстрационное наполнение'
-       WHERE NOT EXISTS (SELECT 1 FROM registry_versions)`);
+    // Версия реестра создаётся только при наличии пользователя: Регламент п. 13
+    // требует фиксировать автора изменения, поэтому поле обязательно. На пустой
+    // базе версию публикует техучёт после первого входа.
+    const author = await t.one<{ id: string }>('SELECT id FROM users ORDER BY created_at LIMIT 1');
+    if (author) {
+      await t.query(
+        `INSERT INTO registry_versions (version, published_by, note)
+         SELECT to_char(now(), 'YYYY-MM-DD'), $1, 'Демонстрационное наполнение'
+         WHERE NOT EXISTS (SELECT 1 FROM registry_versions)`, [author.id]);
+    } else {
+      console.log('Версия реестра не создана: в базе нет пользователей. ' +
+        'Опубликует СП ЦА, ответственное за технический учёт активов, после первого входа (п. 13).');
+    }
   });
 
   console.log(`Справочники заполнены: филиалов ${BRANCHES.length}, объектов ${FACILITIES.length}, ` +

@@ -46,18 +46,22 @@ const MATRIX: Record<Role, Permission[]> = {
     'request.remark', 'request.tv', 'documents.view', 'documents.upload', 'documents.approve',
     'registry.view', 'registry.edit', 'metrics.view', 'admin',
   ],
-  records: ['request.view', 'request.register', 'request.edit', 'registry.view'],
+  // Право на переход даётся ролям, которые названы хотя бы в одном переходе
+  // (см. TRANSITIONS). Какие именно переходы доступны, решает проверка ролей
+  // на самом переходе: документооборот направляет заявку в ОР ПСД и филиал
+  // (п. 6), филиал ведёт СМР (пп. 59, 66), бухгалтерия — АВР и ЭСФ (пп. 91–95).
+  records: ['request.view', 'request.register', 'request.edit', 'request.transition', 'registry.view'],
   orpsd: [
     'request.view', 'request.create', 'request.edit', 'request.transition', 'request.remark',
     'request.tv', 'documents.view', 'documents.upload', 'documents.approve', 'registry.view',
     'metrics.view',
   ],
-  branch: ['request.view', 'documents.view', 'documents.upload', 'registry.view'],
+  branch: ['request.view', 'request.transition', 'documents.view', 'documents.upload', 'registry.view'],
   oko: ['request.view', 'metrics.view'],
   assets: ['documents.view', 'registry.view', 'registry.edit'],
   accounting: ['request.view', 'request.transition', 'documents.view', 'metrics.view'],
   management: ['request.view', 'documents.view', 'registry.view', 'metrics.view'],
-  customer: ['request.view', 'request.create', 'request.edit'],
+  customer: ['request.view', 'request.create', 'request.edit', 'request.transition'],
 };
 
 export function permissionsOf(roles: Role[]): Set<Permission> {

@@ -16,9 +16,13 @@
     "seed:sql": "node --experimental-strip-types seed/emit-config.ts > src/db/002_config.sql",
     "design:config": "node --experimental-strip-types seed/emit-ui-config.ts > design/config.js",
     "design:assets": "node design/emit-assets.mjs > design/assets.js",
-    "design": "npm run design:config && npm run design:assets && node design/build.mjs"
+    "design": "npm run design:config && npm run design:assets && node design/build.mjs",
+    "jobs": "node --experimental-strip-types src/process/jobs-cli.ts",
+    "test:integration": "node --experimental-strip-types --test tests/integration.test.ts",
+    "test:all": "npm test && npm run test:integration"
   },
   "dependencies": {
+    "nodemailer": "^6.10.1",
     "pg": "^8.23.0"
   }
 }

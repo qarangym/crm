@@ -18,6 +18,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY design ./design
 
+# Каталог файлов актов: в рабочем составе монтируется томом.
+RUN mkdir -p /data/storage && chown -R node:node /data
+
 # Приложение работает от непривилегированного пользователя.
 USER node
 

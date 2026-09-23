@@ -7,8 +7,13 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type { Db } from '../db/client.ts';
 import * as repo from '../db/repo.ts';
+import * as docs from '../db/documents.ts';
+import { parseMultipart } from './multipart.ts';
+import { FileStore, actFingerprint } from '../storage/files.ts';
+import { enqueue } from './notifications.ts';
 import { ApiError } from './errors.ts';
 import type { AuthConfig, Identity } from './auth.ts';
 import { checkOrigin, requireIdentity } from './auth.ts';
@@ -16,6 +21,7 @@ import type { Actor } from './rbac.ts';
 import * as rbac from './rbac.ts';
 import type { Ctx } from './http.ts';
 import { Router, clientIp, readJson, sendError, sendJson, sendStatic } from './http.ts';
+import { RateLimiter } from './ratelimit.ts';
 
 import { STAGES, stage } from '../process/stages.ts';
 import { TRANSITIONS } from '../process/transitions.ts';
@@ -26,34 +32,49 @@ import { boardColumns, breakdownByParty, bottlenecks, stageMetrics } from '../pr
 import { validateRequest } from '../domain/validation.ts';
 import { estimate } from '../domain/pricing.ts';
 import { today } from '../domain/calendar.ts';
-import { CUSTOMER_STATUS_NAME, OWNER_PARTY_NAME, SERVICE_NAME } from '../domain/types.ts';
-import type { Service, Tariff } from '../domain/types.ts';
+import { toIsoDate } from '../domain/dates.ts';
+import { CUSTOMER_STATUS_NAME, OWNER_PARTY_NAME, ROLE_NAME, SERVICE_NAME } from '../domain/types.ts';
+import type { Role, Service, Tariff } from '../domain/types.ts';
+
+/**
+ * Признак того, что обработчик сам записал ответ (отдача файла потоком).
+ * Возврат обычного значения привёл бы к повторной отправке заголовков.
+ */
+export const RAW_RESPONSE = Symbol('raw-response');
 
 export type AppOptions = {
   db: Db;
   auth: AuthConfig;
+  /** Хранилище файлов актов. Без него методы архива отвечают 503. */
+  store?: FileStore;
   appOrigin?: string;
   /** Каталог со статикой интерфейса. */
   staticRoot?: string;
   trustProxy?: boolean;
   bootstrapAdminEmail?: string;
+  /** Ограничение частоты запросов на один адрес. */
+  rateLimit?: { windowMs?: number; max?: number };
 };
 
 export function createApp(options: AppOptions) {
-  const { db, auth } = options;
+  const { db, auth, store } = options;
   const router = new Router();
 
   /* --------------------------- вспомогательное --------------------------- */
 
   async function actorOf(identity: Identity): Promise<Actor> {
     let actor = await repo.findActorByIdentity(db, identity);
-    if (!actor && options.bootstrapAdminEmail &&
+    if (actor === null && options.bootstrapAdminEmail &&
         identity.email === options.bootstrapAdminEmail.toLowerCase()) {
       // Первичная настройка: первый вход указанного адреса создаёт администратора,
       // если администраторов ещё нет. Дальше роли назначает ДИТ вручную.
       if (await repo.bootstrapAdmin(db, identity.email, identity.displayName)) {
         actor = await repo.findActorByIdentity(db, identity);
       }
+    }
+    if (actor === 'subject_mismatch') {
+      throw ApiError.forbidden(
+        'Этот адрес закреплён за другой учётной записью входа. Обратитесь в ДИТ для сверки.');
     }
     if (!actor) {
       throw ApiError.forbidden(
@@ -240,7 +261,63 @@ export function createApp(options: AppOptions) {
       detail: `${created.number} · ${services.map((s) => s.service).join(', ')}`,
       regulationRef: 'п. 6',
     });
+
+    if (!draft) {
+      // ТЗ №9: Заказчик получает подтверждение с регистрационным номером.
+      const contact = String((body.applicant as Record<string, unknown> | undefined)?.email ?? '');
+      await enqueue(db, {
+        eventKey: 'request_submitted',
+        recipient: contact,
+        subject: `Заявка ${created.number} принята`,
+        body: [
+          'Ваша заявка принята и передана на регистрацию.',
+          '',
+          `Номер: ${created.number}`,
+          `Объект: ${created.facilityName}`,
+          `Услуги: ${services.map((s) => s.service).join(', ')}`,
+          '',
+          'Ответ о технической возможности направляется в срок не более 5 рабочих дней',
+          'с даты регистрации (пункт 9 Регламента ОРПСД-Р-01).',
+        ].join('\n'),
+      });
+    }
     return { request: created, estimate: priced };
+  });
+
+  /**
+   * Регистрация заявки делопроизводством: входящий номер и дата (п. 6).
+   * Без этих реквизитов заявка не уходит на оценку технической возможности —
+   * порядок регистрации Регламентом закреплён за СП ЦА, ответственным за
+   * документооборот, и система его не подменяет.
+   */
+  router.post('/api/v1/requests/:id/registration', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'request.register');
+
+    const body = await ctx.body<{ incomingNumber?: string; incomingDate?: string; version?: number }>();
+    const number = String(body.incomingNumber ?? '').trim();
+    const date = String(body.incomingDate ?? '').trim();
+    const fields: Record<string, string> = {};
+    if (!number) fields.incomingNumber = 'Укажите входящий регистрационный номер';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) fields.incomingDate = 'Укажите дату регистрации в формате ГГГГ-ММ-ДД';
+    else if (date > today()) fields.incomingDate = 'Дата регистрации не может быть в будущем';
+    if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте реквизиты регистрации', fields);
+
+    const request = await loadVisible(actor, ctx.params.id);
+    const ok = await repo.updateStage(
+      db, request.uuid, request.stageCode, customerStatus(request),
+      body.version ?? request.version,
+      { incoming_number: number.slice(0, 64), incoming_date: date },
+    );
+    if (!ok) throw ApiError.conflict('Карточка изменилась. Обновите заявку и повторите');
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Заявка зарегистрирована делопроизводством',
+      entity: 'request', entityId: request.uuid,
+      detail: `вх. ${number} от ${date}`, regulationRef: 'п. 6',
+    });
+    return { request: await repo.getRequest(db, request.uuid) };
   });
 
   /** Переход по этапам. Единственный способ сменить этап заявки. */
@@ -372,8 +449,330 @@ export function createApp(options: AppOptions) {
         entity: 'request', entityId: request.uuid,
         detail: remarks.map((r) => `${r.field}: ${r.text}`).join('; '), regulationRef: 'ТЗ №11',
       });
+      const customer = await t.one<{ email: string }>(
+        'SELECT email FROM counterparties WHERE id = $1', [request.counterpartyId]);
+      await enqueue(t, {
+        eventKey: 'request_returned',
+        recipient: customer?.email ?? '',
+        subject: `Заявка ${request.number}: требуются уточнения`,
+        body: [
+          `По заявке ${request.number} необходимо внести исправления:`,
+          '',
+          ...remarks.map((r, i) => `${i + 1}. ${r.field} — ${r.text}`),
+          '',
+          'Исправьте указанные поля и отправьте заявку повторно.',
+          'Новая заявка не создаётся, номер и история сохраняются.',
+        ].join('\n'),
+      });
     });
     return { request: await repo.getRequest(db, request.uuid), remarks: await repo.listRemarks(db, request.uuid) };
+  });
+
+  /* --------------------------- пользователи и роли ------------------------ */
+
+  /**
+   * Управление учётными записями. Роли назначает только ДИТ: Регламент
+   * закрепляет действия за подразделениями, поэтому самопроизвольной выдачи
+   * прав быть не должно. Каждое изменение пишется в журнал.
+   */
+  router.get('/api/v1/users', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'admin');
+    return { users: await repo.listUsers(db, ctx.query.get('q') ?? undefined) };
+  });
+
+  router.post('/api/v1/users', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'admin');
+
+    const body = await ctx.body<{
+      email?: string; fullName?: string; position?: string; department?: string;
+      branchId?: string | null; counterpartyId?: string | null; roles?: Role[]; isActive?: boolean;
+    }>();
+
+    const email = String(body.email ?? '').trim().toLowerCase();
+    const fullName = String(body.fullName ?? '').trim();
+    const roles = (body.roles ?? []).filter((r) => r in ROLE_NAME) as Role[];
+    const fields: Record<string, string> = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = 'Укажите корректный адрес почты';
+    if (fullName.length < 3) fields.fullName = 'Укажите фамилию и инициалы';
+    if (!roles.length) fields.roles = 'Назначьте хотя бы одну роль';
+    if (roles.includes('branch') && !body.branchId) fields.branchId = 'Для роли «Филиал» укажите филиал';
+    if (roles.includes('customer') && !body.counterpartyId) {
+      fields.counterpartyId = 'Для роли «Заказчик» укажите организацию';
+    }
+    if (email === actor.email && !roles.includes('admin')) {
+      // Иначе администратор может случайно лишить себя прав и закрыть вход всем.
+      fields.roles = 'Нельзя снять с себя роль администратора';
+    }
+    if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте данные сотрудника', fields);
+
+    const saved = await repo.upsertUser(db, {
+      email, fullName,
+      position: String(body.position ?? '').slice(0, 255),
+      department: String(body.department ?? '').slice(0, 128),
+      branchId: body.branchId ?? null,
+      counterpartyId: body.counterpartyId ?? null,
+      isActive: body.isActive !== false,
+      roles,
+    });
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Назначены права пользователю', entity: 'user',
+      entityId: saved.id, detail: `${email}: ${roles.map((r) => ROLE_NAME[r]).join(', ')}`,
+    });
+    return { user: saved };
+  });
+
+  router.post('/api/v1/users/:id/disable', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'admin');
+    if (ctx.params.id === actor.id) throw ApiError.badRequest('Нельзя отключить собственную учётную запись');
+
+    const ok = await repo.setUserActive(db, ctx.params.id, false);
+    if (!ok) throw ApiError.notFound('Пользователь не найден');
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Учётная запись отключена', entity: 'user',
+      entityId: ctx.params.id, detail: '',
+    });
+    return { ok: true };
+  });
+
+  /** Журнал действий: доступен ОКО и ДИТ (ТЗ №12). */
+  router.get('/api/v1/audit', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    if (!actor.roles.includes('admin') && !actor.roles.includes('oko')) throw ApiError.forbidden();
+    return {
+      events: await repo.searchEvents(db, {
+        entity: ctx.query.get('entity') ?? undefined,
+        actorId: ctx.query.get('actor') ?? undefined,
+        result: ctx.query.get('result') ?? undefined,
+        limit: Number(ctx.query.get('limit') ?? 200),
+      }),
+    };
+  });
+
+  /* ------------------------------ архив актов ----------------------------- */
+
+  /** Поиск по архиву: все критерии комбинируются (требование архива №4). */
+  router.get('/api/v1/documents', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'documents.view');
+    const q = ctx.query;
+    const rows = await docs.searchDocuments(db, {
+      kind: q.get('kind') || undefined,
+      facility: q.get('facility') || undefined,
+      owner: q.get('owner') || undefined,
+      contractor: q.get('contractor') || undefined,
+      dateFrom: q.get('dateFrom') || undefined,
+      dateTo: q.get('dateTo') || undefined,
+      requestId: q.get('requestId') || undefined,
+      // Филиал видит только свои документы; остальным ролям архив открыт целиком.
+      branchId: onlyBranch(actor) ? (actor.branchId ?? '00000000-0000-0000-0000-000000000000') : undefined,
+      limit: Number(q.get('limit') ?? 50),
+      offset: Number(q.get('offset') ?? 0),
+    });
+    return { documents: rows };
+  });
+
+  router.get('/api/v1/documents/:id', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const document = await loadDocument(actor, ctx.params.id);
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Просмотр карточки документа', entity: 'document',
+      entityId: document.id, detail: document.number,
+    });
+    return { document, versions: await docs.listVersions(db, document.id) };
+  });
+
+  function onlyBranch(actor: Actor): boolean {
+    return actor.roles.includes('branch') &&
+      !actor.roles.some((r) => ['admin', 'orpsd', 'assets', 'accounting', 'management'].includes(r));
+  }
+
+  async function loadDocument(actor: Actor, id: string) {
+    rbac.require(actor, 'documents.view');
+    const document = await docs.getDocument(db, id);
+    if (!document) throw ApiError.notFound('Документ не найден');
+    if (onlyBranch(actor) && document.branch_id !== actor.branchId) {
+      throw ApiError.forbidden('Документ другого филиала');
+    }
+    return document;
+  }
+
+  /**
+   * Загрузка акта: карточка с реквизитами и файл.
+   * Проверяется тип и сигнатура файла, дубликат по ключевым реквизитам
+   * (требование архива №11) и принадлежность филиалу.
+   */
+  router.post('/api/v1/documents', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'documents.upload');
+    if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
+
+    const form = await parseMultipart(ctx.req);
+    const file = form.files[0];
+    if (!file) throw ApiError.badRequest('Выберите файл');
+
+    const meta = form.fields;
+    const kind = String(meta.kind ?? '').trim();
+    const allowedKinds = ['Акт приема-передачи', 'АВР', 'ТУ', 'ПСД (РП)', 'Договор', 'Распоряжение', 'КП', 'Приложение'];
+    if (!allowedKinds.includes(kind)) throw ApiError.badRequest('Укажите вид документа', { kind: 'Недопустимый вид' });
+
+    // ОР ПСД загружает в архив окончательную версию АВР после подписания Заказчиком.
+    if (actor.roles.includes('orpsd') && !actor.roles.includes('admin') &&
+        !['АВР', 'Приложение'].includes(kind)) {
+      throw ApiError.forbidden('ОР ПСД загружает окончательную версию АВР; акты приёма-передачи загружает филиал');
+    }
+
+    const fields: Record<string, string> = {};
+    const required = kind === 'Приложение' ? ['number', 'docDate'] : ['number', 'docDate', 'facilityId', 'ownerId', 'contractor'];
+    for (const key of required) if (!String(meta[key] ?? '').trim()) fields[key] = 'Заполните реквизит';
+    const docDate = String(meta.docDate ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(docDate)) fields.docDate = 'Дата в формате ГГГГ-ММ-ДД';
+    else if (docDate > today()) fields.docDate = 'Дата акта не может быть в будущем';
+    if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте реквизиты документа', fields);
+
+    const facilityId = String(meta.facilityId ?? '') || null;
+    const facility = facilityId ? (await repo.listFacilities(db)).find((f) => f.id === facilityId) : null;
+    if (facilityId && !facility) throw ApiError.badRequest('Объект не найден', { facilityId: 'Выберите объект' });
+    if (onlyBranch(actor) && facility && facility.branch_id !== actor.branchId) {
+      throw ApiError.forbidden('Можно загружать документы только своего филиала');
+    }
+
+    const fingerprint = kind === 'Приложение' ? null : actFingerprint({
+      kind, number: String(meta.number), facilityId: facilityId ?? '',
+      ownerId: String(meta.ownerId ?? ''), contractor: String(meta.contractor ?? ''), docDate,
+    });
+    if (fingerprint) {
+      const duplicate = await docs.findByFingerprint(db, fingerprint);
+      if (duplicate) {
+        throw ApiError.conflict(
+          `Акт с такими реквизитами уже зарегистрирован: ${duplicate.number} от ${String(duplicate.doc_date).slice(0, 10)}`);
+      }
+    }
+
+    const stored = await store.put(randomUUID(), file.filename, file.data);
+    let documentId: string;
+    try {
+      documentId = await docs.createDocument(db, {
+        requestId: String(meta.requestId ?? '') || null,
+        kind, formCode: String(meta.formCode ?? '') || '2В',
+        number: String(meta.number).trim(),
+        facilityId, ownerId: String(meta.ownerId ?? '') || null,
+        contractorName: String(meta.contractor ?? '').trim(),
+        branchId: facility?.branch_id ?? actor.branchId,
+        docDate, validUntil: String(meta.validUntil ?? '') || null,
+        fingerprint, createdBy: actor.id,
+      }, stored);
+    } catch (error) {
+      // Запись в базу не удалась — файл в хранилище не оставляем.
+      await store.remove(stored.key).catch(() => {});
+      throw error;
+    }
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Загружен документ', entity: 'document', entityId: documentId,
+      detail: `${kind} ${meta.number} · файл ${stored.fileName} · ${stored.sha256.slice(0, 12)}`,
+      regulationRef: kind === 'Акт приема-передачи' ? 'п. 58' : kind === 'АВР' ? 'пп. 66, 70' : null,
+    });
+    return { document: await docs.getDocument(db, documentId) };
+  });
+
+  /** Замена файла: новая версия, визирование снимается. */
+  router.post('/api/v1/documents/:id/versions', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'documents.upload');
+    if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
+
+    const document = await loadDocument(actor, ctx.params.id);
+    if (document.approved && !actor.roles.includes('admin')) {
+      throw ApiError.forbidden('Завизированный документ защищён от изменения; замена доступна ДИТ');
+    }
+    const form = await parseMultipart(ctx.req);
+    const file = form.files[0];
+    if (!file) throw ApiError.badRequest('Выберите файл');
+
+    const stored = await store.put(document.id, file.filename, file.data);
+    const version = await docs.replaceFile(db, document.id, document.current_version, stored, actor.id);
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Загружена новая версия документа', entity: 'document',
+      entityId: document.id, detail: `${stored.fileName} · версия ${version}`,
+    });
+    return { document: await docs.getDocument(db, document.id), version };
+  });
+
+  /** Визирование карточки. После него правка и удаление закрыты. */
+  router.post('/api/v1/documents/:id/approve', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'documents.approve');
+    const document = await loadDocument(actor, ctx.params.id);
+    if (document.kind === 'Приложение') throw ApiError.badRequest('Приложение к заявке не визируется');
+
+    const ok = await docs.approveDocument(db, document.id, actor.id);
+    if (!ok) throw ApiError.conflict('Документ уже завизирован');
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Документ завизирован', entity: 'document',
+      entityId: document.id, detail: `${document.kind} ${document.number}`,
+      regulationRef: 'пп. 58, 66',
+    });
+    return { document: await docs.getDocument(db, document.id) };
+  });
+
+  /** Удаление карточки — только до визирования (требование ТЗ по архиву). */
+  router.post('/api/v1/documents/:id/delete', async (ctx) => {
+    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'documents.upload');
+    const document = await loadDocument(actor, ctx.params.id);
+    if (document.approved) throw ApiError.forbidden('Завизированный документ удалить нельзя');
+
+    const keys = await docs.deleteDocument(db, document.id);
+    if (!keys.length) throw ApiError.conflict('Документ уже завизирован или удалён');
+    if (store) for (const key of keys) await store.remove(key).catch(() => {});
+
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: 'Удалена невизированная карточка документа', entity: 'document',
+      entityId: document.id, detail: `${document.kind} ${document.number}`,
+    });
+    return { ok: true };
+  });
+
+  /** Скачивание файла. Каждое обращение фиксируется в журнале с именем файла. */
+  router.get('/api/v1/documents/:id/file', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
+    const document = await loadDocument(actor, ctx.params.id);
+    const version = Number(ctx.query.get('version')) || document.current_version;
+    const row = await docs.getVersion(db, document.id, version);
+    if (!row) throw ApiError.notFound('Версия файла не найдена');
+
+    const preview = ctx.query.get('preview') === '1';
+    await repo.logEvent(db, {
+      ...auditOf(ctx, actor), action: preview ? 'Просмотр файла' : 'Скачивание файла',
+      entity: 'document', entityId: document.id,
+      detail: `${row.file_name} · версия ${version}`,
+    });
+
+    const { stream, size } = await store.read(row.storage_key);
+    const inline = preview && ['application/pdf', 'image/png', 'image/jpeg'].includes(row.mime);
+    ctx.res.writeHead(200, {
+      'Content-Type': row.mime,
+      'Content-Length': size,
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(row.file_name)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+    });
+    stream.pipe(ctx.res);
+    return RAW_RESPONSE;
   });
 
   /** Доска: колонки-этапы со счётчиками и карточками. */
@@ -413,7 +812,7 @@ export function createApp(options: AppOptions) {
   });
 
   function toStageRecord(row: Record<string, any>) {
-    const iso = (v: unknown) => (v == null ? null : (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10));
+    const iso = toIsoDate;
     return {
       requestId: 0,
       stageCode: row.stage_code as StageCode,
@@ -432,17 +831,35 @@ export function createApp(options: AppOptions) {
 
   /* ------------------------------ обработчик ----------------------------- */
 
+  // Ограничение частоты: защищает пул соединений от зациклившегося клиента.
+  const limiter = new RateLimiter({
+    windowMs: Number(options.rateLimit?.windowMs ?? 60_000),
+    max: Number(options.rateLimit?.max ?? 300),
+  });
+
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     try {
       const route = router.match(req.method ?? 'GET', url.pathname);
       if (route) {
+        const ip = clientIp(req, options.trustProxy ?? false);
+        // Проверка доступности не ограничивается: её опрашивает мониторинг.
+        if (url.pathname !== '/api/v1/health') {
+          const verdict = limiter.check(ip ?? 'unknown');
+          if (!verdict.allowed) {
+            res.setHeader('Retry-After', String(verdict.retryAfterSec));
+            throw new ApiError(
+              'Слишком много запросов. Повторите через несколько секунд.', 429, 'rate_limited');
+          }
+        }
         const ctx: Ctx = {
           req, res, url, params: route.params, query: url.searchParams,
-          ip: clientIp(req, options.trustProxy ?? false),
+          ip,
           body: <T>() => readJson<T>(req),
         };
-        sendJson(res, 200, await route.handler(ctx));
+        const result = await route.handler(ctx);
+        // Обработчик мог записать ответ сам — например, отдать файл потоком.
+        if (result !== RAW_RESPONSE) sendJson(res, 200, result);
         return;
       }
       if (url.pathname.startsWith('/api/')) throw ApiError.notFound('Метод API не найден');

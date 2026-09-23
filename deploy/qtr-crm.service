@@ -48,7 +48,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=false
-ReadWritePaths=/opt/qtr-crm/backups
+ReadWritePaths=/opt/qtr-crm/backups /var/lib/qtr-crm
 
 StandardOutput=journal
 StandardError=journal

@@ -40,6 +40,18 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       MIGRATE_ON_START: ${MIGRATE_ON_START:-false}
       TRUST_PROXY: "true"
+      STORAGE_ROOT: /data/storage
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-CRM ОР ПСД <no-reply@localhost>}
+      JOBS_ENABLED: ${JOBS_ENABLED:-true}
+      JOBS_INTERVAL_MINUTES: ${JOBS_INTERVAL_MINUTES:-15}
+    volumes:
+      - app-files:/data/storage
     expose: ["3000"]
     depends_on:
       db:
@@ -87,6 +99,8 @@ services:
 volumes:
   db-data:
     name: ${QTR_DB_VOLUME:-qtr-crm-db}
+  app-files:
+    name: ${QTR_FILES_VOLUME:-qtr-crm-files}
 
 networks:
   frontend:
