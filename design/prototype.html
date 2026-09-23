@@ -1,0 +1,2170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM ОР ПСД — дизайн-прототип</title>
+<style>
+:root{
+  /* Палитра перенесена из действующего прототипа QTR CRM и старого прототипа доски. */
+  --blue:#003399; --blue-deep:#00246B; --blue-hover:#0045D9; --yellow:#FFCC00;
+  --ink:#17243B; --muted:#6B7280; --muted-2:#9CA3AF;
+  --line:#E6EAF1; --bg:#F3F5F9; --surface:#FFFFFF;
+  --ok:#0E9F6E; --warn:#D98A00; --bad:#D6323C;
+  --tint:#EDF2FB; --tint-2:#EAF0FC;
+  --r:14px; --r-sm:9px;
+  --shadow:0 1px 2px rgba(23,36,59,.06), 0 8px 24px rgba(23,36,59,.05);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
+a{color:var(--blue);text-decoration:none}
+button{font:inherit;cursor:pointer}
+
+/* ------------------------------- каркас ------------------------------- */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:18px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:11px;padding:2px 8px 18px}
+.brand img{width:46px;height:auto;flex:none;border-radius:7px}
+.brand b{display:block;font-size:14px;line-height:1.2}
+.brand small{color:var(--muted);font-size:11.5px}
+.side-label{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
+  background:transparent;color:var(--ink);text-align:left;font-size:14px}
+.nav button:hover{background:var(--tint)}
+.nav button.on{background:var(--blue);color:#fff}
+.nav button .i{flex:none;color:var(--muted)}
+.nav button:hover .i{color:var(--blue)}
+.nav button.on .i{color:var(--yellow)}
+.nav button .badge{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--bad);color:#fff;
+  border-radius:20px;padding:1px 7px}
+.nav button.on .badge{background:rgba(255,255,255,.22)}
+
+/* Иконки наследуют цвет текста и выравниваются по базовой линии подписи. */
+.i{flex:none;vertical-align:-3px}
+.btn{display:inline-flex;align-items:center;gap:7px}
+.btn .i{color:currentColor;opacity:.85}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.top{background:var(--surface);border-bottom:1px solid var(--line);padding:16px 26px;
+  display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.top .eyebrow{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700}
+.top h1{font-size:23px;margin-top:2px}
+.top p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
+.top .sp{flex:1}
+.wrap{padding:22px 26px 44px}
+
+/* ------------------------------ элементы ------------------------------ */
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:var(--r-sm);padding:8px 14px;font-size:13.5px;font-weight:600}
+.btn:hover{border-color:#C9D3E4;background:#FAFBFE}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:var(--blue-hover);border-color:var(--blue-hover)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.panel-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.panel-head h2{font-size:16px}
+.panel-head p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.panel-body{padding:18px}
+
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 9px;
+  font-size:11.5px;font-weight:700;background:var(--tint);color:var(--blue);white-space:nowrap}
+.chip.g{background:#E7F6EF;color:var(--ok)}
+.chip.w{background:#FDF3E2;color:var(--warn)}
+.chip.r{background:#FBEAEB;color:var(--bad)}
+.chip.n{background:#F1F3F7;color:var(--muted)}
+.chip.svc-tu{background:#E8EEFB;color:var(--blue)}
+.chip.svc-psd{background:#EFEAFB;color:#5B3FBF}
+.chip.svc-smr{background:#FFF6DA;color:#8A6500}
+
+.ref{font-size:11.5px;color:var(--muted-2)}
+.ref.pin{display:inline-block;border:1px dashed #D6DEEC;border-radius:6px;padding:1px 6px;color:var(--muted)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11px;letter-spacing:.05em;color:var(--muted-2);font-weight:700;
+  padding:10px 12px;border-bottom:1px solid var(--line);text-transform:uppercase}
+td{padding:11px 12px;border-bottom:1px solid #F1F4F9;vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#FAFBFE}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+.meter{height:6px;border-radius:20px;background:#EDF0F6;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--blue);border-radius:20px}
+.meter.w i{background:var(--warn)} .meter.r i{background:var(--bad)} .meter.g i{background:var(--ok)}
+
+/* -------------------------------- доска -------------------------------- */
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 10px;
+  font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink);min-width:150px}
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
+.col{flex:0 0 262px;background:#EEF1F7;border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:9px}
+.col-head{display:flex;align-items:flex-start;gap:8px;padding:2px 4px 8px}
+.col-head .no{width:20px;height:20px;border-radius:6px;background:var(--surface);color:var(--muted);
+  display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
+.col-head b{font-size:13px;display:block;line-height:1.3}
+.col-head .sla{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.col-head .owner{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:700;
+  background:var(--surface);border-radius:20px;padding:1px 7px;color:var(--blue)}
+.col-head .cnt{margin-left:auto;font-size:12px;font-weight:800;color:var(--muted);
+  background:var(--surface);border-radius:20px;padding:1px 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
+  box-shadow:0 1px 2px rgba(23,36,59,.05)}
+.card:hover{border-color:#BFCDE6;transform:translateY(-1px)}
+.card .id{display:flex;align-items:center;gap:6px;justify-content:space-between;margin-bottom:6px}
+.card .id b{font-size:12px;letter-spacing:.01em}
+.card .cust{font-size:13.5px;font-weight:600;line-height:1.3}
+.card .obj{font-size:12px;color:var(--muted);margin-top:3px}
+.card .foot{display:flex;align-items:center;gap:5px;margin-top:9px;flex-wrap:wrap}
+.card.late{border-left:3px solid var(--bad)}
+.card.warn{border-left:3px solid var(--warn)}
+.col-empty{color:var(--muted-2);font-size:12.5px;text-align:center;padding:14px 0}
+.owner-customer{background:#FFF6DA;color:#8A6500}
+
+/* ------------------------------ показатели ----------------------------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;box-shadow:var(--shadow)}
+.kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.kpi .big small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
+.kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:5px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+
+.bar-row{display:grid;grid-template-columns:200px 1fr 92px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #F1F4F9}
+.bar-row:last-child{border-bottom:0}
+.bar-row .lbl b{font-size:13px;display:block}
+.bar-row .lbl small{font-size:11px;color:var(--muted-2)}
+.track{position:relative;height:22px;background:#F1F4F9;border-radius:6px;overflow:hidden}
+.track i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--blue);opacity:.85}
+.track .norm{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+.track .norm::after{content:'норматив';position:absolute;top:-14px;left:4px;font-size:9.5px;color:var(--muted);white-space:nowrap}
+.bar-row .val{text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.bar-row .val small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
+.hot i{background:var(--bad)} .mid i{background:var(--warn)}
+
+/* ------------------------------- карточка ------------------------------ */
+.sheet{position:fixed;inset:0;background:rgba(15,23,40,.35);display:none;z-index:40}
+.sheet.on{display:block}
+.sheet-panel{position:absolute;right:0;top:0;bottom:0;width:min(720px,94vw);background:var(--bg);
+  overflow:auto;box-shadow:-12px 0 40px rgba(15,23,40,.18)}
+.sheet-head{background:var(--surface);border-bottom:1px solid var(--line);padding:18px 22px;position:sticky;top:0;z-index:2}
+.sheet-head .row{display:flex;align-items:center;gap:10px}
+.sheet-head h2{font-size:19px}
+.sheet-body{padding:18px 22px 40px;display:flex;flex-direction:column;gap:14px}
+.kv{display:grid;grid-template-columns:168px 1fr;gap:8px 14px;font-size:13.5px}
+.kv b{color:var(--muted);font-weight:600}
+.route{display:flex;gap:4px;margin:12px 0 4px;flex-wrap:wrap}
+.route i{flex:1;min-width:14px;height:6px;border-radius:20px;background:#E4E9F2}
+.route i.done{background:var(--blue);opacity:.45}
+.route i.cur{background:var(--blue)}
+.route i.skip{background:#EFF2F7;border:1px dashed #D8DFEA;height:6px}
+.gate{border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--surface)}
+.gate h4{font-size:13px;margin-bottom:9px}
+.gate .item{display:flex;gap:9px;align-items:flex-start;padding:6px 0;font-size:13px;border-bottom:1px solid #F4F6FA}
+.gate .item:last-child{border-bottom:0}
+.gate .item .st{width:17px;height:17px;border-radius:5px;flex:none;display:grid;place-items:center;
+  font-size:11px;font-weight:800;color:#fff;background:var(--bad);margin-top:1px}
+.gate .item.ok .st{background:var(--ok)}
+.gate .item .tx{flex:1}
+.gate .item .tx small{display:block;color:var(--muted-2);font-size:11px;margin-top:1px}
+.blocked{background:#FBEAEB;border:1px solid #F3CFD1;border-radius:9px;padding:10px 12px;font-size:12.5px;color:#8B2A2F}
+.hist{display:flex;flex-direction:column}
+.hist .e{display:grid;grid-template-columns:118px 1fr;gap:12px;font-size:12.5px;padding:8px 0;border-bottom:1px solid #F4F6FA}
+.hist .e time{color:var(--muted-2)}
+.hist .e:last-child{border-bottom:0}
+
+/* ------------------------------- правила ------------------------------- */
+.tog{width:34px;height:19px;border-radius:20px;background:#D9DFEA;position:relative;display:inline-block;flex:none}
+.tog::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tog.on{background:var(--blue)} .tog.on::after{left:17px}
+.note{background:var(--tint);border-left:3px solid var(--blue);border-radius:0 9px 9px 0;
+  padding:11px 14px;font-size:12.5px;color:#2B3B57}
+.hidden{display:none}
+
+/* --------------------------- мастер заявки --------------------------- */
+.wizard{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+@media(max-width:1180px){.wizard{grid-template-columns:1fr}}
+.steps{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.steps div{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;
+  background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.steps div .n{width:20px;height:20px;border-radius:50%;background:#E7ECF5;color:var(--muted);
+  display:grid;place-items:center;font-size:11px;font-weight:800}
+.steps div.cur{border-color:var(--blue);color:var(--blue);font-weight:700}
+.steps div.cur .n{background:var(--blue);color:#fff}
+.steps div.passed{color:var(--ok);border-color:#CCEADC}
+.steps div.passed .n{background:var(--ok);color:#fff}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid .span2{grid-column:1/-1}
+@media(max-width:760px){.form-grid{grid-template-columns:1fr}}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:9px 11px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink)}
+.field textarea{min-height:74px;resize:vertical}
+.field input:focus,.field textarea:focus,.field select:focus{outline:2px solid var(--tint-2);border-color:var(--blue)}
+.field.bad input,.field.bad textarea,.field.bad select{border-color:var(--bad);background:#FFFBFB}
+.field .err{display:none;font-size:11.5px;color:var(--bad);margin-top:4px}
+.field.bad .err{display:block}
+.field .hint{font-size:11.5px;color:var(--muted-2);margin-top:4px}
+.field .ok-mark{float:right;color:var(--ok);font-size:11.5px;font-weight:700}
+
+.svc-pick{display:flex;gap:10px;flex-wrap:wrap}
+.svc-pick label{flex:1;min-width:190px;border:1px solid var(--line);border-radius:11px;padding:13px 15px;
+  background:var(--surface);cursor:pointer;display:flex;gap:11px;align-items:flex-start}
+.svc-pick label.on{border-color:var(--blue);background:var(--tint);box-shadow:0 0 0 1px var(--blue) inset}
+.svc-pick input{margin-top:3px}
+.svc-pick b{display:block;font-size:14px}
+.svc-pick small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+
+.svc-block{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:14px}
+.svc-block>header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.svc-block>div{padding:16px}
+
+.price{position:sticky;top:18px}
+.price .line{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #F1F4F9;font-size:13px}
+.price .line:last-of-type{border-bottom:0}
+.price .line small{display:block;color:var(--muted-2);font-size:11px}
+.price .total{display:flex;justify-content:space-between;align-items:baseline;
+  border-top:2px solid var(--line);margin-top:8px;padding-top:11px;font-size:15px;font-weight:800}
+.price .disclaimer{background:#FDF3E2;border-radius:9px;padding:10px 12px;font-size:11.5px;color:#7A5200;margin-top:12px}
+
+.review-grid{display:grid;grid-template-columns:200px 1fr;gap:9px 16px;font-size:13.5px}
+.review-grid b{color:var(--muted);font-weight:600}
+
+/* --------------------------- реестр АМС и ТВ --------------------------- */
+.tv{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
+@media(max-width:1180px){.tv{grid-template-columns:1fr}}
+.tier{border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.tier.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
+.tier b{font-size:13.5px}
+.tier .ref{display:block;margin:3px 0 7px}
+.verdict{border-radius:11px;padding:13px 15px;font-size:13px;margin-top:14px;border:1px solid}
+.verdict b{display:block;margin-bottom:4px;font-size:13.5px}
+.verdict.g{background:#F0FAF5;border-color:#CCEADC;color:#0B6E4F}
+.verdict.w{background:#FDF7EC;border-color:#F2DFBD;color:#7A5200}
+.verdict.r{background:#FDF2F2;border-color:#F3CFD1;color:#8B2A2F}
+
+/* --------------------------- полоса режима --------------------------- */
+/* Элемент действующего прототипа: постоянно видно, рабочие это данные или примеры. */
+.mode-bar{display:flex;align-items:center;gap:11px;border-radius:var(--r);padding:11px 16px;margin-bottom:18px;
+  border:1px solid #F2DFBD;background:linear-gradient(180deg,#FEFAF1,#FDF5E7)}
+.mode-bar .i{color:var(--warn)}
+.mode-bar b{font-size:13px;color:#7A5200}
+.mode-bar span{font-size:12.5px;color:#8A6500;opacity:.85}
+.mode-bar .tail{margin-left:auto;font-size:11.5px;color:#8A6500;display:flex;align-items:center;gap:6px}
+
+/* --------------------------- шапка портала --------------------------- */
+.portal-intro{display:flex;gap:26px;align-items:center;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:22px 26px;margin-bottom:18px;box-shadow:var(--shadow)}
+.portal-intro img{width:104px;height:auto;flex:none}
+.portal-intro h2{font-size:19px;margin-bottom:5px}
+.portal-intro p{margin:0;color:var(--muted);font-size:13.5px;max-width:560px}
+.portal-steps{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+.portal-steps div{display:flex;gap:9px;align-items:flex-start;background:var(--tint);border-radius:11px;
+  padding:11px 14px;min-width:172px}
+.portal-steps span{font-size:11px;font-weight:800;color:var(--blue);opacity:.55}
+.portal-steps b{display:block;font-size:12.5px}
+.portal-steps small{color:var(--muted);font-size:11.5px}
+@media(max-width:1180px){.portal-intro{flex-wrap:wrap}.portal-steps{margin-left:0;width:100%}}
+
+/* --------------------------- замечания --------------------------- */
+.remark{display:flex;gap:10px;align-items:flex-start;border:1px solid #F2DFBD;background:#FDF7EC;
+  border-radius:9px;padding:10px 12px;font-size:12.5px;margin-bottom:8px}
+.remark .fld{font-weight:700;color:#7A5200;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <img id="brandMark" alt="QTR — АО «Казтелерадио»">
+      <div><b>CRM ОР ПСД</b><small>Отдел разработки ПСД</small></div>
+    </div>
+    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-label">ПОРТАЛ ЗАКАЗЧИКА</div>
+    <nav class="nav" id="navPortal"></nav>
+    <div class="side-label">РЕГЛАМЕНТ</div>
+    <nav class="nav" id="nav2"></nav>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <div>
+        <div class="eyebrow" id="eyebrow">ОТДЕЛ РАЗРАБОТКИ ПСД</div>
+        <h1 id="title">Доска заявок</h1>
+        <p id="subtitle"></p>
+      </div>
+      <div class="sp"></div>
+      <button class="btn" title="Показать просроченные" aria-label="Просроченные заявки"
+        onclick="go('bottlenecks')" id="bellBtn"></button>
+      <button class="btn" id="exportBtn"></button>
+      <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
+    </header>
+    <div class="wrap" id="view"></div>
+  </main>
+</div>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet-panel" id="sheetPanel"></div>
+</div>
+
+<script>
+/* inline: assets.js */
+/* Сгенерировано: node design/emit-assets.mjs — фирменные изображения АО «Казтелерадио» */
+window.QTR_ASSETS = {"mark":"data:image/png;base64,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","logo":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAu4AAAJ2CAIAAACPSpCzAAAACXBIWXMAAA7EAAAOxAGVKw4bAACJ7ElEQVR4nOydB1gU59qGAXuNiSVR09QkpidHaTbsPfZeYo1do9h77B17pauoiNgbFhAVafbeKyoqKiIIyLL4T+Q/e9ZdWGZnZ753ZvZ5rvv6r/Ob3WXn/b6duXdn5v1s3iEIgiAIgig2NtRvAEEQBEEQRHigMgiCIAiCKDhQGQRBEARBFByoDIIgCIIgCg5UBkEQBEEQBQcqgyAIgiCIggOVQRAEQRBEwYHKIAiCIAii4EBlEARBEARRcKAyCIIgCIIoOFAZBEEQBEEUHKgMgiAIgiAKDlQGQRAEQRAFByqDIAiCIIiCA5VBEARBEETBgcogCIIgCKLgQGUQBEEQBFFwoDIIgiAIgig4UBkEQRAEQRQcqAyCIAiCIAoOVAZBEARBEAUHKoMgCIIgiIIDlUEQBEEQRMGBykielFTNjfuvjpx6tG7P9dk+Z0cview2OaTt6INNh+6vO2CPc4/tlbpsBQAAoGgqd93K7dIbDt7L7d47TwgevjB8yppTnjuu7j/x4NKtF/GvU6mPRWoOVEbMaLUZD2ITt4XcmeF5uuukEIdu24rX8bWpvAYAAICVU6i614/tAtqNOTRmaST3zfbKnZdv09Kpj1oqCVTG0rxOersv7P7EldGcjBd18Sb/tAAAAFAEeZ09qvTcMXxh+Pq9N2Lj3lAfzRQcqIyQcCp9ICJmmFt4pS5b7RzcyT8PAAAAlE655hu7TAz2P3DrxasU6qOcwgKVMSMPnyZ5bL/aYnhQwWpe5JMeAACAKuG+IVfrtWOm15lz159TH/eUEahMznmV+NZ757Xa/Xbb2tNPcQAAANZDxdb+0z1P33mYQH0klHWgMtnmbVr6jtC7bUcfzF/Vk3w2AwAAsGaq9tqxcstlnHvKMlCZLPLwadLEldFlGq0nn7sAAACADu6rdY8pR6IuPqU+TsorUJkPEn3paYdxh3ElLwAAADnj3GO7374bGo2W+rApi0Bl/j97w+7XHbCHfHYCAAAAPPm2lf/KLZdTUjXUh1DiQGXeHYiIcey2jXxGAgAAAAIo02j9Mv+LqW+tt+GeVavM0dOPa/bdRT4LAQAAAAsp29jPY/tV6zzlZKUqc+P+q5YjDpDPPAAAAEBEfmwXsP/EA+pjLOtYncokJL51dQvP4+RBPuEAAAAAKWg0ZN/l2y+pj7fsYl0q43/g1qcN1pFPMgAAAEBSuG/sIxdHWMkVwdaiMvcev8YNSgAAAKyKL5r4HYqMoT4CSx71q4xWm+Gx/SrWrAYAAGCd9J15LP51KvXRWMKoXGUexCbWwj1KAAAArJvPm/gdiFDtzzNqVpn9Jx58XNuXfAIBAAAAcmDUkkhV3q2tTpVJSdUMXXCCfNIAAAAAssKh27abD15RH6VFjgpV5nZMArr3AgAAAFlSrJbP3rD71MdqMaM2lTkYGcMNEvlEAQAAAOTMpFUnMzIyqA/a4kRVKrNg/flcjljUGgAAAMiZ1qMOvklRQ+MZlaiMRqMdNDeMfFoAAAAACsKx27bYuDfUx3BLowaViX+dWn8g2t8BAAAAZlO2sd+568+pj+QWRfEq8+T5m186bCGfCgAAAIBCKeLiHXLyEfXxXHiUrTL3Hr+u2NqffBIAAAAAiiavs8f2I3epj+oCo2CVuX4v/vMmfuTDDwAAAKiA3I7umw/eoj62C4lSVebKnZefYY1rAAAAQDzsHNzX771BfYQ3O4pUmZsPXpVtjN9jAAAAAJHhbGbL4dvUx3nzojyV4TymdMP15IMNAAAAqBLOZvwPKOlMk8JU5tnL5AotNpEPMwAAAKBi8jh5BEc/pD7m842SVOZV4lvcdw0AAAAwoKiL94WbL6iP/LyiGJV5m5Zeu99u8qEFAAAArISyjf1iniRSH/9zjmJU5s9JIeSDCgAAAFgVP7cPeJX4lloBcogyVGbB+vPkwwkAAABYIfUG7ElP11KLgKkoQGWCwh/YOWC9awAAAICG0UsiqV3AVOSuMrdiEkrUXUs+igAAAIA1s3bPdWojyDayVpmUVM3vnQPJxw8AAACwcgpU9bx8+yW1F2QdWatM35nHyAcPAAAAABzft9mclJxGrQZZRL4qs/vYPfJhAwAAAICOrpNCqO0gi8hUZe7HJn5c25d8zAAAAACgjwxXaJKjymRkZDQcvJd8tAAAAABgQPE6vk9fJFObwgeRo8qsCrxMPlQAAAAAyJIGg/ZSm8IHkZ3K3I9NLOLiTT5OAAAAAMgOn13XqH3hf5GdyjQeso98hAAAAABggk/q+D57KZfTTPJSGf8Dt8iHBwAAAAA50nlCMLU1/H9kpDKJb9JKN1xPPjYAAAAA4MPxs7HU7vBvZKQyo5dEko8KAAAAAHjye+dAOaw0KReVuRWTkMfJg3xUAAAAAMCfNVuvUBuEbFSmuWsQ+XgAAAAAwCxK1lsb/zqVViFkoTInzsWSDwYAAAAABDBqSSStRchCZZy6bycfCQAAAAAIoEBVz5gniYQWQa8yQeEPyIcBAAAAAIIZOOc4oUjQq0yVnjvIxwAAAAAAgsnj5PE47g2VSBCrzJFTj8gHAAAAAAAWMmJRBJVLEKtMnf67yasPAAAAAAspVN2L6lYmSpU5czWOvPQAAAAAEIWZXmdIdIJSZf6cFEJedwAAAACIQvE6vskpGvY6QaYyj+PeoL0vAAAAoCY8tl9lbxRkKjNp1UnyigMAAABARJy6b2dvFDQqo9VmfNHEj7ziAAAAABCX01fjGEsFjcrsDL1LXmsAAAAAiE6vqaGMpYJGZVqPOkheawAAAACITuEa3owv/iVQmZcJqXmdccEvAAAAoE427L/J0isIVGbN1ivkVQYAAACARDR3DWLpFQQqU7PvLvIqAwAAAEAicju6P49PYeYVrFXm0bMkW3v6KgMAAABAOnx3X2emFqxVxmP7VfL6AgAAAEBSWo86yEwtWKtMk7/3kdcXAAAAAJJSqLpXSiqj+5iYqkxSchruXQIAAACsgd3H7rGxC6YqExT+gLyyAAAAAGBA/1nH2NgFU5UZ5hZOXlkAAAAAMODbVv5s7IKpyvzacQt5ZQEAAADAhnuPXzOwC3Yq8+JVip2DO3lZAQAAAMCGtXtY3JLNTmX2HL9PXlMAAAAAMKPfTBaXy7BTmcmrT5LXFAAAAADM+L7NZgaCwU5lamG9AgAAAMCasHNwT0pOk1owGKmMVptR1MWbvKYAAAAAYEnY2VipHYORytyKSSCvJgAAAAAYs2jDBakdg5HK7AvDNb8AAACA1fHnpBCpHYORykz3PE1eTQAAAAAwpkrPHVI7BiOV4aSMvJoAAAAAYEzBal5SOwYjlXHqvp28mgAAAABgz6NnSZI6BiOVKVbLh7yUAAAAAGBPxIUnkjoGC5VJSk4jryMAAAAASJB6+QIWKnP2Whx5HQEAAABAwizvM5JqBguVCQp/QF5HAAAAAJDw9/wTkmoGC5Xx3nmNvI4AAAAAIKHNqIOSagYLlZnre5a8jgAAAAAgoVovaVvLsFCZSauwJjYAAABgpfzcPkBSzWChMr2mhpLXEQAAAAAklG64XlLNYKEyHcYdJq8jkC35qnj+1D6gxl87W444MHDO8Xlrz63ZesV757WdoXfDzsaeuvLs2t342zEJHC8TUgEAVkts3BtuP3Dzwauoi08PRcZsC7mzfPOlKWtOcfuNBoP2/tJhS+Ea3uQ7NJAlRV28JdUMFirT5O995HUEcqBU/XUufXb1mXHUze/83rD7564/f5X4lsEMRBDESvI47k3oqUerAi//Nf0ot7fhjqDk+z1g8/4rq6TjzkJl6g/cQ15HwJ5cju6/dw7sNjlkqf/FAxExL16lMJhsCIIgumi1GRdvvliz9Qq3I/q2lT/5XtGakXSgWahMtV47yIsI2PBxbd9mrkFT3U8FRz9MSk5jMLsQBEF45tGzJK8dVzuNP1yq/jryvaW1kZyikW5koTLAUgpW82ruGrRk08VTV56lp2sZzCgEQRBLkpGRwe2vxi2PqtgaP9UwQtLLCaAyQCA/tQ8Yuywq9NQjjQb6giCIUhNx4cmYpZGfN/Ej36mqG6gMkAt5nDwaDdnnsf3qnYcJDGYOgiAIm2i1GdwXsy4Tg/M6e5DvaVUJVAYQY2u/pnrvncs3X3qZkMpgwiAIglDleXzKgvXnyzXfSL7jVRlQGUDGLx22zPE9++hZEoN5giAIIpNoNNpNQTcdum0j3wmrBqgMYE1RF+/e00IjLz5lMD0QBEHkmYyMjCOnHtXpv5t8n6wCoDKAHb923LI68PIbKe+aQxAEUVbCzsbW+Gsn+f5Z0UBlgOTkcnRvN+bQsTOPGcwHBEEQJeZARMzvnQPJd9cKBSoDJKRQda/Bc8PuxyYymAkIgiCKjlab4bnj6mcN0GHPbKAyQBKK1fIZvyL6yfM3DOYAgiCIavI66S2388xXxZN8N64goDJAZIrX8V2w/jz3aWQw+giCIKrM1bvxuICGP1AZIBpFXLynrDkFiUEQBLE8GRkZa7Ze+aimD/m+Xf5AZYAI5HHyGDw3LC4ey1MjCIKImTsPE1z67CLfycscqAywCDsH9+7/HLn3+DWDsUYQBLHCZGRkLPW/iKtnTACVAcJx7rE9Cp3uEARBpM/Jy8++w1Lb2QCVAUIoVX+d985rWm0GgyFGEARBuCS+Ses8IZh8/y9DoDLAPHI5uru6hce/xtKPCIIgBFkdeDmPE1bY/gCoDDCD3zoF4owSgiAIbSIuPPkUnfT0gMoAXuR19pjheVqj0TIYUwRBEMR0bsck/NB2M/mhQSZAZUDOOHTbdunWCwajiSAIgvDM8/iUegP2kB8g5ABUBpgir7PHXN+z+DEGQRBEhuF2zu3HHiI/UpADlQHZ8mO7gFNXnjEYRARBEERY0tO1f88/QX68oAUqA7Km/6xjb1I0DEYQQRAEsTDTPU+THzUIgcoAQz6p4+t/4BaDsUMQBEHEyhzfs+SHDyqgMuADfusUiFUIEARBlJhJq06SH0RIgMqA/9F35rGUVJxUQhAEUWrGLI0kP5SwByoD/iV/VU+fXdcYjBeCIAgiafrPOkZ+TGEMVAasKVF3bfQl9PBFEARRQ9LTtc1cg8iPLCyBylg7v3UKvBWTwGCkEARBEDZ5k6Jx7LaN/PjCDKiMVdNm1MFk3HGNIAiiujx7mfxl0w3kRxk2QGWsF1e38PR0tPFFEARRZy7cfFHUxZv8WMMAqIyV4uZ3nsHoIAiCIITZFnKH/HDDAKiM1ZHX2cN393UGQ4MgCIKQZ7aP+lvnQWWsi3xVPPeG3WcwLgiCIIgckpGRofobmqAyVkTxOr7Hz8YyGBQEQRBEPnn2MrlsYz/yY5B0QGWshWK1fM5cjWMwIgiCIIjccuJcrJ2DO/mRSCKgMlZBibprz994zmA4EARBEHlm9BLVrmkAlVE/xev4wmMQBEGsPOnpWvs/1dk3DyqjckrUXXv1bjyDgUAQBEFkHu5rbW5HFZ5mgsqomaIu3lhcCUEQBNFl/Ipo8mOT6EBlVEuBqp7h558wGAIEQRBEKUlJ1XzX2p/8CCUuUBl1ksfJY/+JBwzqjyAIgigrR08/Jj9IiQtURp347bvBoPgIgiCIEtNuzCHy45SIQGVUyGyfswwqjyAIgig092MT81f1JD9aiQVURm30nhbKoOwIgiCIoqOm63+hMqqiTv/db9PSGZQdQRAEUXQS36SVabSe/LAlClAZ9fBz+wBJhxNBEARRU5b6XyQ/cokCVEYlFK/je/fRawYFRxAEQdSR5BRN6YZq+GEGKqMG7BzcD0bGMKg2giAIoqasDrxMfgizHKiMGpi39hyDUiMIgiAqS3KKRgVXzEBlFE+bUQczMjIYlBpBEARRX+avO0d+ILMQqIyyqdBiU/zrVAZ1RhAEQVQZ7iBSqLoX+eHMEqAyCqZAVc8LN18wKDKCIAii4gyeG0Z+RLMEqIyCWbnlMoMKIwiCIOrOzQevbO3pD2qCgcoolXZjDjEoL4IgCGINae4aRH5cEwxURpGUbez34lUKg/KqOBqN9tnL5Ov34iMvPj0UGRMU/iDg0G2gYpTYQDJNoyWvm+rZfuTusTOPr9x5+fRFcnq6lnrMybL/xAPyQ5tgoDKK5Ojpxwxqq5okJL4Njn7ovu3KmKWRbUcfrNRla4m6a3M5upOPI2CJEi8s43bQ5HWzKvI4efzUPqD7P0e8dly9djeeevyZRqvN+LrZRvIhEAZURnm4uoUzKKyio9FoOdub7XO2zaiDXzTxIx8yIAegMsBcuL0Ht7+NuPDEShpejFseRV5zYUBlFMaP7QKwYGSW4fY1Z67GzfI+U+OvnWpavB6IBVQGCKZCi01ufucT36RRzwhpc+nWC/JSCwMqoyTsHNzDzz9hUFUFhTOYqItPhy8MV8dKIkA6oDLAQkrVXzfN47S6hebXjlvI6ywAqIySGL0kkkFJlZI7DxMmrIj+HOePAD+gMkAUPmuwbmPQTeqpIVVmeZ8hr7AAoDKK4ZuWm1JSNQxKKvNoNNpNQTcbDNpLPiJAWUBlgIjU7rf7dkwC9QQRP3cfvSavrQCgMooh5OQjBvWUc14nvV204cKXTTeQjwVQIlAZIC6FqnsFHLpNPUfEzw9tN5PX1lygMsqg/VirbogX/zp17LKoj2r6kA8EUC5QGSAFw9zCVdaNhtvZklfVXKAyCqBYLZ8nz98wKKYMw03QiSujITHAcqAyQCIaDNqboMAGjNkl7GwseUnNBSqjAJb6X2RQSblFo9GuCLhUvI4vef2BOoDKAOngjkRJySq5syk9XVvUxZu8pGYBlZE7P7cPUNmvl3wScvLR922Ud74WyBmoDJCUKj13vElRyZ0ZTYfuJ6+nWUBl5M7esPsMyiifPHuZ3GHcYfKyA/UBlQFS08w1SB3fPBdvvEBeTLOAysia5q5BDGoon2wNvlOq/jrysgNVApUBDBgw+zj1rBEhURefklfSLKAy8iWXo/vl2y8Z1FAOiYtPaTPqIHnNgYqBygA2eO24Sj1xLM3btPR8VZS0/AtURr70n3WMQQHlkMNRD8s0wrIDQFqgMoANBat5Xb+n+FW1q/RU0rEVKiNTClT1fByn/huwtdqMSatOklcbWANQGcAMzgO4nRv19LEorm7h5GXkD1RGpoxbHsWgerR58Sql0ZB95KUGVgJUBrBkVeBl6uljUfz23SCvIX+gMnKkiIu36nviXb0b/03LTeSlBtYDVAaw5KOaPnHxKdQzSHgu3XpBXkP+QGXkyMSV0QxKR5gDETFFlNaCiZC6A/YEHLqtYv7TOZBBGaEygDFjlkZSzyDheZuWnsfJg7yGPIHKyI4CVT0V7fI5xmfXtVyO7uR1VhbcPjEjQ9mn3k1kb9h9BjWEygDG5Ff4zlxB60pCZWTHiEURDOpGlaX+F8krrFC6TgrhvidRD6Ak4Sztx3YBUhcQKgPYM9PrDPUkEp5WIw+QF5AnUBl5UbCal4qvkpnheZq8woqmwaC9qumMbpDNB29JXT2oDGDPF038NBql9v8duTiCvIA8gcrIi8FzwxgUjX24r92jlkSSl1cF1Om/OyVVhTaj1WaUb75R0tJBZQAJ+xS7+MyqwMvk1eMJVEZG2NqvufngFYOisQ+naOTlVQ1Nh+5X5Zmm1RLvN6EygIRuk0Oo55HA7D52j7x6PIHKyAi1rrg0zQPnlUSm7eiD6li1Tj+Jb9I+qeMrXdGgMoCEkvXWKrRd3umrceTV4wlURkYcOfWIQcUYx83vPHlhVQn3VU999zSNXxEtXcWgMoCKyItPqaeSkDx9kUxeOp5AZeTC750DGZSLcXaE3iUvrIpRdNeKLPPoWZJ0rSygMoCKaR6nqaeSkCSnaMhLxxOojFxYu+c6g3KxDPdFpEBVJa2tqkQ8tit+DV6DtBtzSKJaQWUAFY2G7KOeSgJTuIYyeplCZWRBsVo+qW9VdSHn47g3JeutJS+s6snj5BF2NpZ6tMVM6KlHEtXKqlTmj54DP6s9j3x+gkzKNFpPPZUEpnTD9eTV4wNURhYMXxjOoFbMkpyicey2jbyqVkKJumtVduObRO3yrEplxoxvdTeo+LeNp5HPT5BJsjI7QlVs7U9eOj5AZWTBpVvK28maSLfJIeQl1ce+9bhxE1qucnMZO6Fl5dbjyN+P6PzUPkBNzWbm+p6VokrWpjLvTtk8O1LYXo0TXokodCf/c3vJ23CLAlSGnqq9djAoFLP47LpGXlId5RrOCPOvwO3T9eH+pWKTqeTvTVzU1FwxLj5Fiot/rVBlOBLD8tXvOpR8foKQk4q8QbWqQo6wUBl61my9wqBQbHL1bnzBal7kJc3kl+aTXhwtaOAxmXD/rr6fZzYG3aQef9HSYniQ6PWxTpXheBuZq1P/3uTz08rZGnyHejYJiVKOsFAZYrhvny8TUhkUikE0Gm2lLlvJS5pJXqflN/aWytJjMnl2pHCFRtPJ36eIFHHxfvg0iXoWiBNuvy96faxWZTgyTtoMHdWefIpaMxv2K/KbhlKOsFAZYtTU4Xfc8ijyeuroOrCnCY/J5Oa+kiVqLiB/qyJSd8AedfTNS0nVfFTTR9ziWLPKZDJnRkObyqvJZ6l1ApWRFKgMMYGHbzOoEoNEXXxq5+BOXk8dfiscc1QZjsgtXxeuuoT83YrIioBL1HNBnPSaGipuZaAyHD5Lq+RyWEk+S60QqIykQGUoKeLirY4bTzQardwudA/d+C0fleEI9quYx3EF+RsWi/xVPW/FJFDPCBFyROwGM1CZTHZ7/1LAeRn5RLU2FLo+9u+dA8lLxweoDCU9phxhUCIGmel1hryYBhw3unHJBH4rHNX0w3vTofupZ4QI0Wozyjb2E7EsUBn9m/iK1VhIPlGtiogLT6hnk5DI7TtqdkBlKAkKf8CgRFLn4dMkGS5QYJbKcMz+9zIC+rctFttCFHm7hEFc3cJFrAlURp+LO8uUqTuHfKJaDwq9JP/rZhvJS8cHqAwZRV280zRaBiWSOh3GHSYvpjHmqgzH6PGtyN+2WHA7IBWcuxT3HBNUxoB7Bz5RX4MleZK/qqdCr8f/uLYvefX4AJUho9P4wwzqI3WOnn5MXsksEaAyGSdtOg/oRf7OxWK6pyIX49WPVptRrJZo9zFBZYx5HlrIsc1Y8rmqen7psIV6KgmMrG7mMAFUhgyFXtCuH+57hmzXWhKgMu/eNxOr3dmV/M2LQqHqXk+ev6GeI5am+z9HxCoIVCZLkk7kbdRtCPl0VTe9poZSTyUhefEqhbx0PIHK0JDb0Z2bJQzqI2m2HL5NXsnsEKYyHK+O51fN91QVrGYg4hyDymRHWpQd2gFLyto916mnkpDcfPCKvHQ8gcrQULvfbgbFkTTp6drvZLxoqmCVeaeiRsB5nDwexyn7hxluDyXWekxQGdNnV9EOWCJs7dc8fZFMPZWEJOSkyA0RpAMqQ8Nsn7MMiiNpNgXdJC+jCSxRmXcqagTcd+Yx6pliaWr23SVKKaAyOYJ2wFLg2G0b9TwSmI3y3snrA5Wh4fyN5wyKI1202gw5/yRjY7HKcERt+bpotcXkG2IhKvhhZrrnaVFKAZXhA9oBi85MrzPU80hgFm24QF49nkBlCPi0wTqF3piny/Yjd8nLaBrLVeadWhoBj1gUQT1fLEr0paei1AEqwxO0AxYRW/s19x6/pp5HAtN7msiLh0gHVIaAjuMUfxu2c4/t5GU0jSgq804VjYA/qumT+CaNesoIj0ajFaW5BVSGP+Gby6MdsCj8MUzBrbfFOrfLAKgMAcv8LzKojHQJP/+EvIY5IpbKcMyd2YB8cyxk/rpz1LPGojR3DbK8CFAZs0A7YFFQdEv3Mo3WkxeQJ1AZAq7djWdQGenSdVIIeQ1zRESV4Rij8EbA37TcpOhzmnN9z1peBKiMuaAdsIX83jlQuZ+710kC5x4JUBnWlKi7lkFZpMvz+BSxbo6VFHFVRgWNgBX97fD42VjLKwCVEQDaAVvC7mP3qGeQ8ISJ8aFjBlSGNY2G7GNQFumy1P8ieQ35IK7KvFN+I+AWw4Oo547wpKRqLBdoqIww0A5YGEpvHrZMIbv6TKAyrJnrq+yOMr93DiSvIR9EVxmOxLB8yv2GyqlArJLvynaweIkMqIxg0qLsuij8V0nG5KvieeP+K+rpY1F6TVXM7Us2UBn2HDn1iEFZJMq568/JC8gT0yrz6nh+32XO3Qd3/63FxC/rzypbd07V9qO6Duw5b1b9U1u/zDiZ7RMV3Qh4ySYFX2/u6hZu4eZDZSwB7YDNYpa3UnvJ6PJ9m83kZeQPVIY18a9TGZRFogxfaOnhhBnZqczz0EJDRnbIb7Jtxhf1Zk+a3OzhoWJZvoJyGwE7dd9OPYOEx/LFmKAyloN2wHzgjkrp6VrquWNRlHXNrw1UhjHftNzEoCYSJSMj4+tmG8lryJMsVWaH52/8LSSf0/IBwzvdP/ix8euc2vqlQhsB33mYQD2PBOZ+bKKF2w6VEQW0AzZNyXprY54kUk8cS7Mv7D55Jc0CKsMURTfHO3stjryA/DFWmcVz69jarzL3dQo4L5s4qXlqRG6DV1NoI+B5a5XaYEarzSjq4m3JtkNlxALtgLMjXxXPyItPqWeNCBm1JJK8mGYBlWGKm995BjWRKGOXRZEXkD8GKrNiQU1LXu2HP/4JM3IjJTYCrtNfwXdVuPSxqPcoVEZEwjeX/xjtgI3w23eDesqIE/s/Lb3KnjFQGabsOX6fQU0kSuWuW8kLyB99lQnZ8J1dVr/H5HZYWbfLsPETW6x0c9mw0mHhnLo9h3T7sv6sLF+Qe4XZMxoaXBG8YHY98i01izxOHsq9WsvCK3+hMuJyaVdptAPWYWu/Zs3WK9TzRZy8TEjlNoe8pGYBlWHK/VilnkN99jKZvHpmoVOZx8FFja+PyeWwsp9r55isLuzlZOXIhu+a9xqQ5S8uTXsMehOeR//ximsEHHDoNvVsEhjPHVct2XCojOigHXAmdg7u6/Zcp54somVr8B3ykpoLVIYdBat5KbeJte/u6+QFNAudyhh36S1Za3745vI57qYjAspVajXe+JXrdhn2NjKXvvooqxFwv5nHqGeTwFi4+BdURgrQDvijmj6KbqVtnD+VsDSNAVAZdjh028agIBKlp6LaJdn8V2Wu7P7M+FLfnV6/8txNp0XZDRvdzvjnGc5d9M80cWZTp8sw8k3mSbnmG6lnk8DExadYsuFQGYmw5nbA37byV/qaegZJTxdnIXrGQGXY0Wm8gm9f4j6x5AU0i0yVGTWutcG/1+0yzNw9daD7f4z70BgcKt6E51HQd9NnL5OpJ5TAFK8jfCcLlZEOTvq7DuxJPrEZ0/2fIwlSHkFJEnHBot8+qYDKsGPc8igGBZEiT18o7EIZm/+qzG8tJhr8+w7P3wTsqcP8Kxjfr+G9tIr+YxTUCDjwsFIvl3G0YPkCqIykZJy0ef8TJv30ZsAXTfz2hSn4Hg4TGTjnOHl5BQCVYYdyrwtT4lVgnMpw3xSNb1xKOJ5f2J46csvXBr008jiuCParqP8YpTQCdnULp55TAtNtsvCz+FAZBqi+HXCh6l4zPE8np2iop4Yk0WgUeXbJBirDkhPnYhkURIpMWXOKvHrmwqlMzKFiBv9YsMpSS3bTxm3xilZbfGFnGf3HnN3+ufwbAVfvvZN6TgnM+BXRgrcaKsMGtbYDLuriPXJxRFx8CvWkkDAHI2PI6ywMqAw77j56zaAgUqTJ3/vIq2cunMo8OvyR8b8b3EptjO563tHjWxmvK2ncFq9s3TmxwUVNG4/cKFjNi3pOCYz3zmuCtxoqwwyVtQOu0nOH+7Yrb1T6S4x+Oow7TF5tYUBlGJHb0V2jUeoCY1823UBeQHPhVEYTZWd8uW6O18osm1+L+7/xxwpwD545vZHxA6ZOaWrwmo5txhoYkvwbASu0xVHoqUeCNxkqwxKltwMuUNWzuWvQioBL9x4r9SuouXn2MjmPkwd55YUBlWGEcu+ATRC6M6Ul87Lf6h1GGvz77y0n6HeFMWClm0vtzq6Zv6zYvG8HfGlXaYPHpEfbco8xeNlmPQdy/67/sEVz65AXwQR7lXnR4q2YBMGbDJVhzOVdpcuK1A6Y+zZVqctW6ajSc0cz16AeU46MWx61fu+Nq3fjlb60tYBw3ka+XxIMVIYRym0qc+JcLHn1BJCpMouz8okGf/4dF1rIYLebEpF7+Ji2NpVXc/+X+39nTGuc+eAuA3oZ76OfhhQxvlmpv2tng4fJuRHwQmUuByb40G4DlaFArHbAXzTxu6qu9i1yS0ZGxg9tN5PvlwQDlWFEm1EHGVRDivgfuEVePQFkqszLowWLZHURbomaC6ZMaXpw3Q+ntn65z/enSZObfdVg5vv/tPry+59hHP7bJKZQ1SVpUXbG++gsb1Za6eai/xg5NwLuM+Mo9cwSmLzOAn8Dh8qQIFY74JL11p6+Gkc9IKrN/hMPyHdKlgCVYUTvaaEMqiFFZnieJq+eAHQLF8yc3oj/s1r27p/5w7j+lS5RW77Och8dueVrTnT0n25nv8qglfDbyFz1uw4lr4YxjYbso55ZAlOu+UZhmwyVoUKsdsBFXbyPnn5MPSbqTDPXIPKdkiVAZRih3P54lnTyIESnMpoou99bTuDzlLJ15zx8v8Bkt0E99P99j8/P2e2jjW9WKuC8LPJD9ZFnI+Af2wVQzyyB+b1zoLBNhsoQIlY74AJVPfccV+RlXnLO9XvxilsK2wCoDCOWb77EoBpSpHa/3eTVE4BOZThiDhX7tPY8048vVmNhZoeYA+t+MLj5yITKvMvqZiXubxmsuS3DRsB5nT2oZ5bANBi0V9gmQ2VoyThp8/5yNEunbm5H941BN6lHRlVR4vqRBkBlGOG37waDakiRyl23kldPAPoqwxG15euSteZn9+BvGk/LvESGU5DPjKQnaO2PpvfRxjcr/dxs8qsP2wrLsBGwQpePaTv6oLDthcrIAVHaAdvar1kVeJl6cFSSx3FvlHsPtg6oDCOUu2BHqfrryKsnAAOV4Xh0+KOO/XsbLGVQqtb8WdMbJb/vCvM4uGiWd1twFpLjDtr4ZqXanV0N7vqOCCgnqy6oMU8U2Vqm/6xjwrYXKiMTxGoHPMv7DPX4qCFD5oWR74ssByrDiPDzTxhUQ4rkq+JJXj0BGKtMJk9CigSsqbRmUXXvpVWiA7/S/PfuJP/VlYu7uBm/TtFqi7UfNozJkixvVuoxuLvBw3r//Sd5ZXREX3pKPbmEZMzSSGHbC5Xhidvsejs8f0sMyyedzYjVDnjEooiMjAzqUVJwbsUk5HJ0J98XWQ5UhhFK3I2+U2x/PJvsVYZzF/1edneDiq9yczHupKejYpOpA4d3qtZ+1Jf1ZxWrsfDrBjMbdhsye0bDxx8uVpD5ys16DjR4OvdI/ceEby5PXhkdIScfUc8vIZnpdUbY9irxM8heZXS37+VxXFGz0/BZ0xud2faF8QoeliNWO+De00KtsJ2dWOk5NZR8RyQKUBlGKLS/U8yTRPLSCSNLleG+a1ZoND2f0/Iv6s3msOR7Ifcio8a1TonIrf/6Wd2stNpvhaP+A8gro2Nn6F3q+SUk89edE7a9UBk+/DW0q/Grlao1v/OAXtxMfnaksIg2w2nT5/VmWz6T244++DYtnXqslBfuE2HnoIafZGygMsxQ6JI3ty3oE0+Lgcq8OFqwoRidLQyo0XGEwRdWbl9vcKKK+3YbHfhV5n/lHkxeGR0b9ivyNpCVWy4L216oTI7EhRYyXrZMH1v7Vb+3nDB2QsujG7/NsnWkudw/+LEo7YAbDNqblJxGPVwKS+MhylsnODugMox48vwNg2qIHm7vT146YRj/KnNkw3c8G8zw5BMXt93evxj8lZVuLgYP019s8uqeT8krowMqI/8wVpnpU5vw/xOFqi5p3mvAKjeXW/tLWGIzYrUDrtJzx8uEVOoRU0z2HL9PvgsSEaiMGgotXdSkMhzaaNu1y5zdZtfbuNKBY+m82v1cO/93yYKsef8l1fDe0Y9rLBwysoPxQk47vX41uEOqQqPp+r/Jz59Vn7wyOhSqMtzbFra9UBnTvI3MZdyJgCfcPB80oiNn9sIuFharHfCvHbfExinySyPjpL5N/6blJvJdkIhAZdRQaOmiMpXJjhOby9u3Hpfl6/z4xz9PQ4qE+VcIdP9PwJpK2zx+P7f98yzvaTqy4TuDi29K1FygfyP3q+P5y4i0ULAoQGXkH5Yqw1m+5ZMqj+OK2p1d585sYO7FwmK1A+aO0HcfvaYeN7lnlrfAa+dlC1SGEWkaRV5jrzKV4Xavvf7+s1zDGXmdlnOewe1z582q/+JowXfv7z8aN6FlVs27Vhs0u8uSCzvLFP1w3Upunx4RUE73gPRoW1G+d4oIVEb+Yaky4p5+tXnf9rrboB78LxYWqx1w2cZ+V+68pB46+ebG/VcKbbFhAqgMIxiUQoqoRmU4U+H2krYfnv3J5KPqi5bNr5X5DZL7H8YPCMvpB56YQ8XKGv7c8sGNSxz9XTuT18QAqIz8w0xljmz4TrqZxn3u7FuPG/f+YmFNThcLz/v3JKyl7YA/qeN78vIz6tGTY7TajDr9FbkWjWmgMoxQ6NX1dx+9Ji+dMAxUJsffrrmvj5n9ZvoY3Yxqeg2mLNdXMmgnM/vfZu30NTEg4NBt6vklJFAZPpirMs17DWAz64pWW9zi/cXCd4OKZ/dmRGkHXLiG95FTiuycJGmWbLrIeD/DBqiMGgotXR49SyIvnTD0VWYOP5Po79qZe3BiWL4vPux1YUJlslz1OvN1dBivNykTFLrCMFSGD2apzM19JbP8wVJqvm08bdCIjnt9ftbd4qdDlHbA+ap47jp6j3oMZZQ7DxMKVfdiP9AMgMqoodDSJSk5jbx0wtCpzNntn/P/hrdmUXXuKb4fXv+Y3XKSbyNzNek+2OAVGvz5t3434WC/inkcV5BXI0sU+p3Ve+c1YdsLlcmOwSM70E7FvE7LMy9cu7CzjO5iYVHaAedydF+/V6lL+Yqb9HRtrb67aAdaOqAyjFBoizwuBasp0uJ1KpNdy4qPqi+q02VY2z59XTqOKPLfK3ZL1FyQHJ6HcxT9VayfhBQx3vtnueiSwYLYxtcCy4qz1+KoJ5eQoK8MH/irTPyxAoWqLjH9alXajc7NaiXUT2vP6z64u//qys+OFBarHfAy/4vUI0mfCSui2YwgCVAZRij3/sAyjdaTV08AmSoTktXFjNxXwLkzG6TqrTnA/W/fZc6ZXXo9Flfj/qXH4O6ZD/5PywlZHgCMl8IuW3dOzKFiugdkdS2wvHigTL1etOGCsO2FymRJjr2OuC8D7963Eti8unKXAb0+yWrVVSnIvFiY0xpRftec5nGaejApczjqoa09i1GjAirDCCXuRjPj0G0befUEkKkyOiPRkc9p+bFN32S5T48NLsrtOtv37cP97/X/XuDy7+NXurkYP9J9UXWDly1abfGFnWV0D+D2+z83m0xeBNOkvlXksjWzfc4K214lfgalVhlNlN0XOf3ssXaZs/5T0qNtuU/QqHGtf/jjH/I5bBbD3MKtcxnth0+TPmuwjrz+kgKVYcSZq4r8MZ9L/YF7yKsngEyV+bL+LIN/HzuhpYk9+7MjhVv91e/d+wshuQdXbj0u3agbHqcsBuvU2Nmv0r+e5m1krtqdXckrYJqS9dZSzyyBmbz6pLBNhsoYs3l1ZdOvU9zFLdnomlwdt/aXWDy3Tp0uw2R7QZgB3f85Ym3LaL9NS3fqvp288lIDlWFEyElFXmL5TrGrwHMqE3+sgPG/38n+FtBM7h/8WPdt9bbR4jJZ3nqt/8tNltfQyJD/dA6knlkCM3JxhLBNhsoY49R2jOnXGTWuNZ/XeXU8f8CaSl0H9izO6vSTYFqOOKDQ3yOFxdUtnLzmDIDKMGJr8B0G1ZAiC9afJ6+eADiV4aTE4B/zOi3ns1/Wdxp9srz12uCYYXwNjTxp5hpEPbMEpseUI8I2GSpjQERAOdMvYmu/Kkf1NyA92pb76I0e30rOp5/qDtiT+EaRjb7Mzfq9N8irzQaoDCO8dlxlUA0pEnj4Nnn1BMDtT18eLWjwj7kcVpq1Low+byNzGa880HlAL/0XXLfciXzDeTJg9nHqmSUw7cYcErbJUBkD2vXtY/pFmvYYJOzDksnt/SWWzKtdV5annxy7bXvxKoV6eKXN4aiHeZw8yEvNBqgMI+avO8egGlLk1JVn5NUTQOa1MqVqzTf4d/2Lc836rtmh318GL+XUdgznN7rHyLmFjDErAi5RzyyBqd1PYNt1qIzBj4459lva5/uTJSqjI+H96ac/B/XQ73FAzk/tAx6rdxltbrYXdfEmLzIzoDKMGDIvjEE1pMibFI2dgzt5Ac0lU2VaGLVjnzCpubk74qQTeVv91c/gdSo0mq6/SJ7MW8gYc/T0Y+qZJTA/tN0sbJOhMvqMGNvG9CuUbzgjyxXgLYH7ShDmX4F7bz/K4/RTueYb7zxMoB5k8XMrJqFsYz/y8rIEKsOIrpNCGFRDonzbyp+8gOaSqTIbVzoY/PtH1RfxXKc3kxt7S/3WYqLBi3BfLm/uK6l7jPxbyBjzPF6pv64Xr+MrbJOhMjoSw/JxHwTTrzB/Vn1xPcaAO0HFl86r3b5vn4pNptpRLJuQyWcN1l26pbyJYSLPXiZXaLGJdvfCHqgMIxoM2sugGhKl1cgD5AU0l0yVScuqbUabPn2Nb7HOkg0rHYoY/dZSwHlZ5JavdY9RRAsZAz5tsI56TglMmkYreKuhMjqyXAFen/zOy56HFpJUZfSJP1Yg2K/i5MnNanQckWPrYdH5uLZv5MWn1EMtTuJfpyq0E5iFQGUY8XP7AAbVkChzfAU2JSNEt3BBwJpKxv+1Xtehpm/NCN9cvman4cZPzOe0XHEtZIxpNGQf9ZwSGEvWN4XKZJJx0ibH24u6D+7OzGMM4D5TnNaMHNuG5UmoQtW9Dkc9pB5tS/MyIfW3ToHkuxcSoDKM+KSOL4NqSJSDkTHkBTQX/ZWxew7pZvwATkp6DO5+aP33r8PyZT5MG217fW+pVW4u1dqPyvI1yzWccTLwK/1DgiJayBij3CbullyEDpXJhHPxHJ+uP8+NSYuy07/gXTruBhVfPLcO922BwRmovM4e24/cpR5w4eE8xv5Pa/w9JhOojEpqLWniX6cqbv0OfZVJOpE3u0UlMylcdUmxGgs5uTHxmBa9Brw4WlB/P6uUFjLGBEcr9QvojtC7grcaKpNJgz//Nv1ch/eLLplg40qHQlWXDBje6ZZRD0mJeHT4o3mz6ldsMlXSz4Wdg7vv7uvUYy4ksXFvfu24hXzHQghUhh3nrj9nUBCJ8ksHhX1O9FWG42lIEcE9u0rWmr9lTSWDfetKNxfybRRGLkf3pGSl9gcTvJakDVTmPZd3lbapvNr0cw0WXTKm+X9vDMzlsHLE2DbcVwU2QsNxYnP5zgN6mf7WYSHcHKMedvMS8yTxx3YB5DsWWqAy7DgUGcOgIBJlwOzj5AU0CwOV4Xh5tKBLxxFmvUjBKku5PXX8sQIGL7XT61fCey4sxP7PbdSzSXiGWdCFHSrD8dfQrqafaHrRpUwM2sN812Sq6RNSosN9Mxk+pq10FwhPWnWSeuT55tSVZ6Ubriffq5ADlWHHQr/zDAoiUXZa8MM+CcYq8+79ykrzZtXnBCXHp39UfdHIsW1ig4sav0jklq8LfLicpLJwdQunnk3C09w1SPCGQ2XiQgvlz2nqctPetEbEHCpm/Kx8Tsu3efzO0mYyhWboqPY5bpEwBs8Nk/8y2ttC7hSs5kW+S5EDUBl2DJyj1Fbx797vUpXVKC9LldHt0KdNbfJ90ynGzypSbXHbPn03rHTI7osptx8vXWcu+dZZwkEl/zoouD+eDVTmlM30qU1MP8vWfpXxEqrGKp/lc+3sV+30+pWxzbx737a4Y//eOZ41E0CXicEajXyX0Z639pziLmGUDqgMOxor9g7YzFTvvZO8hvwxoTI6noQUCfaryH2b3LKmEvd4TlNM95tRYgsZAwpU9UxO0VBPJYFJ02gtWVPGylXmbWSuz2rPM/2sJt0H5/ip2ePzc7az68OWSyw5sbl8uYYzRP+8NHMNSkmV3eeF+yD0nhZKvjORFVAZdpRrvpFBQaTLXEV1l+GjMmah0BYyBjRX7ILY7963Y7dk261cZdYuc87xWXt9frZEZTg4W3oaUoTEZt6E5xk0oqPoH5lafXe9TpLRzacxTxJr9t1FvieRG1AZpij3CzGXa3fjyQvIH3FVRrktZAxQ7grt7yy+YMvKVeb3lhNMP4XnoktHNnxn+nVa9u5PojKZ7PP9SfTV0Oz/3CaThT6OnHr0aYN15LsRGQKVYUr0JWW3x1bQLX/iqoxyW8jok8vR/dnLZOpJJDzTPE5bsvnWrDI5+ocN70WXru35NMeXCnT/D6HNXNpV+usGM8X97HzfZvPDp0mEMyFNox25OAIXx2QHVIYpG/bfZFAT6TLT6wx5DXkiosoot4WMAfUH7qGeQRal47jDlmy+NatMc6Ml4g3I77wsjt+iS28jc9nm1ImgQqPpaVF2hDYTG1z0V6NVYC3kqz823HzwimQaXL8Xb50rK/EHKsOUEYsiGNREulh4sQJLxFIZRbeQMUDpJv17Z4vWl7Falbm5r2SO8tFtUA/+H4ocz1Vx+ObUZ88YTZTdvQOfnNr6Jcet/SVSI3Jb8sl9cbTgL80nifsJ+rTBuvM3mHY61WozVgRcKlDVk3zvIXOgMkyp1XcXg5pImqoKKbgoKqP0FjL6FKrupdwmv1xeJ73N7WhROwCrVZnBIzvk+Phoc3rcuY5pm+ML/vDHPxknc36ph4eKLV9Qs22fvt80nmb8neHrBjM79u/ttaTqyw/XDOHJsyOFKzSaLu7nqFgtn/DzT9iM/pU7L526b2e8o1AoUBmmFHHxln/bJdNZHXiZvIx8sFxluO+yBl1NFU2PKUeo545FOXbmsYUVsE6ViT9WIMeuuPatx5n10Ti8/ns+7yF047fZvYI22naPz8/vV4Pi1Q+G+0YxZGQHPm5kwJltX4j+baRgNa8DEdI2Z0pO0UxcGZ0fP8bwBirDGqqzrWKF+3L8UU0f8jLmiIUqI8X3OVpOXn5GPXcsypJNFy2sgHWqzPxZ9XN8sLkng9KjbUvVmp/jy/Z37ZylxKxd5mzWwpC29qv6uXY2Xj+EJ95Lq4j+acrj5LHl8G2JBp175S+a+In+ntUNVIY1/gduMSiLpPl7/gnyMuaIJSrzJjyP6ZW0FUcuR/ez1+KoJ45F6TnV0p5gVqgymii7L+rNNv1IPosuGTNybJsc30PpOnMNek6e2/65g5mfLO5Fjmb/6w5P2vTpK/pnys7B3VPs1gZnrsahZ4wwoDKsGTBbwcsXZObmg1fkZcwRwSqjmhYyBhSv46tomynffKOFFbBCldm8unKOjxyR06JLWXL/4Me5HVbm+OK65r+c08yZ0ZDPU/Rp17eP4B9j9Lm9v0ReaRbTnr/unCgDze1U2405hHutBQOVYc3vnQMZlEXqNLNgVT82CFYZdbSQyRLl2kxs3BvLN98KVcap7RjTDytUdcmjwx8J+6QM4XE18ewZDd+9v16nYbchZr1/O/tV82bVF3BxTHbwuVRZGOOWR1kyxA9iE3tNDc1l2SXtACrDGm7KKrrnb2ZOnIslr6RphKmMalrIZIdCbWbzwVuWb7u1qUxEQLkcHzZhUnPBchAXWijHvrqt/up3a38Jcy87K+C8bJfYK1PyWRVcMP1nHdNqzb6f4/Ltlz2mHLHwvjyQCVSGgP0nHjCojNSp8ZesV5cUoDJqaiFjAiXajCiXZ1mbyrTr28f0Yz6qvsjC0zfL5tcy/SdK15lr7m2ABassPbG5vMEfenT4o0EjOl7YWcaSd9tFyhPHncYfTuO9jDZ3CPhj2H6cThIRqAwBo5ZEMqiM1DkYGUNeSROYqzJqaiGTI4qzGQub42ViVSrTqX/vXDldmDJ1SlMLf+rIOGlTs9NwEWcm9xkM2fCd/p/Qvr/IplDVJX2GdrXw3e73/UnSj1WTv/eZ/sWdG82l/hcrtvaX9G1YJ1AZArj3zKAyDOLcQ77tm8xSGZW1kOGDgmzmeXyKKN9frUpl8jiuMP2AYjUWvjqe30I5ePe+xx33UqLMSTv7VQbnlV6H5WvcfXDm5nB/yMK3qomyy7HFjoXU+GtngtExVavNOBQZ03lCMPrESAdUhoDcju7G012JCY5+SF7M7OCvMuprIcMTpdjMpqCbomyvValMjkyb2sRyj8kk2K9ijr8A8cFgPUvug6lbR+lPc9ZVMEGmGEnKfzoHZi7amp6uDTsbO3hu2OdoEiM9UBkadobeZVAcBmk0ZB95MbNkr8/PfHZt6mshYxaKsJn+s46JsrFQGR0FqyzluXikaZLD84RvLu+1pOpvFq/d+EfPgfr3K706nv+nZpN1/9Xy1jKZTJrcjE9xLNyWiq39B80NK1lvrRRjB7IEKkMDt3dmUBwG4Q4P8ryNcO7MBjnu19KjbZv1HEj+VmmRv82I1fkUKqNjyMgOlgjB+R1lJ0xq/muLiaL8GGPz/mxXbHBR3etzTtO0x6D/TVEXN+2HrfYE47fCMcc307j74KlTmvJcUQHIBKgMDV823aD0xZh0GTw3jLyexnzTeJomys70fq2/a2fy9ykH5GwznH+ItZlQmUxs7Vfd3FdSgAckHM+/YHa978xZc4Any+bX0v9Ds6Y30v+vf/QcKIrHvOO3elTmilSei6uJJWqAAVAZMk5flenBw9zExafI86dU01cDzJ7RkPwdygfZ2sxsn7NibSNUJpMWvQaYawDxxwpMmNS8SE5dZIRRodH0t5G5dH/r+t5SBp15Lb/TSsf5HWVzfD8/N5uc+eDd3r9Yz12NSgcqQwa3j2ZQHzbZsF+cCzPFhfv2afBt791/f76e86/H4AfkD5CnzYj4AYfKZHJw3Q9mHf59lzl/4uIm3cRzX1Rd/88Zr5fkubiaWCpzYWeZHN/Pry0m6h4fvrn8xyLdnwUkBSpDRuWuWxnUh1lke/1v3S7DuG9XCe/vO00My7fd87ccu7lbLXKzmYdPk+wcRLsSCyrD8Xm92fxXA3geWqh5rwGSTrnPas9Licit+4untn5p/B2D+8yKpTJntn2R41uq1n6U/lMu7yr9eU5LcgJyoDKUPI57w6BEbHLnYULBal7kJQUWNuCSlc2s3HJZxMpAZWzMuQf7xt5S5RrOkHq6Dh/TVv+PZrmS68aVDmKpDJ8uecaX5jw4+PEPf/wjdSmAJUBlKFm88QKDEjHLioBL5CW1cv6cFJKUnFa9t0VrSsjHZhoO3iticaAyNpVX3z/4MZ9D/qVdpT+tPY/BjI0O/Er/R6B8Wa1fvWhuHbFUxmtJ1RzfUt9hXYyf+OJoQed2oxkUBAgDKkOJY7dtDErEMrI9zWQNlG3sl9l6UR028zw+RcSzSzZQmcprKr+/NydHHh4qVqbuHAYz9uMaC/Xvss7OM/q7dhZLZfoM7Zrju1q+oGaWz006kbeRmet7A2ZAZYi5+eAVgyoxS2zcm1L115FX1QrhjvrB0Q91A6ECm1kVKObZJRuoTOU1C2bXy/Fgr4myq9Z+FJtJ27J3f/0/zf2/WT5M/zpcC/mRx3kiE43C06Lsug7syaY4wCygMsRM8zjNoEosc/xsrLhfpgEfFqw/bzAQSrcZlz67xC0RVObqnk9zPNiPn9iC2aQ1uMu6eLb3Sa1+dPgjyz0mIqBcjvct5nFckXQir4kXyThpM3xMW2YlAjyByhBTocUmBlVinBmep8kLa1X8MWx/lh0XlWszdx+9FmUJSX2sXGW+bTwtx4P97f0l8mZ1tYpEbFlTSfenOVkx8cgZ0xpb6DFpUXZ8Vleo0XEEn1dbMLseujnICqgMPdGXnjIoFMukp2ubuQaRF9ZK+KblJhMfY4XazLy150QvlJWrDJ/FCjr1781y6obpncox3Ye3ZK35b8LzWKIy79ciyPktufE4B5eJz9IqaAcsH6Ay9AyeG8agUIzzJkXza8ct5LVVPUVdvC/dyuEIrTibycjI+M6yW8qzxMpVJtD9P6aPzTGHitnZrzJ+Yh7HFRUaTa/XdWjbPn17DunWZ2jXDv3+cuk44vumUyw8lj88VEz3132XOZt+8KzpjQR7DO+1u1frv6UcQTtg+QCVoYc7TqSkahjUinHuPnpdoq4cFzRQDXmcPPQv9TURZdkMt1FSlMu6VWb105Aipg/MM6Y1znywrf2qyq3HjZvQcuNKh3sHPjGxlGNiWL6oLV+7za5Xq9Pw3OZrjf4VMG7/nrIxOdsdV0QElBPgMRd2linKb8kFg+Z4fEA7YJkAlZEF/gduMagV+0RefFq4hjd5edWK374b/MdCQTbTe1qoFOWyZpX5hseFMpVajW/bp6/fCsdnRwoLMIYnIUU4HfmqwUz+7+rYpm90T5/DY020snXnPODXF0fH3aDiZXnfWL52mbOADUc7YDkAlZEFNfvuYlArknDfsPM4eZBXWH0IWMMr8Y0CbIbbJRWo6ilFxaxZZQxue86SuNBCAg7kBmii7Fa6ufA8tOu38fVYXI3PUzgvObPtC55v5sTm8vwb/ZWuM1d/VUuzuHfgk4oSLBgO+AOVkQs37quqwYx+/PbdEP1uFCtn1JJIYWMhf5tZ6n9RoqJZs8pMmtzMQkfhROfyrtLX95a6f/Dj5JyuwOUeMG5CyxwvTxkxto3uKXt8fua5Lfmcli+YXc+0diSG5Rs9vpVZ57ws7Cn8PLSQY5uxEk1dkCNQGbmgyot/deFsBs1mxGKYW3iWt17zjJxtRqvN+KHtZonqZs0qs3l1ZXOPzRknbcL8K4yd0LJmp+HFPrwcxNZ+1Rf1ZjfpPnja1Cans/+N5GTgV6bPN9XvOlT34DtBxc3aom8aT+Pkw/hc2K39JSZPblay1nyzXs1gVUthoB0wIVAZuVCoupekg0Een13XyIusAvrPOmaJx2RGtjazM/SudKWzZpXRvyolR9Kjbdcuc/6O9xmTz+vN5ownyy52nGpwzpHdEwtWWar7cYUzJ54X5xpQodH0ul2GcXDKJfialZVuLhZ6TCZoB0wFVEZGzF93jkHFCLNuz3X8NmMJA+cct9xjMiNPm2kwSMz1Iw2wZpW5sbeUWYfk+GMFTgZ+tWJBzXZ9+xSuuoTPn8jlsHLA8E6Pg4savBT3L5xtZPesvT4/6x7J/S1mHyV9fvjjH02UnSgqk+lkQ0e1J9kQawYqIyO+aOKn0WgZFI0w20Lu4CpgYUxefVLcsZCbzZy7/lzSAlqzyiSG5RN8bE6JyL1uudMvzSfx+UNFqi1eNr8WdzjXf4Vrez4tlI0P9RjcXfewTavsmX2a9Fh9aP33YnmMjvc3ZKEdMDugMvJi80F13pWtn/DzT0rWQ78ZM7BzcPfacVWKsZCVzUh0D7YOK1aZ1ZYfm7XRtp6Lq2W/TNIH/NFz4Kvj+fWfzslQlo/k1EenWW8jc33C7/VF5K+hXUX3mEzQDpglUBl54dhtG4Oikef6vXjpru5UGR/V9Nl19J50YyETm7kfm5jLUdqTj1arMkWrLRbr8BwbXJTnutnfNp52e38J/ed2GdAry0cunVdb95gcG+WJy8/NJlu4HoJp0A6YGVAZ2XEgIoZB3cjz4lWKhUdQa6B8841X78ZLPRaczVj4ObLcZobMC5O6mFarMtzRVMTD89vIXJ2zkRIDyjWcoW8zL48WLJXVjUVf1Jud+t+7h1Iicpu4sEZcytadE2POMgXCCPOvUAztgKUHKiM7XPqotl2eQdI02r/nnyAvuGyp3W83J3xsxoLWZuLiUwpW85K6nlarMhzp2S8+IADu1Zr1HMjn73Jeon+madn8Wlk+bM6MhrrHRG35Oo/jCqknQ3EXtws7y0jtMZlc3FmmDO+Ow0AYUBk5cuTUIwalk0kCDt0uVsuHvOaywtZ+zcSV0enpTK8BJ7SZMUsjGVTVmlXGrFUS+ZB0Iu+32d9lrU+7vn10z3obmeuzrNrvFnBednXPp7qHve/8K+E1s6VqzeffMlgU0A5YaqAyckTF6xhkmfuxiTX+wsmm/6dsY7+jpx+TDASJzbxMSC1UXfKfZGysW2WELcRoGu41eQrHds/fdM+aP6t+lo+p1Gq8fpO61QtrZLlMt+U4tBkrutjxAe2AJQUqI1Os5IoZXdLTtRNXRkt94af86TIxOP51KuFAsLeZEYsi2NTWmlVGQLdfPjTtMYjPXy/XcIauccvTkCLZnT/qMqCX/l3c+3x/EnvR6dUDh3eyvKuvYJJO5K3fdSib2W5tQGVkCrddDKont5y+Gvdbp0Dy4pNQst7abSF3qEfg37C0mUfPkiRaPNIYa1aZUeNaS3Fsfv/DDK83oL9yZPNeA7J72F9Du+rbTGxw0U79e4tyssmp7Rgpfpoyl7eRud5vEYsJb1VAZeSLpLfgyjYajXbB+vNFXLzJ688MW/s1/WYeo/0xxiDMbKbnVGl7yehjzSpTt8swiY7N5RvO4PMGHNuM1T1l+YKaJh7Zod9fCR/2pDm/o+yA4Z2KCFrWgMO53eit7v8x6NpHCNoBSwFURr780HYz4ws/5ZOYJ4kdxx0mHwIGOHXfHn3pKXW9swgDm+HcguVCFtasMvmdl0l0YqXP0K783sPqJyFFMp9yMvAr0w/+qdnka3pXAWeSHJ7n4LofJk9u1rTHoIJVlub4535vOWHipObGryMT0A5YXKAyssZn1zUGNZRtIi48UfHlwF/9sWFj0E3qGpuK1DbTcLCEKy4ZY80qwxHo/h8pDskr3Vx4vgH//16vk3Qir21Ol/TmcVwxdUrT7NZbyDhpc3lX6Y0rHRbOqTtmfCtOpzj6u3aeMqXpmkXV9/n+ZLxitgzxWlJVokubrRCojKz5tME6WZ13IMm+sPsqaw1cou7aBevPv01Lpy5tzpHOZg5FxjAuu5WrTPNeA6Q4Hu/w/I3nG9C/XqdEzQV8nlKy1nxOaF4eLUiuHRKx0+vX/GgHLAZQGbnj6hbOoIwyj1absTX4zk/tA8iHw0I+b+I3x/dsUnIadUXNyOukt6LbjEaj/bXjFsbFt3KVye2w8t6BT0Q/GO/x+ZnnG+g2qIfuWV/Um83/nReuuuTPQT2C1v4o6SIDVBxHO2AxgMrInfxVPW/FJDCopPyTkZGx5/j9egP22NrTj4u5VOqydd2e62nKXPlcdJtZsuki+yGwcpXhGDC8k+hHYv6/ynTq31uYyugoWGVpw25Dxk5ouWGlQ0RAuSchRXT3eCsatAO2HKiMAmg6dD+DSioot2MSBs8N+7i2L/nQ5EheZ4+O4w6HKr99s4g28/RFMsnYQWXyOy+7E1Rc3MPwCpO3I+nT6+8/LVQZE9SR7BYtNtw78AnP7skgS6AyymBrsCw6jsgqKamabSF3mrkGcbpAPkDGVOm5Y0XAJWaLKDGIWDbTd+YxkhGBynD80XOguMdg/l1SxoxvpXsWj1uQzGPdcidyHbGQZ0cK27ceR/LRUAFQGWVQptF6ZV1gwTLP41PW7rneeMg+Zs3WsiOXo3utvrsWbbhw99Fr6qpIEsttplgtH6rzg1CZTHyXOYt19E2LsivKu92L+6Lqmc96dTy/uFtUuOqSpBN5yV3EchLD8qEdsDCgMophxKIIBvVUdFJSNQciYoa5hX/fZjPLhiXftvLvNjlkY9DNlwnqv93McpuhAiqTSQHnZScDvxLl0LthpQP/v3vxvytRH934rbhb1GNwd3ILEQu0AxYGVEYxcMfmU1eeMSipOsJZxb6w+1PWnGo6dH+ZRuvFHYtitXxq9t01bnnUztC7z14mU28r6yjUZqAyOsrWnXP/4McWHnSTTuT9usFMnn+xQqPpuifOnN5I3M3h3IhcQUQk46TNkJEdyD8vygIqoyR+6xSoUeYtMOSJi08JOxu7ds/1yatPdp0UwvlNpS5bP2uwjpOS7Kqdr4pnibprf2ofUKf/7lYjD4xfEe2x/erByJjHcW+ot4Y+SrQZqIw+XzWYeX1vKUuOuD2HdOP/5yZNbqZ7Yj1Rz6FwOiWfRQlEZMa0xmgHzB+ojMLgjsQMqmptSUnVvExI1YHLkviEs5mqivr0QWUM+MTFLWTDdwx+NsjvvEy3akFscNEcW/2at0vUkySV4bm4GtoB8wQqozByO7qfvsprzWEEkTrKshmojDHckXLipOZmdWd5cbSgiaWts2TQiI66py+ZV1vUTVgt+u3lsgLtgHkClVEeFVv7J6doGNQWQXKMgmwGKpMdPzWbHMrjcpPEsHxL59Uu7uJm1osXrLJU95OMNtq2QqPpIr7zGh1HkNuG1Bzd+O1H1ReRf3xkDlRGkfw9/wSD2iIInyjFZqAypqnd2XWlm0uwX8Ube0vFhRZ6ebQgB/c/ogO/8lhcrX3fPoWqLhHwssPHtNUdlfm3BubJ0FHtyVWDAed3lP2s9jzyT5Ccgcoolf0nHjAoL4LwiSJsxqpUpqw8GuF/4uKmWwxSG237W4uJYv+J1TOmNSZXDQbcDSqOdsAmgMoolRJ11z56lsSgwgjCJ/K3GatSmdHjWzXpPpi85qsX1tAdjP1WOEr0VwaP7MB5ErltSA3aAZsAKqNg6vTfnZGRwaDICMInMrcZq1KZMeNbPQ8tVLHJVModVJdhOsN4cbTgp1KeIunQ76+3kbnIbUNqEsPycVUlHFPZApVRNlPWnGJQZAThGTnbjLWpDHfkizlUjH8XO3EpW3fO4+CiumNw+759pP6L9bsO5Y705LYhNZyxMSim4oDKKBs7B/fg6IcM6owgPCNbm7FClXn3vo/L902nMC51AedlUVu+1h1910t2askA+9bjnh0pTG4bUqONth2MdsAfApVRPCXqrr0fm8ig1AjCMwmJcrQZ61SZd+9P7jTsNoRZnfM4rtjj87Pur0cHflWAYWeUbxtPu6vqTjM60A5YH6iMGqjUZSs6zSCyigxtxmpVhiM92nbW9EYMWsfmd16m7zGaKLvanV0ZD3SZunN0S1eqG/dF1dEOOBOojEro/s8RBtVGEP6Rm81Ys8pkcmrrl5WlvAXmi3qzo7Nac/vs9s+598Pyqp1iNRYe969ArhoM2Obxez6n5eQfLnKgMuphqf9FBgVHEP6Rlc1AZd69v8zCe2mV8g1niF7eVn/107WQyQ5OdEaMbfNl/VkMhju/87KdXr+SqwYDQtEOGCqjJuwc3NE3D5FbOJup0lMWH1KojA5NlJ3Xkqo/NZssSmF/+OOfoLU/8j/0Zpy0Cd9c/u9R7aXu45fLYaXP0irkqsEAtAOGyqiKoi7eStxfI+qOTGxGiR8NiVRGx6mtXw4Z2eHzerOF/ZVanYZvWmUvuD0d98Tj/hUGjegoZcuZ1XNmNCRXDQbcDSou7vpWygIqozbKNvaLeYIbmhB5RQ42A5Uxwdntny+bX6t93z45XtGSy2FljY4jZk1vdHXPp2IdhtOjbTv27y3d0A8d1T7jJL1tSM2TkCKVWo2n/ZRRAZVRIb902CLpuCKIgJDbDFSGJ89DCx3Z8J3vMucZ0xqPHt8qkwWz63H/Ernla4ma6vZ37Szp6HcZ0Cstyo7cNqTmtbW2A4bKqJPa/Xa/TUtnUH8E4Z9XpDYDlZEzUqsMR6NuQ5JO5CXfUqmxznbAUBnV0mn84fR0LYMhQBD+IbQZqIycYaAyHI5txj4PLUS+sVKjjbYdOLwTyaeMCqiMmukx5QjWm0TkFiqbgcrIGTYqw1GxydQHBz8m314GTJ3SlP2njAqojMrpP+sYg1FAELPC7Xece2xn/FmAysgZZirD8Xm92Zd3lSbfZAassZp2wFAZ9TNiUQR+m0HkFvY2A5WRMyxVhuPjGgvDN5cn32oGWEk7YKiMVTB0wQkGY4EgZoWxzUBl5AxjlbF5v3z3Xr3lolRM6MZvi1RbzP64wxKojLUwcM5x/DaDyC0sbQYqI2fYqwxHboeV65Y7kW87A85u/1zKPoT0QGWsiEFzw2AziNzCzGagMnKGRGXes3rB7Hrkm8+A2/tLqLgdMFTGumg7+iD6zSByC7cbcuouuc1AZeQMncr8y4ixbdAOWNFAZayOJn/vS0nVMBgaBOEfBjYDlZEztCrD0X1wd411tAOu3dmVttRSAJWxRqr33vk8PoXB6CAI/0htM1AZOUOuMhxNewx6E56HvBRSkxqRu02fvuTVFheojJXyfZvND2Kx6iQir3D7I8du2ySa81AZOSMHleFwbjf6xdGC5NWQmvRo2wHqagcMlbFevmjip8SdO6LuSGczSpztUBn2/NRs8sNDxcgLwgA1tQOGylg1hap7bQu5w2CYEIR/JLIZqIyckY/KcHxZf9bVPZ+S14QBqxfWUEc7YKgMWDPD8zSDkUIQ/pHCZqAyckZWKsPxiYtb5JavycvCgC1rKuVVfjtgqAz4l66TQnBbEyKrcPsmB1FtBiojZ+SmMhyFqi45sO4H8sowIGTDd0pvBwyVAf/Pb50C7z1+zWDIEIRnxLUZqIyckaHKcORxXLFhpQN5cRig9HbAUBnwP0rWW7vr6D0Go4YgPCOizUBl5Iw8VeY9qxfNrUNeHwbc3l+ifMMZ1NUWCFQGGDJhRbRGo2UwdgjCJ9xOyv5PEWwGKiNnZKwy/zJuQktraAccG1z0txYTyastAKgMyALuyBHzBF1nEFnk6YvkH9sFWD6roTJyRuYqw9Hr7z/To23JCyU1Ccfz1+o0nLza5gKVAVlTou5a3KeNkEcsj7GBysgb+asMR7OeA5PRDliWQGWAKbpMDH6dJOEUQRAT4Tzmh7abxZrMUBk5owiV4ajRcUT8sQLk5ZKa9Gjb5r0GkFebP1AZkANfNt1wICKGwVAiiH6ePH8josfYQGXkjVJUhuOX5pMeBxclr5ikBKyplE9RzWagMoAXvaeFSjpXEEQ/onuMDVRG3ihIZTi+ajDz+t5S5EWTiPmz6ttUXk1eZLOAygC+lG3st+f4fQZjilh5OI/5vo3IHmMDlZE3ylIZjhI1F5za+iV53cRFuctMQmWAebQbc+jpi2QGI4tYZ2LjJPEYG6iMvFGcynAUrrrk8PrvyUsnFkkn8jbtMYi8qsKAygCzKVbLZ9GGC1ptBoPxRawq0nmMDVRG3ihRZWzetwP2X12ZvHqWExtctHLrceT1FAxUBgikUpetYWdjGQwxYiXhPKZia3/pZixURs4oVGU4bO1XLZtfi7yAlnBpV+mvGswkr6QlQGWARbQdffB+LJrpyS6cZb5JUdL6oI8l9hgbqIy8Ua7KZDJpcjPyGgojZMN3xWosJC+ghUBlgKXkdfb4e/4JXEAjk1y/F99yxAFuXGr13aUUm2HgMTZQGXmjdJXh6DO0q+LaAa9b7pTHcQV56SwHKgPEoVB1r2kepxPfpDEYdCTL3I9N7DjusK39/wZFETbDecx30nuMDVRG3qhAZTha9u6fGpGbvJg8mT61ieJuus4OqAwQkxJ11y7acCElVe6HT5WFs4G+M4/lr+ppPCIyt5lHz5LYeIwNVEbeqENl/v3EdRqecDw/eT1NkxZl13NIN/JaiQhUBojP5038Fqw/j19oGOTOw4R+M4/ldfYwMRyytRmWHmMDlZE3qlEZjt9aTIyVcTvg12H56ncdSl4lcYHKAKkoXsd3lveZuPgUBtPACnPp1osuE4P1TyeZQIY2w3nMt63YeYwNVEbeqEllOMo1nHFzX0nyqhoTc6jYz80mk9dHdKAyQFoKVPUcMi/sVkwCg8lgJTkQEdN06H5zB0JWNvPwKWuPsYHKyBuVqQzHp7Xnnd3+OXlh9Tm3/fMydeeQV0YKoDKABbb2a5r8vW//iQdorCc4ySmaVYGXf2wXIHgUZGIzJB5jA5WRN+pTGY4i1RaHbPiOvLaZBK39sXDVJeQ1kQioDGBK+eYb3fzOv3iFs05mhDsGD5ob9nFtX8vrT24znMd803ITydyDysgZVaoMR16n5VvWVCIvr+fiarkcVpJXQzqgMoCAfFU8244+uC/sfppGy2CSKDSJb9LWbL3i0G2buMUntJmYJ4lUHmMDlZE3alUZDjv7VasX1qAqbMZJm/ETW5AXQWqgMoCSkvXWDl1wIvz8EwZTRSlJTtHsDL3b3DXI9H1JlkBiM7QeYwOVkTcqVplMpk5pyr6qqRG5Ow/oRb7tDIDKAFnwfZvNk1adPH/jOYM5I8+kvk0PCn/QeUJwURdvBgVnbDOcx1RoQekxNlAZeaN6leEYMLwTy3bAL48WdOk4gnyr2QCVAfKCO+C5uoXvC7vPHdoZzB/yxL9OXbfnequRB4rV8mFcamY2w3lM+eYbyacWVEbOWIPKcLTr2+dtZC4G9bwTVPz7plPIt5cZUBkgU4q4eHMH+NWBl28+eMVgIrGMRqMNP/9kuudp+z+32Tm4ExaZgc08iJWFx9hAZeSNlagMR50uw16H5ZO0mNGBX31aex75lrIEKgMUQOmG6zuOO7x+7407D5Xanyb1bXrY2dgZnqfrDthTsJoXeUl1SGoz8vEYG6iMvLEeleGo1Gr8k5AiElVyp9evBassJd9GxkBlgMIo02h94yH7prqfOhARExv3hsEcExaNRnv9XvyWw7eHzAvjZmmWCyTJBIlshvOYcrLxGBuojLyxKpXhqNBo+t2g4qKXcfmCmnb2q8i3jj1QGaBsOLNp5ho0dlmUz65rEReevExIZTDrssydhwmhpx4t33yp97RQh27bCtdgcfWuWIhuM/dl5jE2UBl5Y20qw/FZ7Xnnd5QVq4DaaNvhY9qSbxQVUBmgNkrWW1vjr50dxx3m/Gbxxgt7jt8PP/+E8wxRGg1zH5jbMQlhZ2M3Bt2c43t2wOzjTYfu/6l9QBEmtx1Jiog2I0OPsYHKyBsrVBmOj6ovCt34reXVSw7P0/qvfuSbQwhUBlgRn9Tx5Q6x37X2r9JzR90Be5q5BrUdfbDX1NA+M44a0Gn8Ye4/cQ9w6bOrUpet37fZXKbRep5rNyoXUWyG85ivm8nOY2ygMvLGOlWGI5/T8u2ev1lSurjQQs7tRpNvCC1QGQDA/7DQZu49fi1Pj7GBysgbq1UZm/ftgD0XVxNWtxt7S1VoNJ18E8iBygAAPkCwzcjZY2ygMvLGmlXmPatnTGtsbtFObC5f3MWN+p3LAqgMAMAQATbDecxXf2wgf+cmgMrIGatXmX8ZPLJDxkm+FduyplI+p+Xk71kmQGUAAFlgls3cfSR3j7GBysgbqEwmnfr35tMOeP6s+rZWedN1dkBlAABZw9NmFOExNlAZeQOV0VG/69DE7NsBp0fbDhjeifxNyg2oDAAgW3K0Gc5jvmyqAI+xgcrIG6iMPvatxz07Uti4Skkn8jbtMYj87ckQqAwAwBQmbObOwwSleIwNVEbeQGUMqNhk6r0Dn+iXKDa4aOXW48jfmDyBygAAciBLm1GWx9hAZeQNVMaYMnXnXNxZJrM+l3eV/qrBTPK3JFugMgCAnDGwGc5jvmjiR/6uzMKqVKZDv78Orf9eR3TgV6e2fpnJhZ1lbu8voePZkcIvjxbMROoVm6Ey5lKsxsLj/hWObPiO+x/kb0bOKF5lavbdRV5EAKwBnc3cjlGex9hYmcoA1ZDfeVkexxXkb0PmSPoxZKEyTf7eR15EAKwEzmYu3nyhRI+xgcoAoFJs7ZWvMi1HHCCvIwDWg52DO/l7EAZUBgBVUtTFW9KPIQuV6TophLyOAAD549R9e90Be5QFTqADkCOf1PGVVDNYqIyrWzh5HQEAAABAQsXW/pJqBguVmeV9hryOAAAAACChUpetkmoGC5VZvvkSeR0BAAAAQEKTv/dJqhksVGZr8B3yOgIAAACAhF5TQyXVDBYqc+JcLHkdAQAAAEDChBXRkmoGC5WJeZJIXkcAAAAAkLB88yVJNYOFynDJ6+xBXkoAAAAAsOdARIykjsFIZb5vs5m8lAAAAABgz5U7LyV1DEYq88ew/eSlBAAAAABjbO3XaDRaSR2DkcoMX4gueQAAAIDV8W0rafvjvWOmMmv3XCevJgAAAAAY09z1/9o787iuqvz/0+a0l9PUtDfNNDV961t9G0Uz9yyXckkbp9TSzDJbLLc2s7K0ZdSy1WRXAVFBwQUBRRFBUEFFVFBERBRZlEX27cPvxOfx+8R8gPt533vPPedeeD0fz78KP/d8zr2fc1/n3rNEGJ0xBEWZfWmF0msTQgghhII1eiZ2o7AoU15Za93deiGEEEKozZDoE0ZnDEFRphGTmCCEEMKO58ncC0YHDHFRZtIXO6RXKIQQQgiFeeOAZQIChrgo47fhqPQ6hRBCCKEwn35ns4CAIS7KHDp+XnqdQgghhFCY/1l2QEDAEBdlGDc9uVx6tUIIIYRQjAkH8wSkC6FRZvQHW6RXK4QQQggFeHUvn5raegHpQmiU8VyXJr1mIYQQQijAETMixaQLoVHmZO4F6TULIYQQQgH+GJQqJl0IjTKM+0YGSa9cCCGEEBpt9tkyMdFCdJR5/4dE6ZULIYQQQkN9ZEywsGghOsokpuZLr18IIYQQGupnS5OERQvRUaahwXbbYH/pVQwhhBBC49yfXigsWoiOMoz3vsc7JgghhLDd+o9Rq0TmCglRhiU16bUMIYQQQoOc6yHu7VKjlCjDeHD0aukVDSGEEEIjPHG6VGSokBNlvvHbL72iIYQQQsjdxyeGCg4VcqJMYXFVp+6e0qsbQgghhHz1XZ8uOFTIiTKM4dMjpFc3hBBCCDl6Q3+/yqo6wYlCWpTZnnRGeo1DCCGEkKMzvksQnyikRRnGI2OCpVc6hBBCCLl4UZelGadKxMcJmVHGOxQbZUMIIYTtxEFvh0uJEzKjTGVV3Q39/aRXPYQQQgj1m3AwT0qckBllGF/5YlY2hBBCaHm7T1gnK0tIjjLFF6qv7e0j/QRACCGEUI+b40/JyhKSowxjvvc+6ScAQgghhJrtNn6dzWaTFSTkR5myitrr+/pKPw0QQggh1GZ4XLbEICE/yjAWrkiRfhoghBBCqMFek8LkpghTRJnKqrrbh/hLPxkQQgghVGtiar7cFGGKKMPwDz8m/WRACCGEUJVjZkfLThCmiTI2m63b+HXSTwmEEEIIiV7Rwysnr0x2gjBNlGHsPVwg/axACCGEkOgXXsmys8NvmCjKMCbOjZF+YiCEEELo0ruHBVZVi94Eu1XMFWWKL1Tf9ORy6acHQgghhMrKnYDdHHNFGcaqqOPSTw+EEEIIFXzho62y88LvmC7KMIZPj5B+kiCEEELYqjf09yssrpIdFn7HjFEm71xF537YMRtCCCE0o2ExWbKTwn9hxijDCIzIkH6qIIQQQujkuDnbZGcEZ0waZRivzY+VfsIghBBC6PAvQwPLK2tlBwRnzBtlqqrr7hsZJP20QQghhJB5WTfPPYck71HQKuaNMoyUY+eu6OEl/eRBCCGE8IegVNm5oHVMHWUY3qFp0k8ehBBC2MEdNStKdiJoE7NHGcZb38RJP4UQQghhh/WB0atLympkx4E2sUCUqamtx06TEEIIoRQ79/PLOFUiOwsoYYEowygoqrzz6QDppxNCCCHsUF7WzTN6z2nZKcAF1ogyjIMZ56/t7SP9pEIIIYQdR//wY7Lv/66xTJRhsGDI4qH08wohhBB2BL/y3S/7zk/CSlGGEbw18+KuHtLPLoQQQti+ff3LWNn3fCoWizKMX9Ycln6CIYQQwnbs0GkR9fUNsm/4VKwXZRjfBRyUfpohhBDCdinLMTW19bJv9SqwZJRhLFh+QPrJhhBCCNuZT725yVo5ptG6UYaxcEWK9FMOIYQQthuffmdzdY3FckyjpaNMY9O4GYwChhBCCPX77MxIyz2PsWPtKMNYGZFxiTvSDIQQQqjd8Z9ur6uzzDhfJywfZRgbYk9e1dNb+nUAIYQQWtH3f0i02Wyyb+baaQ9RhrE/vfDmp5ZLvxoghBBCC3mJu4dXaJrse7he2kmUYZzMvfDg6NXSLwsIIYTQEl7T2yc8Llv23ZsD7SfKMCqq6p7/cKv0iwNCCCE0ufeMWGny/a7ptKsow7DZbF/77ce0JgghhLAth0+PuFBeI/uOzY32FmXsRO85fdtgf+nXCoQQQmgqL3H3mOuRZKFNCSi0zyjDOFdcNWDKRukXDYQQQmgSb35qeey+XNn3Z/602yjT2PSyaZF/SqfuntKvHgghhFCuo2ZFFRZXyb4zG0J7jjJ2Uo6de+j5NdKvIQghhFCK1/b2CdicIftubCDtP8owausaPvdMvqwbHs9ACCHsWI6aFXXqbJns+7CxdIgoY+dwZlGvSWHSryoIIYRQgLcOWhEUeVz2vVcEHSjKNDaNnlmx6difsS4whBDC9utl3TxnLk4oq6iVfdcVRMeKMnZKy2rYOb68h5f0qw1CCCHk6zPvbj6cWST7TiuUjhhl7BzLLhkzO/qiLvIvOwghhFC/XV9aG5mQI/vuKoGOG2XspGUVj5wVJf36gxBCCDX7v/9es3bbCUvvbq2Hjh5l7OxPLxw2LUL6tQghhBCq8sHRq4O3ZnbYEGMHUeZ3UjPOv/J5DJbUgxBCaH57TQrbHH+qoaFDhxg7iDLOFBRVzvVIumXgCumXKYQQQujk5T28Js6NOZhxXvbd0kQgyrROXV1DYETG4LfDL3XHJtsQQgjl+/ALwd/6p7TXzQf0gCjjgvzzlV/67HtkTLD0ixhCCGEH9LbB/pPnx+IxjAKIMlQyTpV8tjSpy4trpV/WEEII2713Ph0w5audO5JzO/iQXgqIMqrJOnPh59WHhkwNv/Jxb+nXOoQQwnbjxV093F9ay7rNew8XIMHQQZTRTl1dw55D+XOW7H1iysare/lI/w1ACCG0nJe6/xZf3lkYv3Fn9oXyGtl3NkuCKMOH+vqGY9klgREZ7y7aNfCtTXcM8Zf+84AQQmhCO/fze3xi6GvzY5eGHDlw9FxlVZ3sO5jlQZQxChauE1PzQ6JPzPNKnjg3ZtSsKHbt/mVo4PV9faX/kCCEEBrq1b18bhm4outLa4dPjxg3Z9v7PyT6hx+L3Zd7trBC9t2pHYIoIwcWdIpKq7POXMjMKYUQQtg+LCyuYm277DtMhwNRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFgZRBgAAAAAWBlEGAAAAABYGUQYAAAAAFsaqUaayqu58SVVmTmluYUVRabXs4gAAAABWpayi1n5LzckrY7fU2roG2SVShzWizLHsEr8NR99ZGN/ntfX3jgy6qqe32z+XNvdSd49bBq547OXQ17+M/S7gYNKRgvp6i50JAAAAwGhYatkcf+or3/0vfLS1y4trbx/i/4fHvJxuqczr+/reNzKI3XPf+Hqnx9ojB46es9lsssveJuaNMg0Ntrj9ZyfOjWEZpWUtu/RPTywbN2fbmq2ZlVV1sr/K7xzMOM9iFlG+ubimtp5+aDGyIpm2bA7bun5OnC6VXja7rCQuz/7ZwgrKRx3OLOJ4yamipKxGek06pBQ4PavY6NNaXllrdLWr4nR+Ob38eecqDCoG+0lyr+396YWZOaWFxVUGldkB8bJhP1juh2ZX1OeeyY+MCb64q4eGWyrzmt4+z86MDNicYaq7qh0zRpnSsprFgQf/NnyltupuGS1nfJeQa8CVoZYzBeUXdVFRcpbDOB49+2wZl/rkKCuSacvmkKXPVuuTdWikl80uK4nLs896YJSPenD0ao6XnCo27syWXpMOKQV+fGKogJJc0cPrr8MCe7+6fvL82KUhR45llxh9IhToN3kDveQjZkQaVAz2kzSuwjt197zrmYBek8Je/zLWJyyde4UTLxv2g+V1RJvNFhaTpercufTa3j5TF8Q7GnAzYK4ow3rnC1ekXNfHl/sFelVP7w9+3F18QeaomkX+KarKzLctMGFcQJThIqIMdykFFhNlWvrA6NXsbJ4z/vmBE2p7YiwTGNTeGhplWnrHEP9pi3alttEOqEVwlNmedObRsSEG1cwfHvN665s4uXdVByaKMomp+fc/t8rQi/Lmp5YHRR6X9QXVXlJ82wITxgVEGS4iynCXUmBZUcYu6++xXp/jFa0A1PbEmF6haUaURHCUcTj47XB2k9JZeGFRpqyi9vUvYwVUy62DVmyKy9ZZWv2YIsrU1jXMXJygKvLr8fkPt4oPkoczizQUlWNbYMK4gCjDRUQZ7lIKLDfK2H34heBDx/k8LXAJO5ba4vWbvMGIksiKMnYnfbGjtKxGc+HFRJkTp0v/51+rRVbLnCV75Q4Klh9lzhVX9RDeKPxj1Kr0rGKRX/Ojn/doKCfHtsCEcQFRhouIMtylFNgMUcataSRm7L5co8+Otp4Y652eKSjnXhi5UYZ5+xD/XSl52govIMrEHzj7x/5+4qtl9AdbJE7hlhxlTuZeYK2nlMuxcz+/uP1nxXxNFlfvHhaooZAc2wITxgVEGS4iynCXUmCTRBm3pjSj/8WHMtp6YsxF/incCyM9yrg1vf0PjMjQUHijowy7Eq7t7SOrWoZPj6iqljO5SWaUOXW27C9DtdzgecmagB3JhndoGCwzaS4kr7bAhHEBUYaLiDLcpRTYPFHGrWntCcqcfG2wnthdzwRoK9ijY0O4l8cMUcbu0pAjagtvaJTZLTXH2B06LULKom7SokxOXhmv6dZ6ZCe+rXsVR/QMv+LVFpgwLiDKcBFRhruUApsqyjC7vLjWoFHAO3X0xJjcX+WbJ8pc3NUjLCZLVeGNizLHsktYopVeJ0x2v1NbeP3IiTJV1XX/HGfUDDG13jbYn+Uq475sbV3DDfreXHJpC0wYFxBluIgow11Kgc0WZZj/WXbAiFOjcyLMnCV7+ZbHPFHGrWmZj6MnVbTPBkWZc8VVZng0YPSlqICcKDNxboy2Crp7WOCUr3YuCT68dfdpdkFn5pSmZRXvSskL2Jzx8S97BkzZ2Km7p4aPZbmqusaoaY3rd5zUeVlwaQtMGBcQZbiIKMNdSoFNGGVuHLDsQrn2yTWtUlNbr3MMKbvF8i2SqaKMW9NKP/Tbh0FRZsSMSM3XzEufbPt+ZWp4XLZ9yWOWzBIO5gVGZMz+eU+f19ZrWxr4EncPo8dvOSEhyqzZmqm2Xq583Hvy/FjKguLnS6oWBx68d2SQ2kNw7zo4GP3BFp0/FS5tgdniwhU9vBzLfJmtbM1FlBFDe40y9z+36tGxIXT/51+r//zUcs0lX7Ccc284LCZLf33u5npXI0aZzv38iHXOesisOdLzBT/4cTex8EZEmVVRxzWU+YkpG0OiT7icc3SmoHyuR5KG7YPuGbFS5BBg0VGmrKL21kHqKuW596LUbjvQ0GBjMfMaNQOgWIpkmZT792WdJJ0/El5tAauTotJq4xw3Z5uqb9R8/L/mstH7Z6zPoe0QbQ1hI0YZzcelS9mpp91EmZfnxhhdn0xKgYn3JG1D8Vi7sedQ/rf+KWoXqrjz6YA6rhNi9ffEmFMXxHMsEvFXT4n4zTlbWBG95zS7bbu/tFbtF+zU3fNk7gXKUbhHGXa5qs2+rG+8be8ZVZVTWVU3bdEutWu/ffzLHlVH0YPoKPPe94n0irism+ePQamaj5WWVXyfmsczvV9dz/Gb2lm28aj+hoD51jdx3MvGEe/QNFVfh/0quByX/jhnJ++J98Qow/242mg3UUbKiMJWMTTKNGdTXLaqwXYcl14tLePTE7vpyeUcA5ZBUaY5SUcKBr61SdV3JB6Oe5SZpeaW6tb0aKCsQuM2pZEJOapGFl/ew0vY7odCo0z++cqrenoTa4H9hPT/JguKKlVthrAh9iSXb+pgwJSN+hsCt6Y3mnw7WxxJTM1noZP+XfpN3sBrth6iDBFEGe4IizKNTTdv+jPmKV/t1H9EO77r07k0X8zN8ad4lUpAlLETEn3i6l7Uar/E3YMyH55vlCm+UE2/pbo1PdTUuSZvxqkSVS+bPvpZ0IMZoVHm/R+o+fHirh5bd5/mclCWZm4f4k88bvcJ67gc1M7ZwgrKmCni4joc2wKO5J2ruG0wtXrdmh6AszPC6+iIMkQQZbgjMsowfgxKJV7q/zcmmMsRG2k9Mfbzv9TddSs3bs42XqUSFmUY0XtO0/tplGfnfKMM8Xdtd+zH0Vz2FmD1T1+95ro+vpofAqlCXJRh34e+5TXfqVwxSWfo53vvYdeDi4l8F3CQcsSoxBzKn3FsC3hRU1uvah7HFT28ktN4DkhClCGCKMMdwVGG/daIz/b/2N+PyxFzaT2xmYsTKInn6l4+FVV8BoGKjDIML/Lbc3aDq3T1HTlGmYYGG33g6aNjQ3jVP2NDrIppuT+tOsTruAqIizI+YdRnlf8cF8J9ucCXPqEOSn1tPre2krIVNvuy7C8fen6NyLaAF2oXnFi28SjfAiDKEEGU4Y7gKMOY8Nl2yhEv6kKageUS4lbYew7l/7LmMOUvgyKPcymY4Chjs9noA4FdfkeOUSYygdQHZl7q7sF921H6PA/7Pc5oxEWZp96kjqIyYjOBs4UVl9PGr13f15fLGjPpWcWUw33t99sl+9nSJJFtARfUDvXlO4vBDqIMEUQZ7oiPMktDjhCvdi6Ho/TE7nomgN3pzxSUU+a2DJ0WwaVggqMMY3P8KWLNj5gRqfxRHKPM+E9J0dbNmLaXfktlqlpFUBuCokxpWQ3lfSqTJR6DyvDK59R1+Vja1X+4j38hbcB2LLuE/fGBo+cof8yrLdCP2qG+vV9db8SwZUQZIogy3BEfZehL7+g/VhqtJ/bu/5+K2G38Opd/zFqM8yVV+ssmPso0NNjufJq0C9W1vX2UXynwijIsQd44gPTC8aqe3hyHJzbnja93Ei/Ibw3YVdQJQVGG/mpN7ZYWdOhrkLyre6owcSvsh1/4fYAeZdlpXm2BTlgeVzXUl/2xQb8lRBkiiDLcER9lYvflUo7Yqbun/mMRt8LelZJn//v/LDtA+XsN+y+2RHyUYXz4025iU3M4s0jhc3hFmf3phcTyvP0foxbyYP1w4kozg94ON6gMDgRFmakL4ilf+Lo+viz/GlcM4jIzD+hu0NkvnHKgeV7Jjn8yc3GCsLZAD2qH+v7hMS+OI6mdQJQhgijDHfFRhjg24v7nVuk8ELEnxroojhkx7K5GKRuXtbukRJn4A9Q9NZcEH1b4HF5R5hs/6twlvjMtnOg1KYxShqt6enOZPKWAoChD3Dxy/KfbDS3GbFpX4+KuHjrnj735TRzlQM33iUw4SEo/Rqzjpwq1Q319wtKNKwyiDBFEGe6IjzJ+G45SjvjsTBfDNVxC7Ik5jcBgPUCX/4R14k+d1bt3r5QoU1/fQFzaZ+LcGIXP4RVl/vU+aRXmO58O4FgJLSHO0nUzYIN0J0REGXYREHd59F1v4G2PQZz2zIzdp33oMXErbKdnPw0NNsrSQ1zaAs3Q5yXafdPgRYoRZYggynBHfJSZ8hVpaMIva5SeClAgdlecGkni6ED9C21IiTKMvq+tpxy360trFT6EV5T5+7OkNwyvztvBtQ6cIc5ucTN+zoqIKJNKHqRy5ITSW0b9lJTVEN/t/ar4kFAZYqP82dIkp39IHEUlfv90O2qH+rIfbU2tUfuN20GUIYIowx3BUYZ1kG6mbbVzPMf1mrPKB6L0xFhhnAYD7Esjjd5oPkBQG7KizGvzSQnvyse9FT6ES5Rh7Spxw+o1WzP5VoITNputcz/Srhrv/5BoaElERJn1O0hjfq/u5WPoQBk7/xhF2sdAT70Tb3ItR4dt3X1aTFugAQ1DffPOGb77hvmjzOT5sV/77TfC7wIO0kvbbqJMt/HrDKpPpqoQIDjKzPNKphyOlUrngYgnotUHrnc9Q5rmozww1iWyoszPqw8RWxuFWQ5cogxxxqub8a91GsnLrHA/HU6IiDI/rSJdAY+OFbGQzvDpEZTC/PtDjfVO3Ar7vpFBLf8t6w8RE24qv6fWFFgnQNUOvZd180zUvZU3BfNHGeO8trcPvbTtJsoYKisDvcAio0xI9AliL3xlsw3ntUHcCrvVrZXfWUia3vHBj7v1lFBWlAmLySJeSAoTHbhEGWJJLnH34L7YbEuI+1n20B2ylRERZYhfdchUw+drMd5dtItSmAFTNmr7/OW0rbDb2v2cuOqR0Q/rnFA71NcrNE1MwRBliCDKUDRhlCksrmL5gPha/I4h/jpXbyL2xG56cnmr98gdyaTp4nc+HaBnPousKBO3nzqJSWG/PC5R5tdg0vLKrXaYuUPcHewfo/ROrFNGRJQhrnCsPPCbFwuWk9Y/6PKi0tAtBYhbw6ccO9fqPyfGbZ1tgSrUDvXluPODSxBliCDKUDQiyoTHZWfmlNJNzypOOJjHSrJwRcqwaRH0BVWZq6L0jqwk9sQmt/EbZ/mGuG6bnt+jrChDnHDODG57hAqXKEN829j/9Q18a6BVInaRlkLu3I/P1mBtISLKDJ1GeqczW8hu4Mtov9W/P6slz54trLiEsKixwodXVdcRN20XM56Utaqqhvo+9rLhQ32bgyhDBFGGohFRRphctpt98g3XG0Myt+4+3dYnEBdV1zN8W1aUobc2AZvbfM3HJcrM+I60CJnmYRKqIK64w+6MhhZDRJTpQ5vDRtzWXCfsIqMU5o4h/ho+fHEgaZK98qviUbOijG4LiKgd6nvLwBVnCsqNLlVzEGWIIMpQtG6U6flKmP69Zs/StsK+ob+fwmusTXGk88g+pFbruzBZUaaotJp4OoyOMsQ3/mJedNCX0Td04I6IKEM8efqXQ6BAnE6lLcp0pW2gqrz84soIUtjS0xZQ0DDUl8Vz48rTKogyRBBlKFo0yoz+YEt5pa4lPe0Qe2KvfK50g6yuqScuJaeqtpsjK8qUlNUQz4jRUebVeTsoHyJm5QJ6lGEVaFwxOlyUIbaYGqLM0ZOkxYL+OixQ+XNKy2qIKwpqbgsoTKYtouBQyo4KiDJEEGW4/6DMEGVuGbhCzwpYThDXZHe52y5xDpTmqIEoQ2x8EGU4Y6oos2ZrJqUwGsbKzFmyl/LJMxcnuPyoQW+HS/mtOlA71FfMk8yWIMoQQZShaKEowxqohStSdO6v0hzisq3X9/V1+TA4KPI45aOufNxb28MkWVEm/3wl8eyY5AWT2aJMqdWjTP/XN1C+53zvfQIK4xOWTimMhjadsrU1c88h1wuuEJOE5rZAGbVDfbuNXydyqG9zEGWIIMpQtFCUuaKH1zsL43MLua1CSeyJTfhsu8uPulBOfa6scMtXQFaUoS/SHx7X5oUkMsoYvaehHXqUMbQYIqLMiBmRlO85bdEuAYVhgYlSmJ6vhKn62MTUfMrH3vUMaRJ1QVElcUUsbW2BAmcLK24d5HorKIc3Pbk8J0/anlCIMkQQZShaKMo4roHVWzisTM8aJWJPbFPbN+nmDJlKeq6sbS0xWVEm6UgB8bwo9Fe5RJn3aEu1PfdeFN8aaJWdtOV2WLo1tBgiogxx2beXPuEwmdAlxDw7apa6i4C4FTY9rhGnffFdV1DDUF+5ewyZP8qMmR3N2h0j/OTXvfTStpso88iYYIPqk5mmZpV3M0QZu/oXzCRuhc2SE/H5K/G58qXuHoXFVWpLa/7VfjPb3gGDS5RZuCKF8iG9JqnrkGuD+Mu9ccAyQ4shIsrM/pm0Y+qgt0Ws9vvEFNLCCarWeauroy4MxZoM4mcSZxNoawvagrhfmsMfg1J5HVob5o8y2E6SSHvdTlKMOleyIPbE6EvX5J+nPlfWMERSVpQhLmvLVHjvzyXKEJPiX4a6mGLChe8CSLcqo9sWEVHGY+0RylfVtiqdWogbnqlqGjbHk5Y7vG2wP32J3lPkm/TPqw9pqgln1A71pbw1NxpEGSKIMtwxVZS5qIvSvj/K0HtiYTFZ9I/t/SrpubKGrXlkRZkpX+2kHPfPTy1X+BAuUSYyIYd4YQgYxUjceMvopYdFRBniwsYsxVfqXuVJGRaWjdiVjXhXY6dcVWm7vEhapab7hHUqq6EV1A71ZWWrqjb2ZFFAlCGCKMMd4j1p4YqU1VsyiS4NOfLJr3vHf7r93pFB9B+j3Sff0LhtHLHmr+ntU12j4r5I7Ky7Kb6OaRVZUYa1tJTjKt+zuUSZ4zmlxLrltTG7An1pYyGMnuUqIsrQB37vNng75eS0QmJJ2tojqSUsHl35OGmrgbueCXh0bAjdG/qTdsnW0BY4katyqO+fnlgmcahvcxBliCDKcMfo7SRPnC59/4dEVXswHTqu5VjEK5m1cqqar78/S01j87ySVRVYSpSpqKojdvamLlDqsnKJMgzihbFi0zGOldCS+voG4k47X/sZu5q/iCjDvi2x3r/1TzG0JKuiSAsesHNDX2KZuBOCoaptC5qjdqjvpe4eMUlnNB+OL4gyRBBluCNmZ2zWp2I9B+JF/qWP6vUs6D0x47z/OXV7JkuJMvR3Ol6haQqfwyvKEFeW57IzlwIHjp4jVkvErjZ3C+eCiCjTSD5/Ro/8tdlsb3zt+n2nqoHfxK2wTdUWNEftUN/FgQc1H4s7iDJEEGW4IybKNKrpLD0xRfU7JuJW2Ea7P11pLxcnpEQZ4shol2ecV5Qh7l1w44Bl9AGaGmDpmVgteee4rYHUKoKiDHFkEOvxF5VWG10YlzOqlLd7bE7++UrKVthmawsceK5TN9T3RYMzvloQZYggynBHWJSpq2u4fQhpV9dbBq5Q++Fm6Im50dZAdyA+ytTU1hNHRrNToBwdeEWZZeQMuiM5l1c9tIT4cOjWQaqvTLUIijL09a8WGfyOyQ47CpdzT5+eZ6q2wI7aob7/NyZY/+67fEGUIYIowx1hUYYx47sE4nWu6hdqnp4Yy2oNDdSHB+KjDHFkghvhhQ6vKHOmoJxYJOMWbDt0nLrOr4B1hwVFGfYDIw4O+tvwlYZuBe7AOzSt1dlMqgbqu9MyqdnagkZNQ31P5l7QVNMGgihDBFGGOyKjDP1WqmqVv+9XmqUnxqSPwBMfZejt/JqtLhZf5hVlGA+MXk35qE7dPVk7yakm/osX52wjVgv3VelbIijKMIZNiyB+bW/FYVPaiD9wtuUrmOCtmS0fS0wmL46XcapE+u9fW1tQU1v/2MsqhvqyzBe957SK6hYFogwRRBnuiIwyrO0iXueULd4cEN8OiPHVeTuIxRYcZVZvIe1AzLy8h5fLDT45Rpm5HknEgo39OJpLVTTneE4p8ZEeqxZDN5K0Iy7KBEZQB6/d9OTys/y2SWtseiZ038iga3r7bEl03p4+KjHHaQA/PRDQrySztQVqh/oaPbNMM4gyRBBluCMyyhQWV3G/zs3WE+vcz4+4npvIKFNUWk1/ek2ZLsQxyhzLpp7Bi7osTeS90Alxa0U39bsAaUNclGGXKcsoxC8/dFoEx3HXjn2XLuvm2XL3tV0pedf39bX/wf3PraIf954RpA3YzNYWqB3q+/yHnFea4giiDBFEGe6IjDLllbXcr/NPfiVthS1S4mrCwqJMfX3DUPLLBCYlLnCMMgz6w/W7hwWe47fFDXEFf7tGT8O2Iy7KMGYupg5ec+OxR5qdX9Ycbv6xF3f1YKfB6W9Sjp3781O/xayW/6stdtO2whasy7aA5TZVQ30ffsF0Q32bgyhDBFGGOyKjDOMPj5GW5qJfb8StsEU6+oMtlJKLiTKsT6vq6XW38aRV1/lGmXXbqTtcujUtQ8xlH4PoPafpN5EHRq82dDa4A6FRpqCo8prePvSq159m/MOPtRzby/7L9yud90HMOFUy8K1NtXXUEcdTF5CmlwtWuS1QO9T3j/39TpzWtY6w0SDKEEGU4Y7gKHMtreUkXm/m7Ild0cPrQrnrQRUCokxpWc2zMyNVFX5D7EnKJ/ONMg0NNvqqyszh0yNU7T7Rkj2H8omXot1lG4/qORwdoVGG8Y0fqUl1OG7ONm1PBdg5/vgXpfVj2P/V/C3q6hqIL8smfLa9qLRav8T9mK5oe4CVhqG+US2GFpkNRBkiiDLcsXSUeYu24Nt1fXwLi6v0N19Lgg9TDudGu/MZGmXq6xtYB/i2waSFfBzSN8LjG2Ua1S9y2Pe19blah6KymlG1NvTdwwIF7GdpR3SUqaquI+5N7fCeESs3x6t72ZZwMI8yfe7Nb+K0fQviVtjMyAQ+aWC+N3VRRd/16a1+wqQvSKtDOvzo5z1cQpiCdeRnYG1h/ijjFZqWdKRAgMpTJ4hR5m/DVxpaSIV2jRhlRs2KElOfLuevWjfK0LfC5rUkCctDxH18BxAWLDYiypSU1exIzp398547aKsRam5euEcZ1mnvQ9vQ0eGfnli2MiJD7eId//6Q1OI1V9VW6joRHWUYW3ef1nCt9HwlLDQmSznisZwUEn3i6Xc20z/25bkxGm6o42jz6f/Y34/+xkqZw5lFxG/UVlugoc6NVn+8MH+UMUllEqOM0SrkA/oqmmJ0+fjHnFGGsmgCvSdGfGlCoferpNstSzwup68So8xVPb3vHhZIsXM/v4u6aL9U6FNHGw2IMowjJ4o6dVcxAtLuQ8+v8Vh7xOVYYBbr31kYT1wWrrnPvSdi4pIDCVGGMW3RLm0XDfs9s6QyZ8newIiMdduztiTmrN6SuWD5gRfnbGMn5lJNK1eOmBHJMhC98OWVtVf3IjUrEz7bzrHSiBOm2moLNP9QjRNRRlhlIsqo1aJRhlWjy48a+3E05aNULRbqkm8VF1hvrstd3ohRRowsCVHG9zgwIso0ulq/XsFL3D16vhI2dUH8T6sOsZtpeFw2u7EGbM6Y55XMmjhtz6jcmnYqOF/CbcIUBTlRRu1uzEbLziX9cqTv7rYpznWzQmf6t9T812pbIL2SW4ooI6wyEWXUatEo4/I5Cn0r7DGzea6rdjynlFjzXV9aq/xR5okynbp7qlqTsNGwKGOz2UbOipJeIXYv6+ZJX56NF3KiTGPTbKZ7R6oYem20j70cSkyRQ6aGUz7wuj6+fEc8sXsV8bu02hZIr+GWIsoIq0xEGbWaLcr8dVgg5XAuh83Se2Ksd86l5A4epC20z8w4VaLwOeaJMv7hx9RWgkFRprFp1hW9hg311+DDaguvH2lRhnE6v9xUaxvcNzLoTEG5cplZAiO+xuK+iXRDg404WM+ttbZAevW2FFFGWGUiyqjVbFGGuMmAy+14B79N6old1dNb1Wt3CspTSps71yNJ4XNMEmV+CHJe0YOCcVGm0Ry31A9+3K2h5PqRGWUam8ZFP/T8GukXpcM7hvgfOVGkUGD6VthGDN6eODeGePSWbYH0um0pooywykSUUavZogxx2dl3F+1S+BD6VtjE1epUkXSkgFj5944MUvgc6VGG9WZ9wlqfKOoSQ6NMY9MtVWKambNkr7Zi60dylGlsmgXXV+VcMkO96cnlh4632fp0n7CO8iF8R8w5WL/jJPFbtGwLpFdsSxFlhFUmooxazRZliCvPuisONKH3xIJd7fCsAZvNdjt5GCnLPW19jtwoc9tgfz2NidFRhpGTV/bwC8Hia+YbP+1l1o/8KNPYtCrRPK9kYndBgNf39d3d2m4ameSRa3xHzDmorKqjr1Dk1BZIr9WWIsoIq0xEGbWaLcr8tOoQ5XAXdVm6P72wrQ8h9sRYI2PQdiVvfL2TWP/T2n68JDHKPDszsqCoUk8NCIgyjU2Du0WOAr66l0+owCVkWsUUUcYOu/UaOmqJ/ciHTYsgbh7B0kzxhWqnEtK3wg6JPmFQLdH3I3VqC4Rd1nQRZYRVJqKMWs0WZehvZ/45LoTdyVp+An0r7JGGbWUclZhDLMMtA1e0tYablCjTY2Jo/AEObYiYKNPY9AzMKzRNw3owau396vrjOfL3tzFRlGlsWoZyacgRzXPZlavbvm0pazEv7+FiY7ZL3D3WbmslixCnXLGrp9KwLRj9NhwlfmWntsDoC1qDiDLCKhNRRq1mizKsbSQuZ+XWlGZafgK9JxYUeZxLmVtSW9dA38GnreX+REaZPz2xbMJn25PT2nzQpRZhUcZObmHFpC92GPTG46/DAtn9SMxukS4xV5SxU11T77s+nf0auVT3o2NDtvz3XkLbk84oNAoXd/VYGZHRslT0XpERI+YcnC+hLgHu9t9tgaE/eG0iygirTEQZtZotyjSqeSLLbPnPiT0x1tNT3gRDJ/QfzsS5Ma1+gqFRplN3z4eeX8Pa8Hleyaz9rK/ns1y7A8FRxs7J3AszFyfQJ8C6tPuEdcs3HhW2vxIFM0YZB0dOFH3y615WaxpC5d+fDXpnYfyulLxWP3l3an7nfn6t/sO2hqaXltVk5pRSbPlmii/sfqChJMR/IlL9sz1ZV1XYsZzIP18pvQLpX5BdCdJLyFTYJKSiqk568Zpb6GpB9zMF5ZTP4djcs24MvfxO/7ahwUb8hzl5Ljaf0gn9UmyrJKxKjTjjRaXVhmY4O8TLxoibCItlm+KyX/k85v7nVmmIL1f08Orz2vr53vvSs4q5l00/po4yDtgVFrsv94egVNZVGj494rGXQ+8ZsdKxg8Z9I4MeHRsy6O3w8Z9un7Nkb1hMFmVkVmrG+Zufct7deomMtX0AAAAAYbBbZFRiziL/lMnzf7ul9pgYeu/IoOb7Uv3vv9c8MWXjmNnR07/dxbr3yWmFpnoG0xJrRBmDOJ5T2nyb7m9drS4FAAAAALPRoaNMY9MU/PuaXiF/4ZUsuywAAAAAUE1HjzKNTYMeflmD90oAAACAJUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICFQZQBAAAAgIVBlAEAAACAhUGUAQAAAICF+X9VCfjLQDevlQAAAABJRU5ErkJggg=="};
+
+</script>
+<script>
+/* inline: config.js */
+/* Сгенерировано: node --experimental-strip-types seed/emit-ui-config.ts */
+window.QTR_CONFIG = {
+  "stages": [
+    {
+      "code": "draft",
+      "order": 1,
+      "name": "Черновик заявки",
+      "short": "Черновик",
+      "slaValue": 0,
+      "slaUnit": "none",
+      "slaText": "—",
+      "ownerParty": "customer",
+      "ownerName": "Заказчик",
+      "serviceScope": null,
+      "customerStatus": "draft",
+      "customerStatusName": "Черновик",
+      "terminal": false,
+      "regulationRef": "ТЗ №1",
+      "hint": "Заказчик заполняет форму на портале. Заявка ещё не подана."
+    },
+    {
+      "code": "registered",
+      "order": 2,
+      "name": "Зарегистрирована",
+      "short": "Регистрация",
+      "slaValue": 0,
+      "slaUnit": "same_day",
+      "slaText": "в день поступления",
+      "ownerParty": "records",
+      "ownerName": "Документооборот",
+      "serviceScope": null,
+      "customerStatus": "registered",
+      "customerStatusName": "Зарегистрирована",
+      "terminal": false,
+      "regulationRef": "п. 6",
+      "hint": "Регистрация в СП ЦА, ответственном за документооборот, и направление в ОР ПСД и филиал."
+    },
+    {
+      "code": "tv_review",
+      "order": 3,
+      "name": "Оценка технической возможности",
+      "short": "Оценка ТВ",
+      "slaValue": 5,
+      "slaUnit": "working",
+      "slaText": "5 рабочих дней",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "review",
+      "customerStatusName": "На проверке",
+      "terminal": false,
+      "regulationRef": "пп. 9, 16",
+      "hint": "Проверка по мастер-файлу «Реестр АМС и загрузки»; результат фиксируется с версией реестра."
+    },
+    {
+      "code": "offer",
+      "order": 4,
+      "name": "КП, договор, счёт",
+      "short": "КП и договор",
+      "slaValue": 1,
+      "slaUnit": "operational",
+      "slaText": "счёт — в день получения СЗ",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 21, 32, 48, 84–85",
+      "hint": "Коммерческое предложение по Прейскуранту суммой позиций, проект договора, счёт в 1С."
+    },
+    {
+      "code": "awaiting_payment",
+      "order": 5,
+      "name": "Ожидание 100 % предоплаты",
+      "short": "Оплата",
+      "slaValue": 10,
+      "slaUnit": "working",
+      "slaText": "оферта 10 рабочих дней",
+      "ownerParty": "customer",
+      "ownerName": "Заказчик",
+      "serviceScope": null,
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 86–88, табл. 1",
+      "hint": "Ежедневный мониторинг поступления оплаты; по истечении оферты заявка закрывается."
+    },
+    {
+      "code": "tu",
+      "order": 6,
+      "name": "Выдача технических условий",
+      "short": "ТУ",
+      "slaValue": 5,
+      "slaUnit": "working",
+      "slaText": "5 рабочих дней после полной оплаты",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": "ТУ",
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 22–24",
+      "hint": "Разработка, согласование с филиалом, утверждение и направление ТУ Заявителю."
+    },
+    {
+      "code": "psd",
+      "order": 7,
+      "name": "Разработка ПСД",
+      "short": "ПСД",
+      "slaValue": 30,
+      "slaUnit": "working",
+      "slaText": "30 рабочих дней, продление не более 15",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": "ПСД",
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 33–42",
+      "hint": "Контрольные точки: исходные данные (3 р.д.), графическая часть, двухуровневая проверка СД, согласование с филиалом."
+    },
+    {
+      "code": "smr_prep",
+      "order": 8,
+      "name": "Подготовка к СМР",
+      "short": "Подготовка СМР",
+      "slaValue": 90,
+      "slaUnit": "calendar",
+      "slaText": "до 90 календарных дней на оборудование",
+      "ownerParty": "customer",
+      "ownerName": "Заказчик",
+      "serviceScope": "СМР",
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 55–60",
+      "hint": "Заказчик передаёт оборудование по акту; филиал принимает; оформляется распоряжение на СМР."
+    },
+    {
+      "code": "smr",
+      "order": 9,
+      "name": "Выполнение СМР",
+      "short": "СМР",
+      "slaValue": 15,
+      "slaUnit": "working",
+      "slaText": "15 рабочих дней",
+      "ownerParty": "branch",
+      "ownerName": "Филиал",
+      "serviceScope": "СМР",
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "п. 59",
+      "hint": "Работы выполняет филиал; по завершении оформляется технический АВР."
+    },
+    {
+      "code": "avr",
+      "order": 10,
+      "name": "АВР и ЭСФ",
+      "short": "АВР и ЭСФ",
+      "slaValue": 1,
+      "slaUnit": "operational",
+      "slaText": "1 операционный день",
+      "ownerParty": "accounting",
+      "ownerName": "Расчёты с контрагентами",
+      "serviceScope": null,
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 66, 70, 90–92",
+      "hint": "Формирование акта по типовой форме № 2В и электронной счёт-фактуры, направление Заказчику."
+    },
+    {
+      "code": "closing",
+      "order": 11,
+      "name": "Приёмка Заказчиком",
+      "short": "Приёмка",
+      "slaValue": 10,
+      "slaUnit": "working",
+      "slaText": "10 рабочих дней на замечания",
+      "ownerParty": "customer",
+      "ownerName": "Заказчик",
+      "serviceScope": null,
+      "customerStatus": "work",
+      "customerStatusName": "В работе",
+      "terminal": false,
+      "regulationRef": "пп. 93–95",
+      "hint": "Без подтверждения и мотивированных замечаний в срок работы считаются принятыми в полном объёме."
+    },
+    {
+      "code": "closed_done",
+      "order": 12,
+      "name": "Исполнена",
+      "short": "Исполнена",
+      "slaValue": 0,
+      "slaUnit": "none",
+      "slaText": "—",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "done",
+      "customerStatusName": "Выполнена",
+      "terminal": true,
+      "regulationRef": "п. 127",
+      "hint": "Договор считается исполненным после подписания всех предусмотренных документов."
+    },
+    {
+      "code": "closed_rejected",
+      "order": 13,
+      "name": "Отказано",
+      "short": "Отказ",
+      "slaValue": 2,
+      "slaUnit": "working",
+      "slaText": "ответ в 2 рабочих дня",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "rejected",
+      "customerStatusName": "Отклонена",
+      "terminal": true,
+      "regulationRef": "п. 19, табл. 1",
+      "hint": "Мотивированный письменный отказ; заявка закрывается и архивируется."
+    },
+    {
+      "code": "closed_expired",
+      "order": 14,
+      "name": "Закрыта по истечении оферты",
+      "short": "Оферта истекла",
+      "slaValue": 0,
+      "slaUnit": "none",
+      "slaText": "—",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "rejected",
+      "customerStatusName": "Отклонена",
+      "terminal": true,
+      "regulationRef": "табл. 1",
+      "hint": "Оплата не поступила в течение 10 рабочих дней; заявка закрыта с письменным уведомлением."
+    },
+    {
+      "code": "closed_cancelled",
+      "order": 15,
+      "name": "Расторгнута",
+      "short": "Расторжение",
+      "slaValue": 0,
+      "slaUnit": "none",
+      "slaText": "—",
+      "ownerParty": "orpsd",
+      "ownerName": "ОР ПСД",
+      "serviceScope": null,
+      "customerStatus": "rejected",
+      "customerStatusName": "Отклонена",
+      "terminal": true,
+      "regulationRef": "пп. 96–97",
+      "hint": "Соглашение о расторжении; при необходимости — заявка на возврат денежных средств."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "draft",
+      "to": "registered",
+      "title": "Подать заявку",
+      "roles": [
+        "customer",
+        "records",
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "п. 6"
+    },
+    {
+      "from": "registered",
+      "to": "tv_review",
+      "title": "Направить на оценку ТВ",
+      "roles": [
+        "records",
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "п. 6.1"
+    },
+    {
+      "from": "registered",
+      "to": "closed_rejected",
+      "title": "Отклонить заявку",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "п. 19"
+    },
+    {
+      "from": "tv_review",
+      "to": "offer",
+      "title": "ТВ подтверждена — сформировать КП",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 16.3, 16.5, 21"
+    },
+    {
+      "from": "tv_review",
+      "to": "closed_rejected",
+      "title": "ТВ отсутствует — мотивированный отказ",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "табл. 1"
+    },
+    {
+      "from": "offer",
+      "to": "awaiting_payment",
+      "title": "Договор и счёт направлены",
+      "roles": [
+        "orpsd",
+        "accounting",
+        "admin"
+      ],
+      "regulationRef": "пп. 84–85"
+    },
+    {
+      "from": "offer",
+      "to": "closed_cancelled",
+      "title": "Расторжение / отзыв заявки",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 96–97"
+    },
+    {
+      "from": "awaiting_payment",
+      "to": "tu",
+      "title": "Оплата получена — выдача ТУ",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 20, 24, 86"
+    },
+    {
+      "from": "awaiting_payment",
+      "to": "psd",
+      "title": "Оплата получена — разработка ПСД",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 33, 86"
+    },
+    {
+      "from": "awaiting_payment",
+      "to": "smr_prep",
+      "title": "Оплата получена — подготовка к СМР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 49, 53, 54"
+    },
+    {
+      "from": "awaiting_payment",
+      "to": "closed_expired",
+      "title": "Закрыть по истечении оферты",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "табл. 1"
+    },
+    {
+      "from": "awaiting_payment",
+      "to": "closed_cancelled",
+      "title": "Расторжение и возврат",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 96–97"
+    },
+    {
+      "from": "tu",
+      "to": "psd",
+      "title": "ТУ выданы — к разработке ПСД",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 24, 32"
+    },
+    {
+      "from": "tu",
+      "to": "smr_prep",
+      "title": "ТУ выданы — к подготовке СМР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 49, 53"
+    },
+    {
+      "from": "tu",
+      "to": "avr",
+      "title": "ТУ выданы — к оформлению АВР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 25, 90"
+    },
+    {
+      "from": "psd",
+      "to": "smr_prep",
+      "title": "ПСД утверждена — к подготовке СМР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 42, 49, 53"
+    },
+    {
+      "from": "psd",
+      "to": "avr",
+      "title": "ПСД передана — к оформлению АВР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 42–43, 90"
+    },
+    {
+      "from": "smr_prep",
+      "to": "smr",
+      "title": "Оборудование принято — начать СМР",
+      "roles": [
+        "orpsd",
+        "branch",
+        "admin"
+      ],
+      "regulationRef": "пп. 58–60"
+    },
+    {
+      "from": "smr_prep",
+      "to": "closed_cancelled",
+      "title": "Оборудование не предоставлено — расторжение",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 57, 96"
+    },
+    {
+      "from": "smr",
+      "to": "avr",
+      "title": "Работы завершены — оформить АВР",
+      "roles": [
+        "orpsd",
+        "branch",
+        "admin"
+      ],
+      "regulationRef": "пп. 66, 70"
+    },
+    {
+      "from": "avr",
+      "to": "closing",
+      "title": "АВР и ЭСФ направлены Заказчику",
+      "roles": [
+        "accounting",
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 91–93"
+    },
+    {
+      "from": "closing",
+      "to": "closed_done",
+      "title": "Работы приняты — закрыть заявку",
+      "roles": [
+        "orpsd",
+        "accounting",
+        "admin"
+      ],
+      "regulationRef": "пп. 94–95, 127"
+    }
+  ],
+  "rules": [
+    {
+      "id": 1,
+      "event": "Заявка зарегистрирована",
+      "description": "Определить филиал и курирующего заместителя директора по объекту; направить заявку в ОР ПСД и филиал; запустить срок ответа 5 рабочих дней",
+      "regulationRef": "пп. 6, 9, Приложение 7",
+      "timerDays": 5,
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "event": "Недостаточно данных для оценки ТВ",
+      "description": "Сформировать служебную записку в филиал с таймером 3 рабочих дня и напоминанием курирующему заместителю директора",
+      "regulationRef": "п. 10",
+      "timerDays": 3,
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "event": "Загрузка приближается к предельным значениям",
+      "description": "Показать расчётную загрузку объекта и яруса, остаток ёмкости и мощности; запросить решение инженера о поверочном расчёте. Числовой порог Регламентом не установлен — система его не задаёт",
+      "regulationRef": "п. 16.4, Приложение 8",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 4,
+      "event": "Техническая возможность подтверждена",
+      "description": "Сформировать КП по Прейскуранту суммой всех позиций заявки, проект договора и служебную записку на выставление счёта",
+      "regulationRef": "пп. 21, 32, 48",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 5,
+      "event": "Договор подписан",
+      "description": "Направить СЗ в СП ЦА, ответственное за расчёты с контрагентами; счёт формируется в 1С в день получения СЗ и направляется Заказчику",
+      "regulationRef": "пп. 84–85",
+      "timerDays": 1,
+      "enabled": true
+    },
+    {
+      "id": 6,
+      "event": "Оплата не поступила",
+      "description": "Ежедневный мониторинг поступления оплаты; письмо-напоминание Заказчику; по истечении срока оферты (10 рабочих дней) — закрытие заявки с письменным уведомлением",
+      "regulationRef": "п. 88, табл. 1",
+      "timerDays": 10,
+      "enabled": true
+    },
+    {
+      "id": 7,
+      "event": "Поступила 100 % предоплата",
+      "description": "Запустить срок оказания услуги: ТУ — 5 рабочих дней, ПСД — 30 рабочих дней; направить СЗ в филиал о возможности приёма оборудования",
+      "regulationRef": "пп. 24, 33, 54",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 8,
+      "event": "Разработка ПСД, третий рабочий день",
+      "description": "Контрольная точка «проверка полноты и корректности исходных данных»; при неполноте — запрос в филиал с уведомлением курирующего заместителя директора",
+      "regulationRef": "п. 34.1",
+      "timerDays": 3,
+      "enabled": true
+    },
+    {
+      "id": 9,
+      "event": "До срока ПСД пять дней, объём не закрыт",
+      "description": "Предложить продление не более чем на 15 рабочих дней с письменным уведомлением Заказчика",
+      "regulationRef": "п. 33",
+      "timerDays": 15,
+      "enabled": true
+    },
+    {
+      "id": 10,
+      "event": "До истечения срока предоставления оборудования десять дней",
+      "description": "Направить уведомление-напоминание Заказчику; при просрочке — претензия, далее приостановление и (или) расторжение договора",
+      "regulationRef": "пп. 56–57",
+      "timerDays": 10,
+      "enabled": true
+    },
+    {
+      "id": 11,
+      "event": "Акт приёма-передачи оборудования завизирован",
+      "description": "Запустить срок выполнения СМР 15 рабочих дней; поставить задачу на подготовку распоряжения",
+      "regulationRef": "пп. 58–60",
+      "timerDays": 15,
+      "enabled": true
+    },
+    {
+      "id": 12,
+      "event": "Нарушен срок этапа",
+      "description": "Эскалация 1-го уровня в день выявления — курирующему заместителю директора филиала с копией директору; при неустранении в течение 2 рабочих дней — 2-й уровень курирующему члену Правления",
+      "regulationRef": "п. 100",
+      "timerDays": 2,
+      "enabled": true
+    },
+    {
+      "id": 13,
+      "event": "Технический акт выполненных работ подписан",
+      "description": "Уведомить СП ЦА, ответственное за расчёты с контрагентами: АВР и электронная счёт-фактура оформляются не позднее 1 операционного дня",
+      "regulationRef": "пп. 66, 90–91",
+      "timerDays": 1,
+      "enabled": true
+    },
+    {
+      "id": 14,
+      "event": "Заказчик отказался подписать технический АВР",
+      "description": "Служебная записка филиала с причиной и подтверждающими документами; при разногласиях — претензионный порядок и СЗ в СП ЦА, ответственное за юридические вопросы",
+      "regulationRef": "пп. 67–69, табл. 1",
+      "timerDays": 3,
+      "enabled": true
+    },
+    {
+      "id": 15,
+      "event": "АВР не подписан и замечания не поступили в течение 10 рабочих дней",
+      "description": "Работы считаются принятыми в полном объёме без замечаний; дополнительное оформление и повторное подписание не требуются",
+      "regulationRef": "пп. 94–95",
+      "timerDays": 10,
+      "enabled": true
+    },
+    {
+      "id": 16,
+      "event": "Поступило письмо о расторжении договора",
+      "description": "Подготовка соглашения о расторжении; при необходимости — заявка на возврат денежных средств",
+      "regulationRef": "пп. 96–97",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 17,
+      "event": "Истекает срок действия технических условий",
+      "description": "Уведомить ОР ПСД и Заказчика: срок действия ТУ не более 6 месяцев, продление допускается только по запросу до истечения срока",
+      "regulationRef": "п. 31",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 18,
+      "event": "Истекают три месяца с даты получения утверждённой ПСД",
+      "description": "Условия установки оборудования перестают быть актуальными — требуется повторная оценка технической возможности и при необходимости актуализация проектных решений",
+      "regulationRef": "п. 47",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 19,
+      "event": "Получен технический акт монтажа или демонтажа",
+      "description": "Задача СП ЦА, ответственному за технический учёт активов: внести изменения в реестр в течение 1 рабочего дня; при высвобождении ёмкости — уведомление коммерческому блоку",
+      "regulationRef": "пп. 13–14",
+      "timerDays": 1,
+      "enabled": true
+    },
+    {
+      "id": 20,
+      "event": "Наступило 5-е число месяца",
+      "description": "Подготовить отчёт филиала об исполненных и неисполненных договорах за прошедший месяц для подтверждения и направления в установленном порядке",
+      "regulationRef": "п. 105",
+      "timerDays": null,
+      "enabled": true
+    },
+    {
+      "id": 21,
+      "event": "Наступило 1 марта",
+      "description": "Сформировать сводный отчёт по производственным показателям филиалов за отчётный год по исполненным, принятым и оплаченным договорам",
+      "regulationRef": "пп. 107, 109",
+      "timerDays": null,
+      "enabled": true
+    }
+  ],
+  "ownerParties": {
+    "records": "Документооборот",
+    "orpsd": "ОР ПСД",
+    "branch": "Филиал",
+    "customer": "Заказчик",
+    "accounting": "Расчёты с контрагентами",
+    "assets": "Технический учёт активов"
+  },
+  "services": {
+    "ТУ": "Технические условия",
+    "ПСД": "Проектно-сметная документация",
+    "СМР": "Строительно-монтажные работы"
+  }
+};
+
+</script>
+<script>
+/* inline: demo-data.js */
+/* Демонстрационные данные для дизайн-прототипа. Организации и объекты вымышлены. */
+(function () {
+  const iso = (offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const BRANCHES = [
+    'Алматинский филиал', 'Акмолинский филиал', 'Карагандинский филиал',
+    'Павлодарский филиал', 'Восточно-Казахстанский филиал', 'Мангистауский филиал',
+  ];
+
+  const PEOPLE = {
+    AA: { n: 'Начальник ОР ПСД', r: 'ОР ПСД' },
+    MS: { n: 'Инженер ОР ПСД', r: 'ОР ПСД' },
+    ET: { n: 'Инженер-проектировщик', r: 'ОР ПСД' },
+    DA: { n: 'Специалист делопроизводства', r: 'Документооборот' },
+    KB: { n: 'Бухгалтер по расчётам', r: 'Расчёты с контрагентами' },
+    NR: { n: 'Специалист техучёта', r: 'Технический учёт активов' },
+    SK: { n: 'Зам. директора филиала', r: 'Филиал' },
+  };
+
+  // [номер, заказчик, объект, филиал, услуги, этап, ответственный, смещение срока]
+  const SEED = [
+    ['ЗК-2026-0141', 'ТОО «Спектр Телеком»', 'РТС Кок-Тобе', 0, ['ТУ'], 'registered', 'DA', 0],
+    ['ЗК-2026-0140', 'АО «Транстелеком»', 'АМС Кокшетау РТС-3', 1, ['ТУ', 'ПСД'], 'tv_review', 'ET', 3],
+    ['ЗК-2026-0139', 'ТОО «Алатау Медиа»', 'АМС Темиртау РТС-7', 2, ['ТУ'], 'tv_review', 'MS', -1],
+    ['ЗК-2026-0138', 'ТОО «Каспий Сигнал»', 'АМС Экибастуз РТС-2', 3, ['ТУ', 'ПСД', 'СМР'], 'tv_review', 'MS', -3],
+    ['ЗК-2026-0137', 'АО «Казтелеком Юг»', 'АМС Семей РТС-1', 4, ['ТУ', 'ПСД'], 'offer', 'ET', 1],
+    ['ЗК-2026-0136', 'ТОО «ЭнергоСвязь»', 'РТС Балхаш', 2, ['ТУ'], 'awaiting_payment', 'MS', 6],
+    ['ЗК-2026-0135', 'ТОО «Северный эфир»', 'АМС Атырау РТС-4', 5, ['ТУ', 'СМР'], 'awaiting_payment', 'ET', -4],
+    ['ЗК-2026-0134', 'ТОО «Горизонт Связь»', 'АМС Степногорск', 1, ['ТУ'], 'tu', 'MS', 2],
+    ['ЗК-2026-0133', 'ТОО «Спектр Телеком»', 'АМС Караганда РТС-12', 2, ['ТУ', 'ПСД', 'СМР'], 'psd', 'MS', 11],
+    ['ЗК-2026-0132', 'АО «Транстелеком»', 'АМС Талдыкорган РТС-5', 0, ['ПСД'], 'psd', 'ET', -2],
+    ['ЗК-2026-0131', 'ТОО «Каспий Сигнал»', 'АМС Павлодар РТС-1', 3, ['СМР'], 'smr_prep', 'ET', 41],
+    ['ЗК-2026-0129', 'ТОО «Алатау Медиа»', 'АМС Усть-Каменогорск РТС-2', 4, ['ТУ', 'СМР'], 'smr', 'SK', 4],
+    ['ЗК-2026-0127', 'ТОО «Северный эфир»', 'АМС Сарань РТС-9', 2, ['СМР'], 'avr', 'KB', 0],
+    ['ЗК-2026-0124', 'АО «Казтелеком Юг»', 'АМС Кокшетау РТС-3', 1, ['ТУ', 'СМР'], 'closing', 'MS', 5],
+    ['ЗК-2026-0121', 'ТОО «ЭнергоСвязь»', 'РТС Кок-Тобе', 0, ['ТУ'], 'closing', 'ET', -1],
+  ];
+
+  const PRICE = { 'ТУ': 420000, 'ПСД': 980000 };
+
+  /* БИН с корректным контрольным разрядом: демо-данные должны проходить
+     ту же проверку, что и боевые (src/domain/validation.ts). */
+  function makeBin(seq) {
+    const base = String(50140000000 + seq * 137).padStart(11, '0').slice(0, 11);
+    const w1 = [1,2,3,4,5,6,7,8,9,10,11], w2 = [3,4,5,6,7,8,9,10,11,1,2];
+    const d = base.split('').map(Number);
+    const sum = w => w.reduce((a, k, i) => a + k * d[i], 0);
+    let c = sum(w1) % 11;
+    if (c === 10) c = sum(w2) % 11;
+    return c === 10 ? makeBin(seq + 1) : base + c;
+  }
+
+  const requests = SEED.map(([number, customer, object, branchIdx, services, stageCode, owner, dueOffset], i) => {
+    const amount = services.reduce((sum, s) => sum + (PRICE[s] || 0), 0);
+    const paidStages = ['tu', 'psd', 'smr_prep', 'smr', 'avr', 'closing'];
+    return {
+      number,
+      customer,
+      bin: makeBin(i + 3),
+      object,
+      branch: BRANCHES[branchIdx],
+      services,
+      stageCode,
+      owner,
+      dueAt: iso(dueOffset),
+      amount: services.includes('СМР') ? null : amount,
+      createdAt: iso(-20 - i),
+      incomingNumber: stageCode === 'draft' ? null : `вх-${1200 + i}`,
+      incomingDate: stageCode === 'draft' ? null : iso(-20 - i),
+      tvStatus: ['registered', 'tv_review'].includes(stageCode) ? 'pending' : 'confirmed',
+      masterFileVersion: ['registered', 'tv_review'].includes(stageCode) ? null : '2026-09-01',
+      verificationCalc: stageCode === 'tv_review' && i % 3 === 0 ? 'required' : 'not_required',
+      contractNumber: ['registered', 'tv_review'].includes(stageCode) ? null : `ДП-${100 + i}/26`,
+      paidAt: paidStages.includes(stageCode) ? iso(-10) : null,
+      estimateApproved: ['smr_prep', 'smr', 'avr', 'closing'].includes(stageCode),
+      orderNumber: ['smr', 'avr', 'closing'].includes(stageCode) ? `Р-${70 + i}` : null,
+      transferAct: ['smr', 'avr', 'closing'].includes(stageCode) ? iso(-12) : null,
+      avrApproved: ['closing'].includes(stageCode),
+      openRemarks: i === 2 ? 2 : 0,
+      escalationLevel: dueOffset <= -3 ? 2 : dueOffset < 0 ? 1 : 0,
+    };
+  });
+
+  /* Завершённые прохождения этапов — основа показателей узких мест. */
+  const history = [];
+  const PROFILE = {
+    registered: [0, 1], tv_review: [3, 14], offer: [1, 4], awaiting_payment: [2, 16],
+    tu: [3, 9], psd: [22, 41], smr_prep: [20, 70], smr: [9, 22], avr: [1, 3], closing: [4, 12],
+  };
+  let seedRandom = 42;
+  const rnd = () => (seedRandom = (seedRandom * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+  Object.entries(PROFILE).forEach(([code, [min, max]]) => {
+    for (let i = 0; i < 18; i++) {
+      const spent = Math.round(min + rnd() * (max - min));
+      history.push({ stageCode: code, spent });
+    }
+  });
+
+  /* Прейскурант: позиции ТУ и ПСД. СМР — только по утверждённой смете (п. 49). */
+  const TARIFFS = [
+    { id: 't-tu-ams', service: 'ТУ', name: 'ТУ на размещение оборудования на АМС', unit: 'услуга', amount: 420000, source: 'Прейскурант, п. 3.1' },
+    { id: 't-tu-room', service: 'ТУ', name: 'ТУ на размещение в помещении', unit: 'услуга', amount: 310000, source: 'Прейскурант, п. 3.2' },
+    { id: 't-tu-cable', service: 'ТУ', name: 'ТУ на прокладку кабеля', unit: 'трасса', amount: 265000, source: 'Прейскурант, п. 3.4' },
+    { id: 't-tu-power', service: 'ТУ', name: 'ТУ на подключение электроснабжения', unit: 'точка', amount: 380000, source: 'Прейскурант, п. 3.5' },
+    { id: 't-psd-rp', service: 'ПСД', name: 'Разработка рабочего проекта (одностадийный РП)', unit: 'проект', amount: 980000, source: 'Прейскурант, п. 4.2' },
+    { id: 't-psd-sd', service: 'ПСД', name: 'Сметная документация к РП', unit: 'комплект', amount: 210000, source: 'Прейскурант, п. 4.3' },
+  ];
+
+  /* Мастер-файл «Реестр АМС и загрузки». Структура — Приложение 8 Регламента.
+     Часть паспортных значений в Приложении помечена [ЗАПОЛНИТЬ] — здесь это null. */
+  const FACILITIES = [
+    { inv: 1187, name: 'АМС Караганда РТС-12', branch: BRANCHES[2], kind: 'башня', height: 72,
+      passportLoad: 9500, load: 5740, powerInput: 15, powerUsed: 8.5, version: '2026-09-01', checkedAt: iso(-60),
+      tiers: [{ h: 66, cap: 2800, load: 1800 }, { h: 58, cap: 3200, load: 2340 }, { h: 48, cap: 3500, load: 1600 }],
+      tenants: [
+        { c: 'ТОО «Спектр Телеком»', eq: '4 RRU + 3 антенны', kg: 1240, m2: 2.1, kw: 3.2, tu: 'ТУ-2025-014' },
+        { c: 'ТОО «Алатау Медиа»', eq: '3 антенны панельные', kg: 820, m2: 1.6, kw: 1.8, tu: 'ТУ-2024-089' },
+      ] },
+    { inv: 1233, name: 'АМС Темиртау РТС-7', branch: BRANCHES[2], kind: 'мачта', height: 60,
+      passportLoad: 6200, load: 5810, powerInput: 10, powerUsed: 9.1, version: '2026-09-01', checkedAt: iso(-120),
+      tiers: [{ h: 54, cap: 2600, load: 2600 }, { h: 44, cap: 3600, load: 3210 }],
+      tenants: [{ c: 'ТОО «Горизонт Связь»', eq: '6 антенн', kg: 2100, m2: 3.4, kw: 4.1, tu: 'ТУ-2023-102' }] },
+    { inv: 1710, name: 'АМС Экибастуз РТС-2', branch: BRANCHES[3], kind: 'башня', height: 80,
+      passportLoad: 11000, load: 4300, powerInput: 20, powerUsed: 6.4, version: '2026-09-01', checkedAt: iso(-30),
+      tiers: [{ h: 74, cap: 3000, load: 1200 }, { h: 64, cap: 4000, load: 1900 }, { h: 52, cap: 4000, load: 1200 }],
+      tenants: [{ c: 'ТОО «Каспий Сигнал»', eq: '3 антенны', kg: 900, m2: 1.7, kw: 2.2, tu: 'ТУ-2025-003' }] },
+    { inv: 402, name: 'РТС Кок-Тобе', branch: BRANCHES[0], kind: 'телебашня', height: 372,
+      passportLoad: null, load: 47800, powerInput: 120, powerUsed: 96, version: '2026-09-01', checkedAt: iso(-45),
+      tiers: [{ h: 300, cap: 15000, load: 12000 }, { h: 250, cap: 20000, load: 16800 }, { h: 200, cap: null, load: 19000 }],
+      tenants: [{ c: 'ТОО «Спектр Телеком»', eq: '12 антенн', kg: 4200, m2: 6.5, kw: 11, tu: 'ТУ-2024-002' }] },
+  ];
+
+  window.QTR_DEMO = { requests, history, people: PEOPLE, branches: BRANCHES, tariffs: TARIFFS, facilities: FACILITIES };
+})();
+
+</script>
+<script>
+const C = window.QTR_CONFIG, D = window.QTR_DEMO, A = window.QTR_ASSETS;
+
+/* ------------------------------- иконки -------------------------------
+   Штриховой набор 24×24, наследует цвет текста. Заменяет юникод-символы:
+   они рисуются разными шрифтами и ломают единый вид интерфейса. */
+const ICONS = {
+  board:   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+  funnel:  '<path d="M4 4h16l-6.5 8v6l-3 2v-8z"/>',
+  list:    '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  tower:   '<path d="M12 9v12"/><path d="m7.5 21 4.5-12 4.5 12"/><path d="M8.6 5.6a5 5 0 0 1 6.8 0"/><path d="M6 2.8a9 9 0 0 1 12 0"/>',
+  archive: '<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5"/><path d="M10 12.5h4"/>',
+  filePlus:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11.5v6M9 14.5h6"/>',
+  checks:  '<path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 6 1.4 1.4L7.2 4.6M3 12l1.4 1.4L7.2 10.6M3 18l1.4 1.4L7.2 16.6"/>',
+  sliders: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="7" cy="18" r="2.2" fill="currentColor" stroke="none"/>',
+  clock:   '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 2"/>',
+  download:'<path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 19.5h15"/>',
+  plus:    '<path d="M12 5v14M5 12h14"/>',
+  close:   '<path d="m6 6 12 12M18 6 6 18"/>',
+  bell:    '<path d="M18 8.5a6 6 0 1 0-12 0c0 6.5-2.5 7.5-2.5 7.5h17S18 15 18 8.5"/><path d="M10.2 19.5a2 2 0 0 0 3.6 0"/>',
+  search:  '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
+  warn:    '<path d="M10.3 4.3 2.7 17.4a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/>',
+  check:   '<path d="m4.5 12.5 5 5 10-11"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-.6 4"/><path d="M20 5v6h-6"/>',
+};
+const icon = (name, size = 18) =>
+  `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true">${ICONS[name] || ''}</svg>`;
+const stageBy = Object.fromEntries(C.stages.map(s => [s.code, s]));
+const boardStages = C.stages.filter(s => !s.terminal && s.code !== 'draft');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today = () => new Date().toISOString().slice(0, 10);
+const money = n => n == null ? 'по смете' : new Intl.NumberFormat('ru-RU').format(n) + ' ₸';
+const fmt = d => new Date(d + 'T12:00:00Z').toLocaleDateString('ru-RU', {day:'2-digit',month:'short'});
+
+/* Остаток срока в рабочих днях — та же логика, что в src/domain/calendar.ts */
+function daysLeft(due) {
+  const a = new Date(today() + 'T12:00:00Z'), b = new Date(due + 'T12:00:00Z');
+  const back = b < a; const from = back ? b : a, to = back ? a : b;
+  let n = 0; const cur = new Date(from);
+  while (cur < to) { cur.setUTCDate(cur.getUTCDate() + 1);
+    if (![0,6].includes(cur.getUTCDay())) n++; }
+  return back ? -n : n;
+}
+function slaChip(r) {
+  const n = daysLeft(r.dueAt);
+  if (n < 0) return `<span class="chip r">просрочка ${-n} дн.${r.escalationLevel ? ' · эск. ' + r.escalationLevel : ''}</span>`;
+  if (n === 0) return '<span class="chip w">срок сегодня</span>';
+  if (n <= 3) return `<span class="chip w">${n} дн.</span>`;
+  return `<span class="chip g">${n} дн.</span>`;
+}
+const svcChips = r => r.services.map(s =>
+  `<span class="chip svc-${({'ТУ':'tu','ПСД':'psd','СМР':'smr'})[s]}">${s}</span>`).join('');
+
+/* Роли шире, чем ответственные стороны: ответственная сторона — кому засчитывается
+   время этапа, роль — кто вправе выполнить переход. */
+const ROLE_LABEL = {
+  admin:'ДИТ', records:'Документооборот', orpsd:'ОР ПСД', branch:'Филиал', oko:'ОКО',
+  assets:'Технический учёт активов', accounting:'Расчёты с контрагентами',
+  management:'Руководство', customer:'Заказчик',
+};
+
+const MENU = [
+  ['board', 'Доска заявок', 'board'], ['bottlenecks', 'Узкие места', 'funnel'],
+  ['registry', 'Реестр заявок', 'list'], ['ams', 'Реестр АМС и ТВ', 'tower'],
+  ['archive', 'Архив актов', 'archive'],
+];
+const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'checks']];
+const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock']];
+const TITLES = {
+  board: ['Доска заявок', 'Этапы, нормативы и ответственная сторона по Регламенту ОРПСД-Р-01'],
+  bottlenecks: ['Узкие места', 'Фактическое время на этапе против норматива Регламента'],
+  registry: ['Реестр заявок', 'Табличное представление с остатком срока'],
+  ams: ['Реестр АМС и оценка ТВ', 'Мастер-файл «Реестр АМС и загрузки» · раздел 4 Регламента'],
+  archive: ['Архив актов', 'Акты приёма-передачи и АВР с поиском по реквизитам'],
+  rules: ['Автоматизации', '21 правило со ссылкой на пункт Регламента'],
+  stages: ['Этапы и сроки', 'Конфигурация процесса: нормативы редактирует ДИТ, Регламент не меняется'],
+  new: ['Заявка на услуги ОР ПСД', 'Электронная форма портала · состав сведений по п. 7 Регламента'],
+  mine: ['Мои заявки', 'Кабинет Заказчика: номер, статус и замечания'],
+};
+let view = 'board';
+let filters = { branch: '', service: '', party: '' };
+
+function renderNav() {
+  const late = D.requests.filter(r => daysLeft(r.dueAt) < 0).length;
+  const item = ([k, l, i]) =>
+    `<button class="${view===k?'on':''}" onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
+    (k === 'board' && late ? `<span class="badge">${late}</span>` : '') + `</button>`;
+  document.getElementById('nav').innerHTML = MENU.map(item).join('');
+  document.getElementById('navPortal').innerHTML = MENU_PORTAL.map(item).join('');
+  document.getElementById('nav2').innerHTML = MENU2.map(item).join('');
+}
+function go(v) { view = v; render(); window.scrollTo(0, 0); }
+
+function filtered() {
+  return D.requests.filter(r =>
+    (!filters.branch || r.branch === filters.branch) &&
+    (!filters.service || r.services.includes(filters.service)) &&
+    (!filters.party || stageBy[r.stageCode].ownerParty === filters.party));
+}
+function filterBar() {
+  const parties = [...new Set(boardStages.map(s => s.ownerParty))];
+  return `<div class="filters">
+    <select onchange="filters.branch=this.value;render()">
+      <option value="">Все филиалы</option>
+      ${D.branches.map(b => `<option ${filters.branch===b?'selected':''}>${b}</option>`).join('')}
+    </select>
+    <select onchange="filters.service=this.value;render()">
+      <option value="">Все услуги</option>
+      ${['ТУ','ПСД','СМР'].map(s => `<option ${filters.service===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    <select onchange="filters.party=this.value;render()">
+      <option value="">Любая ответственная сторона</option>
+      ${parties.map(p => `<option value="${p}" ${filters.party===p?'selected':''}>${C.ownerParties[p]}</option>`).join('')}
+    </select>
+    <button class="btn ghost" onclick="filters={branch:'',service:'',party:''};render()">Сбросить</button>
+    <span class="ref">${filtered().length} из ${D.requests.length} заявок</span>
+  </div>`;
+}
+
+/* --------------------------------- доска --------------------------------- */
+function renderBoard() {
+  const rows = filtered();
+  return filterBar() + `<div class="board">` + boardStages.map(s => {
+    const items = rows.filter(r => r.stageCode === s.code);
+    const isCustomer = s.ownerParty === 'customer';
+    return `<div class="col">
+      <div class="col-head">
+        <span class="no">${s.order}</span>
+        <div><b>${esc(s.short)}</b>
+          <span class="sla">${esc(s.slaText)}</span>
+          <span class="owner ${isCustomer ? 'owner-customer' : ''}">${C.ownerParties[s.ownerParty]}</span>
+        </div>
+        <span class="cnt">${items.length}</span>
+      </div>
+      ${items.map(cardHtml).join('') || '<div class="col-empty">пусто</div>'}
+      <div class="ref" style="padding:2px 4px">${esc(s.regulationRef)}</div>
+    </div>`;
+  }).join('') + `</div>
+  <div class="note" style="margin-top:16px">
+    Колонки — этапы Регламента, а не произвольные статусы. Подпись под названием — норматив,
+    метка — сторона, которой засчитывается время: просрочка на ожидании оплаты (п. 86),
+    предоставлении оборудования (п. 55) и приёмке АВР (п. 94) относится к Заказчику, а не к ОР ПСД.
+  </div>`;
+}
+function cardHtml(r) {
+  const n = daysLeft(r.dueAt);
+  const cls = n < 0 ? 'late' : n <= 3 ? 'warn' : '';
+  return `<div class="card ${cls}" onclick="openSheet('${r.number}')">
+    <div class="id"><b>${r.number}</b>${slaChip(r)}</div>
+    <div class="cust">${esc(r.customer)}</div>
+    <div class="obj">${esc(r.object)} · ${esc(r.branch)}</div>
+    <div class="foot">${svcChips(r)}
+      ${r.openRemarks ? '<span class="chip w">замечания: ' + r.openRemarks + '</span>' : ''}
+      <span class="ref" style="margin-left:auto">${money(r.amount)}</span>
+    </div>
+  </div>`;
+}
+
+/* ----------------------------- узкие места ------------------------------ */
+function metrics() {
+  return boardStages.filter(s => s.slaValue > 0).map(s => {
+    const samples = D.history.filter(h => h.stageCode === s.code).map(h => h.spent).sort((a,b)=>a-b);
+    const median = samples.length ? samples[Math.floor(samples.length/2)] : 0;
+    const breached = samples.filter(v => v > s.slaValue).length;
+    return { ...s, median, ratio: median / s.slaValue, n: samples.length,
+      breachShare: samples.length ? breached / samples.length : 0,
+      inProgress: D.requests.filter(r => r.stageCode === s.code).length };
+  }).sort((a,b) => b.ratio - a.ratio);
+}
+function renderBottlenecks() {
+  const m = metrics();
+  // Для заголовка берём этап с наибольшим абсолютным превышением норматива:
+  // по отношению медианы к нормативу наверх всплывали бы короткие этапы в 1 день.
+  const worst = m.slice().sort((a, b) => (b.median - b.slaValue) - (a.median - a.slaValue))[0];
+  const rows = D.requests;
+  const late = rows.filter(r => daysLeft(r.dueAt) < 0);
+  const byParty = {};
+  rows.forEach(r => {
+    const p = stageBy[r.stageCode].ownerParty;
+    byParty[p] = byParty[p] || { total: 0, late: 0 };
+    byParty[p].total++;
+    if (daysLeft(r.dueAt) < 0) byParty[p].late++;
+  });
+  const max = Math.max(...m.map(x => x.median / x.slaValue));
+
+  return `<div class="kpis">
+    <div class="kpi"><div class="big">${rows.length}</div><span>заявок в работе</span></div>
+    <div class="kpi"><div class="big" style="color:${late.length?'var(--bad)':'var(--ok)'}">${late.length}</div>
+      <span>просрочено · ${rows.filter(r=>r.escalationLevel===2).length} на эскалации 2-го уровня</span></div>
+    <div class="kpi"><div class="big">${Math.round((1 - late.length/rows.length)*100)}<small>%</small></div>
+      <span>заявок в нормативном сроке</span></div>
+    <div class="kpi"><div class="big">${worst.median}<small>дн.</small></div>
+      <span>медиана на этапе «${esc(worst.short)}» при нормативе ${worst.slaValue}</span></div>
+  </div>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="panel-head"><div><h2>Время на этапе против норматива</h2>
+        <p>Медиана по завершённым прохождениям. Чёрная риска — норматив Регламента</p></div></div>
+      <div class="panel-body">
+        ${m.map(x => {
+          const cls = x.ratio >= 1.5 ? 'hot' : x.ratio > 1 ? 'mid' : '';
+          const w = Math.min(100, x.ratio / max * 100);
+          const normPos = Math.min(100, (1 / max) * 100);
+          return `<div class="bar-row">
+            <div class="lbl"><b>${esc(x.name)}</b><small>${C.ownerParties[x.ownerParty]} · ${esc(x.regulationRef)}</small></div>
+            <div class="track ${cls}"><i style="width:${w}%"></i><span class="norm" style="left:${normPos}%"></span></div>
+            <div class="val">${x.median} дн.<small>норматив ${x.slaValue}</small></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <section class="panel">
+        <div class="panel-head"><div><h2>Кто держит срок</h2>
+          <p>Просрочки по ответственной стороне</p></div></div>
+        <div class="panel-body">
+          <table><tbody>
+          ${Object.entries(byParty).sort((a,b)=>b[1].late-a[1].late).map(([p, v]) => `
+            <tr><td>${C.ownerParties[p]}</td>
+              <td style="width:110px"><div class="meter ${v.late/v.total>.4?'r':v.late?'w':'g'}">
+                <i style="width:${Math.round(v.late/v.total*100)}%"></i></div></td>
+              <td class="num" style="width:74px">${v.late} из ${v.total}</td></tr>`).join('')}
+          </tbody></table>
+          <div class="note" style="margin-top:12px">
+            Без этого разреза отчётность показывает «срывает ОР ПСД», хотя заявка
+            стоит в ожидании оплаты Заказчика (п. 86) или приёмки АВР (п. 94).
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><h2>Эскалации</h2><p>Пункт 100 Регламента</p></div></div>
+        <div class="panel-body">
+          <table><tbody>
+            <tr><td>1-й уровень — зам. директора филиала</td>
+              <td class="num"><b>${rows.filter(r=>r.escalationLevel===1).length}</b></td></tr>
+            <tr><td>2-й уровень — курирующий член Правления</td>
+              <td class="num"><b style="color:var(--bad)">${rows.filter(r=>r.escalationLevel===2).length}</b></td></tr>
+          </tbody></table>
+        </div>
+      </section>
+    </div>
+  </div>`;
+}
+
+/* ------------------------------- реестр --------------------------------- */
+function renderRegistry() {
+  const rows = filtered().slice().sort((a,b) => daysLeft(a.dueAt) - daysLeft(b.dueAt));
+  return filterBar() + `<section class="panel"><div class="panel-body" style="padding:0 6px">
+    <table><thead><tr>
+      <th>Номер</th><th>Заказчик и объект</th><th>Услуги</th><th>Этап</th>
+      <th>Ответственная сторона</th><th>Срок</th><th class="num">Стоимость</th>
+    </tr></thead><tbody>
+    ${rows.map(r => { const s = stageBy[r.stageCode]; return `<tr onclick="openSheet('${r.number}')" style="cursor:pointer">
+      <td><b>${r.number}</b><br><span class="ref">вх. ${esc(r.incomingNumber||'—')}</span></td>
+      <td><b>${esc(r.customer)}</b><br><span class="ref">${esc(r.object)} · ${esc(r.branch)}</span></td>
+      <td>${svcChips(r)}</td>
+      <td>${s.order}. ${esc(s.short)}<br><span class="ref pin">${esc(s.regulationRef)}</span></td>
+      <td>${C.ownerParties[s.ownerParty]}</td>
+      <td>${fmt(r.dueAt)}<br>${slaChip(r)}</td>
+      <td class="num">${money(r.amount)}</td></tr>`}).join('')}
+    </tbody></table></div></section>`;
+}
+
+/* ------------------------------- архив ---------------------------------- */
+function renderArchive() {
+  const docs = [
+    ['АПП-026', 'Акт приёма-передачи', 'АМС Караганда РТС-12', 'ТОО «Горизонт Связь»', 'АО «Казтелерадио»', -3, true, null],
+    ['АВР-018', 'АВР (форма № 2В)', 'АМС Атырау РТС-4', 'ТОО «Каспий Сигнал»', 'АО «Казтелерадио»', -5, true, null],
+    ['АВР-021', 'АВР (форма № 2В)', 'АМС Сарань РТС-9', 'ТОО «Северный эфир»', 'АО «Казтелерадио»', -1, false, null],
+    ['ТУ-2026-114', 'Технические условия', 'РТС Кок-Тобе', 'ТОО «Спектр Телеком»', '—', -40, true, 140],
+  ];
+  return `<div class="filters">
+    <input type="search" placeholder="Объект, номер акта или файл…" style="min-width:260px">
+    <select><option>Все виды</option><option>Акт приёма-передачи</option><option>АВР</option><option>ТУ</option></select>
+    <input type="search" placeholder="Собственник оборудования">
+    <input type="search" placeholder="Подрядчик">
+    <button class="btn ghost">Сбросить</button>
+  </div>
+  <section class="panel"><div class="panel-body" style="padding:0 6px">
+  <table><thead><tr><th>Документ</th><th>Объект / собственник</th><th>Подрядчик</th>
+    <th>Дата акта</th><th>Срок действия</th><th>Визирование</th><th></th></tr></thead><tbody>
+  ${docs.map(([no, kind, obj, owner, contractor, off, appr, validDays]) => {
+    const d = new Date(); d.setDate(d.getDate() + off); const doc = d.toISOString().slice(0,10);
+    let valid = '—';
+    if (validDays) { const v = new Date(d); v.setDate(v.getDate() + validDays);
+      valid = `${fmt(v.toISOString().slice(0,10))} <span class="ref">п. 31</span>`; }
+    return `<tr><td><b>${no}</b><br><span class="ref">${kind}</span></td>
+      <td><b>${obj}</b><br><span class="ref">${owner}</span></td>
+      <td>${contractor}</td><td>${fmt(doc)}</td><td>${valid}</td>
+      <td>${appr ? '<span class="chip g">завизирован</span>' : '<span class="chip w">ожидает визы</span>'}</td>
+      <td><button class="btn sm">Скачать</button></td></tr>`;
+  }).join('')}
+  </tbody></table></div></section>
+  <div class="note" style="margin-top:14px">
+    Загрузка в архив не отменяет порядок направления уведомлений и копий актов
+    (пп. 28, 58, 66): уведомление заинтересованным СП ЦА формируется автоматически,
+    срок 2 рабочих дня контролируется таймером. Просмотр и скачивание фиксируются в журнале.
+  </div>`;
+}
+
+/* ------------------------------- правила -------------------------------- */
+function renderRules() {
+  return `<section class="panel"><div class="panel-body" style="padding:0 6px">
+  <table><thead><tr><th style="width:54px">Вкл.</th><th>Событие</th><th>Действие системы</th>
+    <th style="width:120px">Регламент</th><th style="width:78px">Таймер</th></tr></thead><tbody>
+  ${C.rules.map(r => `<tr>
+    <td><span class="tog ${r.enabled?'on':''}" onclick="this.classList.toggle('on')"></span></td>
+    <td><b>${esc(r.event)}</b></td>
+    <td style="color:var(--muted)">${esc(r.description)}</td>
+    <td><span class="ref pin">${esc(r.regulationRef)}</span></td>
+    <td class="num">${r.timerDays ? r.timerDays + ' дн.' : '—'}</td></tr>`).join('')}
+  </tbody></table></div></section>
+  <div class="note" style="margin-top:14px">
+    Правила — данные, а не код: администратор ДИТ включает и выключает их без пересборки.
+    Ссылка на пункт хранится вместе с правилом, чтобы при проверке сопоставить поведение
+    системы с текстом Регламента. Выключенное правило пишется в журнал, но не рассылает уведомления.
+  </div>`;
+}
+
+/* ---------------------------- этапы и сроки ------------------------------ */
+function renderStages() {
+  return `<section class="panel"><div class="panel-body" style="padding:0 6px">
+  <table><thead><tr><th style="width:44px">№</th><th>Этап</th><th>Норматив</th>
+    <th>Ответственная сторона</th><th>Услуга</th><th>Статус для Заказчика</th><th>Регламент</th></tr></thead><tbody>
+  ${C.stages.map(s => `<tr${s.terminal?' style="color:var(--muted)"':''}>
+    <td>${s.order}</td>
+    <td><b>${esc(s.name)}</b><br><span class="ref">${esc(s.hint)}</span></td>
+    <td>${esc(s.slaText)}</td>
+    <td>${C.ownerParties[s.ownerParty]}</td>
+    <td>${s.serviceScope ? `<span class="chip svc-${({'ТУ':'tu','ПСД':'psd','СМР':'smr'})[s.serviceScope]}">${s.serviceScope}</span>` : '<span class="ref">все</span>'}</td>
+    <td><span class="chip n">${esc(s.customerStatusName)}</span></td>
+    <td><span class="ref pin">${esc(s.regulationRef)}</span></td></tr>`).join('')}
+  </tbody></table></div></section>
+  <div class="note" style="margin-top:14px">
+    Семь статусов ТЗ сохранены как витрина для Заказчика (столбец справа), но внутри процесс
+    разложен на этапы Регламента: иначе весь цикл от оценки ТВ до закрытия прячется
+    внутри статуса «В работе», и узкое место не видно.
+  </div>`;
+}
+
+/* ------------------------------- карточка -------------------------------- */
+function gateItems(r) {
+  const s = stageBy[r.stageCode];
+  const items = [];
+  const add = (ok, text, ref) => items.push({ ok, text, ref });
+  if (['registered'].includes(r.stageCode))
+    add(!!r.incomingNumber, 'Входящий номер и дата регистрации', 'п. 6');
+  if (['tv_review'].includes(r.stageCode)) {
+    add(r.tvStatus === 'confirmed', 'Техническая возможность подтверждена', 'п. 16.3');
+    add(!!r.masterFileVersion, 'Зафиксирована версия мастер-файла «Реестр АМС и загрузки»', 'п. 16.5');
+    add(r.verificationCalc !== 'required', 'Решение о поверочном расчёте', 'п. 16.4');
+  }
+  if (['offer'].includes(r.stageCode))
+    add(!!r.contractNumber, 'Договор либо основание безвозмездной услуги', 'пп. 21, 83');
+  if (['awaiting_payment'].includes(r.stageCode)) {
+    add(!!r.paidAt, 'Поступление 100 % предварительной оплаты', 'пп. 86, 89');
+    if (r.services.includes('СМР')) add(r.estimateApproved, 'Утверждённая сметная документация', 'пп. 49, 53');
+  }
+  if (['smr_prep'].includes(r.stageCode)) {
+    add(!!r.transferAct, 'Завизированный акт приёма-передачи оборудования', 'п. 58');
+    add(!!r.orderNumber, 'Распоряжение на выполнение СМР', 'п. 60');
+  }
+  if (['avr'].includes(r.stageCode)) add(r.avrApproved, 'Технический акт выполненных работ', 'пп. 66, 70');
+  if (['closing'].includes(r.stageCode))
+    add(false, 'Подтверждение Заказчика либо истечение 10 рабочих дней молчания', 'п. 94');
+  if (!items.length) add(true, 'Дополнительных условий перехода нет', s.regulationRef);
+  return items;
+}
+/* Замечания к полям формы: основание возврата заявки на доработку (ТЗ №11). */
+const REMARKS = {
+  'ЗК-2026-0139': [
+    { field: 'Масса оборудования', text: 'Указано 4 т без паспорта — уточните и приложите подтверждение' },
+    { field: 'Приложения к заявке', text: 'Не приложена схема крепления на ярусе' },
+  ],
+};
+function addRemark(number) {
+  const field = document.getElementById('rmField').value;
+  const text = document.getElementById('rmText').value.trim();
+  if (!text) return;
+  (REMARKS[number] = REMARKS[number] || []).push({ field, text });
+  openSheet(number);
+}
+function removeRemark(number, i) { REMARKS[number].splice(i, 1); openSheet(number); }
+function returnToCustomer(number) {
+  const r = D.requests.find(x => x.number === number);
+  r.openRemarks = (REMARKS[number] || []).length;
+  closeSheet(); render();
+}
+
+function openSheet(number) {
+  const r = D.requests.find(x => x.number === number);
+  const s = stageBy[r.stageCode];
+  const items = gateItems(r);
+  const blocked = items.filter(i => !i.ok);
+  // Та же фильтрация, что в src/process/transitions.ts: этапы неназначенных услуг
+  // не предлагаются (п. 7.5 — состав услуг определяет маршрут заявки).
+  const next = C.transitions.filter(t => t.from === r.stageCode &&
+    (!stageBy[t.to].serviceScope || r.services.includes(stageBy[t.to].serviceScope)));
+  const route = C.stages.filter(x => !x.terminal);
+
+  document.getElementById('sheetPanel').innerHTML = `
+  <div class="sheet-head">
+    <div class="row">
+      <div><div class="ref">${esc(r.customer)}</div><h2>${r.number}</h2></div>
+      <div style="margin-left:auto">${slaChip(r)}</div>
+      <button class="btn ghost" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
+    </div>
+    <div class="route">
+      ${route.map(x => {
+        const skip = x.serviceScope && !r.services.includes(x.serviceScope);
+        const cls = skip ? 'skip' : x.order < s.order ? 'done' : x.order === s.order ? 'cur' : '';
+        return `<i class="${cls}" title="${x.order}. ${esc(x.name)}${skip ? ' — не заказано' : ''}"></i>`;
+      }).join('')}
+    </div>
+    <div class="ref">Этап ${s.order} из ${route.length}: ${esc(s.name)} · норматив ${esc(s.slaText)} ·
+      отвечает ${C.ownerParties[s.ownerParty]} · ${esc(s.regulationRef)}</div>
+  </div>
+  <div class="sheet-body">
+    ${blocked.length ? `<div class="blocked"><b>Переход невозможен.</b> ${blocked.map(b =>
+      esc(b.text) + ' (' + esc(b.ref) + ')').join('; ')}</div>` : ''}
+
+    <div class="gate">
+      <h4>Условия перехода по Регламенту</h4>
+      ${items.map(i => `<div class="item ${i.ok?'ok':''}">
+        <span class="st">${i.ok ? '✓' : '!'}</span>
+        <span class="tx">${esc(i.text)}<small>${esc(i.ref)}</small></span></div>`).join('')}
+    </div>
+
+    <section class="panel"><div class="panel-body">
+      <div class="kv">
+        <b>Заказчик</b><span>${esc(r.customer)} · БИН ${r.bin}</span>
+        <b>Объект</b><span>${esc(r.object)}</span>
+        <b>Филиал</b><span>${esc(r.branch)} <span class="ref">определён по объекту, Приложение 7</span></span>
+        <b>Услуги</b><span>${svcChips(r)}</span>
+        <b>Внутренний номер</b><span>${r.number} <span class="ref">присвоен при подаче</span></span>
+        <b>Регистрация</b><span>${r.incomingNumber ? esc(r.incomingNumber) + ' от ' + fmt(r.incomingDate) : '<span class="ref">ожидает регистрации</span>'} <span class="ref">п. 6</span></span>
+        <b>Оценка ТВ</b><span>${r.tvStatus === 'confirmed'
+          ? '<span class="chip g">подтверждена</span> реестр ' + esc(r.masterFileVersion)
+          : '<span class="chip w">не проверена</span>'}</span>
+        <b>Договор</b><span>${r.contractNumber ? esc(r.contractNumber) : '<span class="ref">не сформирован</span>'}</span>
+        <b>Оплата</b><span>${r.paidAt ? '<span class="chip g">100 % получена ' + fmt(r.paidAt) + '</span>'
+          : '<span class="chip n">не поступила</span>'} <span class="ref">п. 86</span></span>
+        <b>Стоимость</b><span>${money(r.amount)} ${r.services.includes('СМР')
+          ? '<span class="ref">СМР — по утверждённой смете, п. 49</span>' : '<span class="ref">сумма позиций, п. 21</span>'}</span>
+      </div>
+    </div></section>
+
+    <section class="panel">
+      <div class="panel-head"><div><h2>Следующий шаг</h2>
+        <p>Доступные переходы и кто вправе их выполнить</p></div></div>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:9px">
+        ${next.map(t => {
+          const disabled = blocked.length && !t.to.startsWith('closed');
+          return `<div style="display:flex;align-items:center;gap:10px">
+            <button class="btn ${t.to.startsWith('closed')?'':'primary'} sm" ${disabled?'disabled':''}>${esc(t.title)}</button>
+            <span class="ref pin">${esc(t.regulationRef)}</span>
+            <span class="ref" style="margin-left:auto">${t.roles.map(x => ROLE_LABEL[x] || x).join(', ')}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><h2>Возврат на доработку</h2>
+        <p>Замечания привязываются к полям формы — ТЗ №11</p></div></div>
+      <div class="panel-body">
+        ${(REMARKS[r.number] || []).map((m, i) => `<div class="remark">
+          <span class="fld">${esc(m.field)}</span>
+          <span style="flex:1">${esc(m.text)}</span>
+          <button class="btn ghost sm" onclick="removeRemark('${r.number}',${i})">Убрать</button>
+        </div>`).join('') ||
+          '<div class="ref" style="margin-bottom:10px">Замечаний нет. Без хотя бы одного замечания вернуть заявку нельзя.</div>'}
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field"><label>Поле формы</label>
+            <select id="rmField">
+              ${['Масса оборудования','Парусность','Потребляемая мощность','Состав и объём работ',
+                 'Задание на проектирование','Приложения к заявке','Реквизиты Заказчика']
+                .map(f => `<option>${f}</option>`).join('')}
+            </select></div>
+          <div class="field"><label>Что исправить</label>
+            <input id="rmText" placeholder="например: приложите схему крепления"></div>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:12px;align-items:center">
+          <button class="btn sm" onclick="addRemark('${r.number}')">Добавить замечание</button>
+          <div style="flex:1"></div>
+          <span class="ref pin">ТЗ №11</span>
+          <button class="btn primary sm" ${(REMARKS[r.number]||[]).length ? '' : 'disabled'}
+            onclick="returnToCustomer('${r.number}')">Вернуть Заказчику</button>
+        </div>
+        <div class="note" style="margin-top:12px">
+          Повторная отправка обновляет ту же заявку с инкрементом версии — новая запись
+          не создаётся, номер и история сохраняются.
+        </div>
+      </div></section>
+
+    <section class="panel">
+      <div class="panel-head"><div><h2>История</h2><p>Журнал обработки заявки, ТЗ №12</p></div></div>
+      <div class="panel-body"><div class="hist">
+        ${[['Заявка подана через портал, присвоен номер', -20],
+           ['Зарегистрирована делопроизводством, направлена в ОР ПСД и филиал', -20],
+           ['Запрошены данные у филиала, срок ответа 3 рабочих дня', -16],
+           ['Получен ответ филиала', -14],
+           r.escalationLevel ? ['Эскалация ' + r.escalationLevel + '-го уровня (п. 100)', -2] : null,
+          ].filter(Boolean).map(([t, off]) => {
+            const d = new Date(); d.setDate(d.getDate() + off);
+            return `<div class="e"><time>${fmt(d.toISOString().slice(0,10))}</time><span>${esc(t)}</span></div>`;
+          }).join('')}
+      </div></div>
+    </section>
+  </div>`;
+  document.getElementById('sheet').classList.add('on');
+}
+function closeSheet() { document.getElementById('sheet').classList.remove('on'); }
+
+/* ====================== МАСТЕР ЗАЯВКИ (портал) ====================== */
+/* Сценарии размещения и состав полей повторяют src/domain/validation.ts. */
+const PLACEMENTS = {
+  ams:     { name: 'На антенно-мачтовом сооружении', note: 'оценка по несущей способности, парусности и мощности (п. 16.2)' },
+  room:    { name: 'В помещении объекта',            note: 'оценка по свободной площади и мощности (п. 17)' },
+  network: { name: 'Присоединение к сети телерадиовещания', note: 'выдаётся безвозмездно при подтверждённой ТВ (п. 20)' },
+  cable:   { name: 'Прокладка кабеля',               note: 'Приложения 2–3 Регламента' },
+  power:   { name: 'Подключение электроснабжения',   note: 'Приложение 4 Регламента' },
+};
+const FIELDS = {
+  common: [
+    ['equipment', 'Модель и назначение оборудования', 'text', 'Антенна панельная, радиомодуль'],
+    ['quantity', 'Количество, шт.', 'number', '3'],
+    ['power', 'Потребляемая мощность, кВт', 'number', '2.4'],
+  ],
+  ams: [['weight', 'Общая масса, кг', 'number', '48'], ['windage', 'Парусность, м²', 'number', '1.2'],
+        ['height', 'Высота размещения, м', 'number', '35']],
+  room: [['area', 'Площадь размещения, м²', 'number', '4']],
+  cable: [['length', 'Протяжённость кабеля, м', 'number', '120'],
+          ['route', 'Маршрут и способ прокладки', 'text', 'от ввода до аппаратной, в лотках']],
+  power: [],
+  network: [['channel', 'Наименование телерадиоканала', 'text', ''],
+            ['signalType', 'Тип сигнала', 'text', 'SDI'],
+            ['deliveryPoint', 'Точка доведения сигнала', 'text', 'аппаратная РТС'],
+            ['bitrate', 'Информационная скорость, Мбит/с', 'number', '100']],
+};
+
+let wiz = null;
+function newWizard() {
+  return {
+    step: 0,
+    applicant: { company: '', bin: '', contact: '', email: '', phone: '' },
+    facilityInv: '',
+    services: {},   // 'ТУ' -> { placement, params, tariffId, qty, basisReference, designTask }
+    errors: {},
+    submitted: null,
+  };
+}
+function toggleService(code, on) {
+  if (on) wiz.services[code] = { placement: code === 'СМР' ? 'ams' : 'ams', params: {}, tariffId: '', qty: 1 };
+  else delete wiz.services[code];
+  render();
+}
+const setW = (path, value) => { const p = path.split('.'); let o = wiz;
+  while (p.length > 1) o = o[p.shift()]; o[p[0]] = value; };
+
+/* Контрольный разряд БИН — тот же алгоритм, что в src/domain/validation.ts */
+function checkBin(v) {
+  if (!/^\d{12}$/.test(v) || /^(\d)\1{11}$/.test(v)) return false;
+  const d = v.split('').map(Number);
+  const s = w => w.reduce((a, k, i) => a + k * d[i], 0);
+  let c = s([1,2,3,4,5,6,7,8,9,10,11]) % 11;
+  if (c === 10) c = s([3,4,5,6,7,8,9,10,11,1,2]) % 11;
+  return c !== 10 && c === d[11];
+}
+const okText = (v, min = 3) => {
+  const s = String(v ?? '').trim();
+  return s.length >= min && /[A-Za-zА-Яа-яЁё]/.test(s) && !/(.)\1{4,}/.test(s) &&
+    !/^[-—–\s.]+$/.test(s) && !/^(тест|test|нет|na)$/i.test(s);
+};
+const okNum = (v, max) => { const n = Number(v); return v !== '' && Number.isFinite(n) && n > 0 && n <= max; };
+
+function validateStep(step) {
+  const e = {};
+  const codes = Object.keys(wiz.services);
+  if (step === 0 && codes.length === 0) e.services = 'Выберите хотя бы одну услугу';
+  if (step === 1) {
+    const a = wiz.applicant;
+    if (!okText(a.company)) e['applicant.company'] = 'Укажите наименование организации';
+    if (!checkBin(a.bin)) e['applicant.bin'] = 'БИН: 12 цифр, проверьте контрольный разряд';
+    if (!okText(a.contact)) e['applicant.contact'] = 'Укажите Ф.И.О. ответственного лица';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(a.email)) e['applicant.email'] = 'Укажите корректный адрес почты';
+    if (!/^7\d{10}$/.test(String(a.phone).replace(/\D/g, ''))) e['applicant.phone'] = 'Номер в формате +7 7XX XXX XX XX';
+  }
+  if (step === 2) {
+    if (!wiz.facilityInv) e.facility = 'Выберите объект из справочника';
+    codes.forEach(code => {
+      const s = wiz.services[code], p = s.params;
+      const k = f => `svc.${code}.${f}`;
+      if (!okText(p.scope, 12)) e[k('scope')] = 'Опишите состав и объём работ';
+      if (s.placement === 'network') {
+        if (code !== 'ТУ') e[k('placement')] = 'Присоединение к сети оформляется только как ТУ (п. 20)';
+        FIELDS.network.forEach(([f, label, type]) => {
+          if (type === 'number' ? !okNum(p[f], 100000) : !okText(p[f], 2)) e[k(f)] = label + ': проверьте значение';
+        });
+      } else {
+        FIELDS.common.concat(FIELDS[s.placement] || []).forEach(([f, label, type]) => {
+          if (type === 'number' ? !(f === 'power' ? Number(p[f]) >= 0 && p[f] !== '' : okNum(p[f], 100000))
+                                : !okText(p[f], 5)) e[k(f)] = label + ': проверьте значение';
+        });
+        if (p.quantity && !Number.isInteger(Number(p.quantity))) e[k('quantity')] = 'Количество должно быть целым';
+      }
+      if (code === 'ПСД' && !okText(p.designTask, 12)) e[k('designTask')] = 'Укажите задание на проектирование (п. 32)';
+      if (code === 'СМР' && !String(s.basisReference ?? '').trim())
+        e[k('basisReference')] = 'Укажите номер утверждённой ПСД или иного основания (п. 53)';
+    });
+  }
+  return e;
+}
+function wizNext() {
+  const e = validateStep(wiz.step);
+  wiz.errors = e;
+  if (Object.keys(e).length === 0) wiz.step++;
+  render();
+}
+function wizBack() { wiz.step--; wiz.errors = {}; render(); }
+function wizSubmit() {
+  wiz.submitted = { number: 'ЗК-2026-0142', at: new Date().toLocaleString('ru-RU') };
+  render();
+}
+
+/* Расчёт по п. 21: сумма всех позиций. СМР не считается (п. 49). */
+function wizEstimate() {
+  const lines = Object.entries(wiz.services).map(([code, s]) => {
+    if (code === 'ТУ' && s.placement === 'network')
+      return { title: 'ТУ на присоединение к сети телерадиовещания', amount: 0, qty: 1, source: 'Регламент п. 20 — безвозмездно' };
+    if (code === 'СМР')
+      return { title: 'Строительно-монтажные работы', amount: null, qty: 1, source: 'Регламент п. 49 — по утверждённой смете' };
+    const t = D.tariffs.find(x => x.id === s.tariffId);
+    if (!t) return { title: C.services[code], amount: null, qty: 1, source: 'Позиция прейскуранта не выбрана' };
+    return { title: t.name, amount: t.amount * Number(s.qty || 1), qty: Number(s.qty || 1), source: t.source };
+  });
+  return { lines, total: lines.reduce((a, l) => a + (l.amount ?? 0), 0),
+    undetermined: lines.some(l => l.amount === null) };
+}
+
+function fieldHtml(path, label, value, opts = {}) {
+  const err = opts.err !== undefined ? opts.err : wiz.errors[path];
+  const type = opts.type || 'text';
+  const tag = opts.textarea
+    ? `<textarea oninput="setW('${path}',this.value)" placeholder="${esc(opts.ph||'')}">${esc(value||'')}</textarea>`
+    : `<input type="${type}" value="${esc(value ?? '')}" placeholder="${esc(opts.ph||'')}"
+        oninput="setW('${path}',this.value)">`;
+  return `<div class="field ${err?'bad':''} ${opts.span?'span2':''}">
+    <label>${esc(label)}${opts.mark ? `<span class="ok-mark">${opts.mark}</span>` : ''}</label>
+    ${tag}
+    ${opts.hint ? `<div class="hint">${opts.hint}</div>` : ''}
+    <div class="err">${esc(err || '')}</div></div>`;
+}
+
+function renderWizard() {
+  if (wiz === null) wiz = newWizard();
+  if (wiz.submitted) return renderSubmitted();
+  const codes = Object.keys(wiz.services);
+  const est = wizEstimate();
+  const steps = ['Услуги', 'Заказчик', 'Объект и параметры', 'Проверка'];
+
+  let body = '';
+  if (wiz.step === 0) {
+    body = `<section class="panel"><div class="panel-head"><div><h2>Какие услуги нужны</h2>
+      <p>Можно выбрать несколько — заявка останется одной (п. 7.5)</p></div></div>
+      <div class="panel-body">
+      <div class="svc-pick">${['ТУ','ПСД','СМР'].map(code => `
+        <label class="${wiz.services[code]?'on':''}">
+          <input type="checkbox" ${wiz.services[code]?'checked':''}
+            onchange="toggleService('${code}',this.checked)">
+          <span><b>${code} — ${esc(C.services[code])}</b>
+          <small>${code==='ТУ'?'Условия присоединения и размещения':code==='ПСД'?'Одностадийный рабочий проект и смета':'Монтаж силами филиала по утверждённой ПСД'}</small></span>
+        </label>`).join('')}</div>
+      ${wiz.errors.services ? `<div class="blocked" style="margin-top:14px">${wiz.errors.services}</div>` : ''}
+      ${codes.length ? `<div style="margin-top:18px">${codes.map(code => `
+        <div class="field" style="margin-bottom:12px">
+          <label>Сценарий размещения для ${code}</label>
+          <select onchange="setW('services.${code}.placement',this.value);render()">
+            ${Object.entries(PLACEMENTS).map(([k, v]) =>
+              `<option value="${k}" ${wiz.services[code].placement===k?'selected':''}>${v.name}</option>`).join('')}
+          </select>
+          <div class="hint">${PLACEMENTS[wiz.services[code].placement].note}</div>
+          <div class="err" style="display:${wiz.errors['svc.'+code+'.placement']?'block':'none'}">${esc(wiz.errors['svc.'+code+'.placement']||'')}</div>
+        </div>`).join('')}</div>` : ''}
+      </div></section>`;
+  }
+
+  if (wiz.step === 1) {
+    const a = wiz.applicant;
+    body = `<section class="panel"><div class="panel-head"><div><h2>Реквизиты Заказчика</h2>
+      <p>Состав сведений — пункт 7 Регламента</p></div></div>
+      <div class="panel-body"><div class="form-grid">
+        ${fieldHtml('applicant.company', 'Наименование организации', a.company, { span: true, ph: 'ТОО «Название»' })}
+        ${fieldHtml('applicant.bin', 'БИН / ИИН', a.bin, { ph: '12 цифр',
+          mark: checkBin(a.bin) ? '✓ контрольный разряд верен' : '',
+          hint: 'Проверяется контрольный разряд по алгоритму РК' })}
+        ${fieldHtml('applicant.contact', 'Ф.И.О. ответственного лица', a.contact, {})}
+        ${fieldHtml('applicant.email', 'Электронная почта', a.email, { type: 'email' })}
+        ${fieldHtml('applicant.phone', 'Телефон', a.phone, { ph: '+7 7XX XXX XX XX' })}
+      </div></div></section>`;
+  }
+
+  if (wiz.step === 2) {
+    const f = D.facilities.find(x => String(x.inv) === String(wiz.facilityInv));
+    body = `<section class="panel"><div class="panel-head"><div><h2>Объект размещения</h2>
+      <p>Филиал и куратор определяются по объекту — Приложение 7</p></div></div>
+      <div class="panel-body">
+      <div class="field ${wiz.errors.facility?'bad':''}">
+        <label>Объект</label>
+        <select onchange="wiz.facilityInv=this.value;render()">
+          <option value="">— выберите из справочника —</option>
+          ${D.facilities.map(x => `<option value="${x.inv}" ${String(wiz.facilityInv)===String(x.inv)?'selected':''}>
+            ${esc(x.name)} · инв. № ${x.inv}</option>`).join('')}
+        </select>
+        <div class="err">${esc(wiz.errors.facility||'')}</div>
+        ${f ? `<div class="hint">Филиал: <b>${esc(f.branch)}</b> · ${esc(f.kind)}, ${f.height} м ·
+          версия реестра ${esc(f.version)}</div>` : ''}
+      </div></div></section>
+
+      ${codes.map(code => {
+        const s = wiz.services[code], p = s.params;
+        const list = s.placement === 'network' ? FIELDS.network : FIELDS.common.concat(FIELDS[s.placement] || []);
+        return `<div class="svc-block">
+          <header><span class="chip svc-${({'ТУ':'tu','ПСД':'psd','СМР':'smr'})[code]}">${code}</span>
+            <b>${esc(C.services[code])}</b>
+            <span class="ref" style="margin-left:auto">${esc(PLACEMENTS[s.placement].name)}</span></header>
+          <div><div class="form-grid">
+            ${list.map(([f2, label, type, ph]) => fieldHtml(
+              `services.${code}.params.${f2}`, label, p[f2],
+              { type, ph, err: wiz.errors[`svc.${code}.${f2}`] })).join('')}
+            ${fieldHtml(`services.${code}.params.scope`, 'Состав и объём работ', p.scope,
+              { span: true, textarea: true, err: wiz.errors[`svc.${code}.scope`] })}
+            ${code === 'ПСД' ? fieldHtml(`services.${code}.params.designTask`, 'Задание на проектирование', p.designTask,
+              { span: true, textarea: true, hint: 'Приложение 2 к договору, п. 32', err: wiz.errors['svc.ПСД.designTask'] }) : ''}
+            ${code === 'СМР' ? fieldHtml(`services.${code}.basisReference`, 'Номер утверждённой ПСД или основания', s.basisReference,
+              { span: true, hint: 'Договор на СМР заключается не ранее утверждения сметной документации (п. 53)',
+                err: wiz.errors['svc.СМР.basisReference'] }) : ''}
+          </div>
+          ${code !== 'СМР' && s.placement !== 'network' ? `
+            <div class="form-grid" style="margin-top:14px">
+              <div class="field"><label>Позиция прейскуранта</label>
+                <select onchange="setW('services.${code}.tariffId',this.value);render()">
+                  <option value="">— уточнит ОР ПСД —</option>
+                  ${D.tariffs.filter(t => t.service === code).map(t =>
+                    `<option value="${t.id}" ${s.tariffId===t.id?'selected':''}>${esc(t.name)} · ${money(t.amount)}</option>`).join('')}
+                </select></div>
+              <div class="field"><label>Количество</label>
+                <input type="number" min="1" value="${s.qty||1}" oninput="setW('services.${code}.qty',this.value);render()"></div>
+            </div>` : ''}
+          </div></div>`;
+      }).join('')}`;
+  }
+
+  if (wiz.step === 3) {
+    const f = D.facilities.find(x => String(x.inv) === String(wiz.facilityInv));
+    body = `<section class="panel"><div class="panel-head"><div><h2>Проверьте заявку перед отправкой</h2>
+      <p>После подтверждения заявка получает номер и поступает на регистрацию (ТЗ №6)</p></div></div>
+      <div class="panel-body"><div class="review-grid">
+        <b>Организация</b><span>${esc(wiz.applicant.company)} · БИН ${esc(wiz.applicant.bin)}</span>
+        <b>Контактное лицо</b><span>${esc(wiz.applicant.contact)} · ${esc(wiz.applicant.phone)} · ${esc(wiz.applicant.email)}</span>
+        <b>Объект</b><span>${f ? esc(f.name) + ' · инв. № ' + f.inv : '—'}</span>
+        <b>Филиал</b><span>${f ? esc(f.branch) : '—'} <span class="ref">определён по объекту</span></span>
+        <b>Услуги</b><span>${codes.map(c => `<span class="chip svc-${({'ТУ':'tu','ПСД':'psd','СМР':'smr'})[c]}">${c}</span>`).join(' ')}</span>
+        ${codes.map(code => { const s = wiz.services[code];
+          return `<b>${code}: параметры</b><span>${esc(PLACEMENTS[s.placement].name)} · ${esc(s.params.scope || '')}</span>`;
+        }).join('')}
+      </div></div></section>`;
+  }
+
+  return `<div class="steps">${steps.map((s, i) =>
+      `<div class="${i===wiz.step?'cur':i<wiz.step?'passed':''}">
+        <span class="n">${i < wiz.step ? '✓' : i + 1}</span>${s}</div>`).join('')}</div>
+    <div class="wizard">
+      <div>${body}
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="btn" onclick="${wiz.step ? 'wizBack()' : 'go(\'board\')'}">
+            ${wiz.step ? '← Назад' : 'Отмена'}</button>
+          <div style="flex:1"></div>
+          <button class="btn">Сохранить черновик</button>
+          ${wiz.step < 3
+            ? `<button class="btn primary" onclick="wizNext()">Продолжить →</button>`
+            : `<button class="btn primary" onclick="wizSubmit()">Подтвердить и подать заявку</button>`}
+        </div>
+      </div>
+      <aside class="price">
+        <section class="panel"><div class="panel-head"><div><h2>Предварительная стоимость</h2>
+          <p>Сумма позиций — п. 21 Регламента</p></div></div>
+          <div class="panel-body">
+            ${est.lines.length ? est.lines.map(l => `<div class="line">
+              <span>${esc(l.title)}${l.qty > 1 ? ` × ${l.qty}` : ''}<small>${esc(l.source)}</small></span>
+              <b style="white-space:nowrap">${l.amount === null ? '—' : money(l.amount)}</b></div>`).join('')
+              : '<div class="ref">Выберите услуги, чтобы увидеть расчёт</div>'}
+            ${est.lines.length ? `<div class="total"><span>Итого</span><span>${money(est.total)}</span></div>` : ''}
+            ${est.undetermined ? `<div class="hint" style="margin-top:8px">Часть позиций на этапе заявки не рассчитывается</div>` : ''}
+            <div class="disclaimer">Ориентировочная стоимость. Не является коммерческим предложением
+              и офертой: стоимость определяет ОР ПСД в КП после подтверждения технической
+              возможности (п. 21).</div>
+          </div></section>
+      </aside>
+    </div>`;
+}
+
+function renderSubmitted() {
+  return `<section class="panel" style="max-width:720px">
+    <div class="panel-body" style="text-align:center;padding:38px">
+      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok);
+        display:grid;place-items:center;font-size:26px;margin:0 auto 16px">✓</div>
+      <h2 style="font-size:20px">Заявка подана</h2>
+      <p style="color:var(--muted);margin:8px 0 18px">Внутренний номер <b>${wiz.submitted.number}</b>
+        от ${wiz.submitted.at}. Заявка направлена в СП ЦА, ответственное за документооборот.</p>
+      <div class="kv" style="text-align:left;max-width:520px;margin:0 auto">
+        <b>Что дальше</b><span>Регистрация в день поступления, затем направление в ОР ПСД и филиал (п. 6)</span>
+        <b>Срок ответа</b><span>Не более 5 рабочих дней с даты регистрации (п. 9)</span>
+        <b>Уведомление</b><span>Придёт на указанную почту с регистрационным номером (ТЗ №9)</span>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:10px;justify-content:center">
+        <button class="btn" onclick="wiz=null;go('mine')">Мои заявки</button>
+        <button class="btn primary" onclick="wiz=null;render()">Подать ещё одну</button>
+      </div>
+    </div></section>`;
+}
+
+/* ====================== КАБИНЕТ ЗАКАЗЧИКА ====================== */
+function renderMine() {
+  const mine = D.requests.filter(r => r.customer === 'ТОО «Спектр Телеком»');
+  return `<section class="panel"><div class="panel-body" style="padding:0 6px">
+    <table><thead><tr><th>Номер</th><th>Объект</th><th>Услуги</th>
+      <th>Статус</th><th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
+    ${mine.map(r => { const s = stageBy[r.stageCode];
+      const status = r.openRemarks ? 'Требуются уточнения' : s.customerStatusName;
+      return `<tr><td><b>${r.number}</b><br><span class="ref">от ${fmt(r.createdAt)}</span></td>
+        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
+        <td><span class="chip ${r.openRemarks?'w':s.customerStatus==='done'?'g':'n'}">${status}</span></td>
+        <td style="color:var(--muted)">${esc(s.hint)}</td>
+        <td class="num">${money(r.amount)}</td></tr>`;
+    }).join('')}
+    </tbody></table></div></section>
+    <div class="note" style="margin-top:14px">
+      Заказчик видит семь статусов ТЗ №10, а не внутренние этапы: детализация нужна
+      подразделениям Общества, Заказчику — понятное состояние заявки.
+    </div>`;
+}
+
+/* ====================== РЕЕСТР АМС И ОЦЕНКА ТВ ====================== */
+let tv = { inv: 1187, tier: 0, kg: 900, m2: 1.6, kw: 2.5, decision: null };
+function renderAms() {
+  const f = D.facilities.find(x => x.inv === tv.inv) || D.facilities[0];
+  const tier = f.tiers[tv.tier] || f.tiers[0];
+  const pct = (a, b) => b ? Math.round(a / b * 100) : null;
+
+  const objAfter = f.load + Number(tv.kg);
+  const objPct = pct(objAfter, f.passportLoad);
+  const tierAfter = tier.load + Number(tv.kg);
+  const tierPct = pct(tierAfter, tier.cap);
+  const powerAfter = +(f.powerUsed + Number(tv.kw)).toFixed(1);
+  const powerOk = powerAfter <= f.powerInput;
+  const unknown = f.passportLoad === null || tier.cap === null;
+
+  let verdict;
+  if (unknown) verdict = ['w', 'Паспортные данные неполны',
+    'В мастер-файле не заполнены паспортные значения (Приложение 8 помечено [ЗАПОЛНИТЬ]). ' +
+    'Требуется запрос в филиал либо поверочный расчёт — решение принимает инженер (п. 16.4).'];
+  else if ((objPct ?? 0) > 100 || (tierPct ?? 0) > 100) verdict = ['r', 'Техническая возможность отсутствует',
+    `Превышение паспортной нагрузки: ${tierPct > 100 ? 'ярус ' + tier.h + ' м — ' + tierPct + ' %' : 'объект — ' + objPct + ' %'}. ` +
+    'Готовится мотивированный отказ в срок 2 рабочих дня (табл. 1).'];
+  else if (!powerOk) verdict = ['r', 'Недостаточно электрической мощности',
+    `Свободно ${(f.powerInput - f.powerUsed).toFixed(1)} кВт, требуется ${tv.kw} кВт. ` +
+    'Запрос в филиал служебной запиской, срок ответа 3 рабочих дня (п. 10).'];
+  else verdict = ['g', 'Расчёт выполнен',
+    `Объект после размещения — ${objPct} %, ярус ${tier.h} м — ${tierPct} %, мощность ${powerAfter} из ${f.powerInput} кВт. ` +
+    'Решение о необходимости поверочного расчёта принимает инженер: числовой порог Регламентом не установлен (п. 16.4).'];
+
+  return `<div class="tv">
+    <div>
+      <section class="panel" style="margin-bottom:16px"><div class="panel-body" style="padding:0 6px">
+        <table><thead><tr><th>Инв. №</th><th>Объект</th><th>Тип, высота</th>
+          <th>Загрузка, кг</th><th>Мощность, кВт</th><th>Версия</th><th>Проверка</th></tr></thead><tbody>
+        ${D.facilities.map(x => { const p = x.passportLoad ? Math.round(x.load / x.passportLoad * 100) : null;
+          return `<tr onclick="tv.inv=${x.inv};tv.tier=0;tv.decision=null;render()"
+            style="cursor:pointer;${x.inv===f.inv?'background:#F0F4FC':''}">
+            <td><b>${x.inv}</b></td>
+            <td>${esc(x.name)}<br><span class="ref">${esc(x.branch)}</span></td>
+            <td>${esc(x.kind)}, ${x.height} м</td>
+            <td style="min-width:130px">${x.load.toLocaleString('ru-RU')} / ${x.passportLoad ? x.passportLoad.toLocaleString('ru-RU') : '<span class="ref">[не заполнено]</span>'}
+              ${p !== null ? `<div class="meter ${p>=95?'r':p>=85?'w':''}"><i style="width:${Math.min(100,p)}%"></i></div>` : ''}</td>
+            <td>${x.powerUsed} / ${x.powerInput}</td>
+            <td>${esc(x.version)}</td>
+            <td>${fmt(x.checkedAt)}</td></tr>`;
+        }).join('')}
+        </tbody></table></div></section>
+
+      <section class="panel"><div class="panel-head"><div><h2>${esc(f.name)}</h2>
+        <p>инв. № ${f.inv} · ${esc(f.branch)} · версия мастер-файла ${esc(f.version)}</p></div>
+        <button class="btn sm" style="margin-left:auto">Запросить изменение</button></div>
+        <div class="panel-body">
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+            ${f.tiers.map((t, i) => `<div class="tier ${i===tv.tier?'on':''}" onclick="tv.tier=${i};render()">
+              <b>Ярус ${t.h} м</b>
+              <span class="ref">${t.load.toLocaleString('ru-RU')} / ${t.cap ? t.cap.toLocaleString('ru-RU') + ' кг' : '[не заполнено]'}</span>
+              ${t.cap ? `<div class="meter ${t.load/t.cap>=.95?'r':t.load/t.cap>=.85?'w':''}">
+                <i style="width:${Math.min(100,Math.round(t.load/t.cap*100))}%"></i></div>` : ''}
+            </div>`).join('')}
+          </div>
+          <table><thead><tr><th>Арендатор</th><th>Оборудование</th><th class="num">кг</th>
+            <th class="num">м²</th><th class="num">кВт</th><th>ТУ</th></tr></thead><tbody>
+          ${f.tenants.map(t => `<tr><td>${esc(t.c)}</td><td>${esc(t.eq)}</td>
+            <td class="num">${t.kg}</td><td class="num">${t.m2}</td><td class="num">${t.kw}</td>
+            <td>${esc(t.tu)}</td></tr>`).join('')}
+          </tbody></table>
+          <div class="note" style="margin-top:14px">
+            Изменения вносит только СП ЦА, ответственное за технический учёт активов (п. 12);
+            коммерческий блок правит свои поля, остальным доступно чтение.
+            Режим ведения реестра — организационное решение по п. 15.
+          </div>
+        </div></section>
+    </div>
+
+    <aside>
+      <section class="panel" style="position:sticky;top:18px">
+        <div class="panel-head"><div><h2>Оценка технической возможности</h2>
+          <p>Раздел 4 Регламента · п. 16.2</p></div></div>
+        <div class="panel-body">
+          <div class="field"><label>Ярус размещения</label>
+            <select onchange="tv.tier=+this.value;render()">
+              ${f.tiers.map((t, i) => `<option value="${i}" ${i===tv.tier?'selected':''}>
+                ${t.h} м — свободно ${t.cap ? (t.cap - t.load).toLocaleString('ru-RU') + ' кг' : 'не определено'}</option>`).join('')}
+            </select></div>
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="field"><label>Масса, кг</label>
+              <input type="number" value="${tv.kg}" oninput="tv.kg=+this.value||0;render()"></div>
+            <div class="field"><label>Парусность, м²</label>
+              <input type="number" step="0.1" value="${tv.m2}" oninput="tv.m2=+this.value||0;render()"></div>
+            <div class="field"><label>Мощность, кВт</label>
+              <input type="number" step="0.1" value="${tv.kw}" oninput="tv.kw=+this.value||0;render()"></div>
+          </div>
+          <div class="kv" style="margin:6px 0 2px;font-size:13px">
+            <b>Объект после</b><span>${objAfter.toLocaleString('ru-RU')} / ${f.passportLoad ? f.passportLoad.toLocaleString('ru-RU') : '—'} кг${objPct!==null?` · ${objPct} %`:''}</span>
+            <b>Ярус после</b><span>${tierAfter.toLocaleString('ru-RU')} / ${tier.cap ? tier.cap.toLocaleString('ru-RU') : '—'} кг${tierPct!==null?` · ${tierPct} %`:''}</span>
+            <b>Мощность после</b><span>${powerAfter} / ${f.powerInput} кВт</span>
+          </div>
+          <div class="verdict ${verdict[0]}"><b>${verdict[1]}</b>${verdict[2]}</div>
+
+          <div class="field" style="margin-top:14px">
+            <label>Решение инженера о поверочном расчёте (п. 16.4)</label>
+            <select onchange="tv.decision=this.value;render()">
+              <option value="" ${!tv.decision?'selected':''}>— не зафиксировано —</option>
+              <option value="not_required" ${tv.decision==='not_required'?'selected':''}>Не требуется</option>
+              <option value="required" ${tv.decision==='required'?'selected':''}>Требуется — запросить филиал</option>
+              <option value="done" ${tv.decision==='done'?'selected':''}>Выполнен, решения подтверждены</option>
+            </select>
+            <div class="hint">Числовой порог Регламентом не установлен, система его не задаёт</div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <button class="btn primary sm" ${verdict[0]==='g' && (tv.decision==='not_required'||tv.decision==='done') ? '' : 'disabled'}>
+              Зафиксировать ТВ и версию реестра</button>
+            <button class="btn sm">СЗ в филиал</button>
+          </div>
+          <div class="ref" style="margin-top:10px">
+            Результат сохраняется в заявке с указанием версии мастер-файла ${esc(f.version)} (п. 16.5) —
+            без этого переход к КП заблокирован.
+          </div>
+        </div></section>
+    </aside>
+  </div>`;
+}
+
+/* Полоса режима — элемент действующего прототипа QTR CRM. */
+function modeBar() {
+  return `<div class="mode-bar">${icon('warn', 17)}
+    <div><b>Демонстрационный режим</b>
+      <span> · примеры заявок и документов для знакомства с системой</span></div>
+    <div class="tail">${icon('refresh', 14)} данные не сохраняются</div>
+  </div>`;
+}
+
+/* Шапка портала Заказчика с полным фирменным знаком. */
+function portalIntro() {
+  return `<div class="portal-intro">
+    <img src="${A.logo}" alt="АО «Казтелерадио»">
+    <div>
+      <h2>Заявка на услуги ОР ПСД</h2>
+      <p>Технические условия, проектно-сметная документация и строительно-монтажные работы
+         на объектах АО «Казтелерадио». Форма подскажет, какие исходные данные нужны
+         для выбранной услуги.</p>
+    </div>
+    <div class="portal-steps">
+      ${[['01','Выберите услуги','ТУ, ПСД или СМР — можно вместе'],
+         ['02','Заполните данные','Форма покажет только нужные поля'],
+         ['03','Отслеживайте заявку','Номер, статус и замечания в кабинете']]
+        .map(([n,t,d]) => `<div><span>${n}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function render() {
+  renderNav();
+  document.getElementById('brandMark').src = A.mark;
+  document.getElementById('bellBtn').innerHTML =
+    icon('bell', 17) + (D.requests.filter(r => daysLeft(r.dueAt) < 0).length
+      ? `<b style="color:var(--bad);margin-left:5px">${D.requests.filter(r => daysLeft(r.dueAt) < 0).length}</b>` : '');
+  document.getElementById('exportBtn').innerHTML = icon('download', 16) + '<span>Выгрузить</span>';
+  document.getElementById('newBtn').innerHTML = icon('plus', 16) + '<span>Новая заявка</span>';
+  const [t, sub] = TITLES[view];
+  document.getElementById('title').textContent = t;
+  document.getElementById('subtitle').textContent = sub;
+  document.getElementById('eyebrow').textContent =
+    ['rules', 'stages'].includes(view) ? 'ОРПСД-Р-01 · РЕДАКЦИЯ 2'
+    : ['new', 'mine'].includes(view) ? 'АО «КАЗТЕЛЕРАДИО» · ПОРТАЛ ЗАКАЗЧИКА'
+    : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
+  const portal = ['new', 'mine'].includes(view);
+  const withoutBar = ['rules', 'stages'];
+  document.getElementById('view').innerHTML =
+    (portal ? portalIntro() : withoutBar.includes(view) ? '' : modeBar()) +
+    ({ board: renderBoard, bottlenecks: renderBottlenecks, registry: renderRegistry,
+       archive: renderArchive, rules: renderRules, stages: renderStages,
+       new: renderWizard, mine: renderMine, ams: renderAms,
+    })[view]();
+}
+render();
+</script>
+</body>
+</html>

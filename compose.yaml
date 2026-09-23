@@ -1,0 +1,94 @@
+# Рабочий состав: база, приложение и обратный прокси с корпоративным входом.
+#
+# Наружу открыт только прокси. Порт приложения и порт базы не публикуются:
+# сеть backend помечена internal, поэтому контейнеры в ней недоступны извне.
+#
+# Запуск:  docker compose up -d --build
+# Миграции: docker compose exec app npm run migrate
+
+name: qtr-crm
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PGUSER:-qtr}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?задайте PGPASSWORD в .env}
+      POSTGRES_DB: ${PGDATABASE:-qtr_crm}
+      # Хранение данных вне каталога инициализации тома.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks: [backend]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-qtr} -d ${PGDATABASE:-qtr_crm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  app:
+    build: .
+    image: ${QTR_IMAGE:-qtr-crm:0.1.0}
+    environment:
+      DATABASE_URL: postgres://${PGUSER:-qtr}:${PGPASSWORD}@db:5432/${PGDATABASE:-qtr_crm}
+      APP_ORIGIN: ${APP_ORIGIN:?укажите внешний адрес, например https://crm.example.kz}
+      SSO_ENABLED: ${SSO_ENABLED:-true}
+      AUTH_PROXY_SHARED_SECRET: ${AUTH_PROXY_SHARED_SECRET:?сгенерируйте секрет: openssl rand -hex 32}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      MIGRATE_ON_START: ${MIGRATE_ON_START:-false}
+      TRUST_PROXY: "true"
+    expose: ["3000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    command:
+      - --provider=oidc
+      - --oidc-issuer-url=${OIDC_ISSUER_URL}
+      - --client-id=${OIDC_CLIENT_ID}
+      - --client-secret=${OIDC_CLIENT_SECRET}
+      - --cookie-secret=${OIDC_COOKIE_SECRET}
+      - --email-domain=${OIDC_EMAIL_DOMAIN:-*}
+      - --http-address=0.0.0.0:4180
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --pass-access-token=false
+      - --skip-provider-button=true
+      - --redirect-url=${APP_ORIGIN}/oauth2/callback
+      - --cookie-secure=true
+    expose: ["4180"]
+    networks: [backend]
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:stable-alpine
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:80:80"
+      - "${BIND_ADDR:-0.0.0.0}:443:443"
+    environment:
+      SERVER_NAME: ${SERVER_NAME:?укажите домен, например crm.example.kz}
+      AUTH_PROXY_SHARED_SECRET: ${AUTH_PROXY_SHARED_SECRET}
+    volumes:
+      - ./deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
+    depends_on:
+      app:
+        condition: service_started
+    networks: [frontend, backend]
+    restart: unless-stopped
+
+volumes:
+  db-data:
+    name: ${QTR_DB_VOLUME:-qtr-crm-db}
+
+networks:
+  frontend:
+  backend:
+    internal: true

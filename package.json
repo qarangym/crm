@@ -1,0 +1,24 @@
+{
+  "name": "qtr-crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CRM ОР ПСД АО «Казтелерадио»: заявки на ТУ/ПСД/СМР, архив актов, контроль сроков по Регламенту ОРПСД-Р-01",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/server/index.ts",
+    "dev": "node --experimental-strip-types --watch src/server/index.ts",
+    "migrate": "node --experimental-strip-types src/db/migrate-cli.ts",
+    "seed:demo": "node --experimental-strip-types src/db/seed-demo.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "seed:sql": "node --experimental-strip-types seed/emit-config.ts > src/db/002_config.sql",
+    "design:config": "node --experimental-strip-types seed/emit-ui-config.ts > design/config.js",
+    "design:assets": "node design/emit-assets.mjs > design/assets.js",
+    "design": "npm run design:config && npm run design:assets && node design/build.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  }
+}

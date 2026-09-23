@@ -1,0 +1,58 @@
+# Служба приложения CRM ОР ПСД (установка без Docker).
+#
+# Установка:
+#   sudo cp deploy/qtr-crm.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qtr-crm
+#
+# Журнал:  journalctl -u qtr-crm -f
+# Рестарт: sudo systemctl restart qtr-crm
+
+[Unit]
+Description=CRM ОР ПСД АО «Казтелерадио»
+Documentation=file:/opt/qtr-crm/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qtrcrm
+Group=qtrcrm
+WorkingDirectory=/opt/qtr-crm
+
+# Настройки берутся из .env: DATABASE_URL, APP_ORIGIN, AUTH_PROXY_SHARED_SECRET и т. д.
+# Файл должен быть доступен только пользователю службы: chmod 600 /opt/qtr-crm/.env
+EnvironmentFile=/opt/qtr-crm/.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+
+ExecStart=/usr/bin/node --experimental-strip-types src/server/index.ts
+
+Restart=on-failure
+RestartSec=5
+# Корректное завершение: приложение само закрывает соединения по SIGTERM.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Ограничения прав: службе нужен только свой каталог и сеть.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+ReadWritePaths=/opt/qtr-crm/backups
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qtr-crm
+
+[Install]
+WantedBy=multi-user.target
