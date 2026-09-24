@@ -11,8 +11,8 @@ import { EMPTY_CALENDAR } from '../domain/types.ts';
 import { addWorkingDays, dueDate, isOverdue, today, workingDaysBetween } from '../domain/calendar.ts';
 import type { StageCode } from './stages.ts';
 import { nextMainStage, stage } from './stages.ts';
-import type { GuardInput, GuardResult, RequestSnapshot } from './transitions.ts';
-import { checkTransition, findTransition } from './transitions.ts';
+import type { GuardFailure, GuardInput, GuardResult, RequestSnapshot } from './transitions.ts';
+import { checkTransition, findTransition, paidAtFor } from './transitions.ts';
 
 /** Запись о нахождении заявки на этапе — строка таблицы `request_stages`. */
 export type StageRecord = {
@@ -52,20 +52,27 @@ export type EngineContext = {
   now?: string;
 };
 
+const STAGE_SERVICE: Partial<Record<StageCode, Service>> = { tu: 'ТУ', psd: 'ПСД', smr_prep: 'СМР', smr: 'СМР' };
+
 /**
  * Дата, от которой отсчитывается норматив этапа.
- * Регламент пп. 24, 33 — срок услуги считается с даты полной оплаты;
- * п. 59 — СМР выполняются со дня передачи оборудования по акту **и**
- * перечисления 100 % оплаты, то есть от более поздней из двух дат.
+ * Регламент пп. 24, 33 — срок услуги считается с даты полной оплаты договора
+ * этой услуги; п. 59 — СМР выполняются со дня передачи оборудования по акту
+ * **и** перечисления 100 % оплаты по договору на СМР, то есть от более поздней
+ * из двух дат. Безвозмездная услуга (п. 20) отсчитывается от перехода.
  */
 export function stageStartDate(r: RequestSnapshot, code: StageCode, at: string): string {
+  const service = STAGE_SERVICE[code];
+  const paidAt = service ? paidAtFor(r, service) : null;
   if (code === 'tu' || code === 'psd' || code === 'smr_prep') {
-    return r.paidAt && r.paidAt > at ? r.paidAt : (r.paidAt ?? at);
+    return paidAt ?? at;
   }
   if (code === 'smr') {
-    const dates = [at, r.paidAt, r.transferActApprovedDate].filter(Boolean) as string[];
+    const dates = [at, paidAt, r.transferActApprovedDate].filter(Boolean) as string[];
     return dates.sort().at(-1) ?? at;
   }
+  // П. 94: 10 рабочих дней на замечания — с даты получения АВР Заказчиком.
+  if (code === 'closing') return r.avrSentAt ?? at;
   return at;
 }
 
@@ -155,8 +162,8 @@ export function applyTransition(
 }
 
 export class TransitionError extends Error {
-  failures: GuardResult extends { ok: false; failures: infer F } ? F : never;
-  constructor(message: string, failures: any) {
+  failures: GuardFailure[];
+  constructor(message: string, failures: GuardFailure[]) {
     super(message);
     this.name = 'TransitionError';
     this.failures = failures;
@@ -195,49 +202,63 @@ export function extendStage(
 }
 
 /**
- * Требуемый уровень эскалации.
+ * Срок, нарушение которого эскалируется по п. 100.
+ *
+ * Пункт 100 говорит о нарушении сроков **филиалом**. Просрочки Заказчика
+ * (оплата, оборудование, приёмка), ОР ПСД и бухгалтерии в эскалацию не
+ * попадают: их учитывают показатели по ответственной стороне.
+ */
+export type EscalationSubject = {
+  dueAt: string | null;
+  /** Этап завершён либо на служебную записку получен ответ. */
+  closed: boolean;
+  /** За срок отвечает филиал. */
+  branchDeadline: boolean;
+  /** Уже отправленный уровень. */
+  level: number;
+  /** Дата уведомления первого уровня — от неё отсчитываются 2 рабочих дня. */
+  level1At: string | null;
+};
+
+/** Сроки этапа эскалируются, только если этап ведёт филиал. */
+export function isBranchDeadline(record: Pick<StageRecord, 'ownerParty'>): boolean {
+  return record.ownerParty === 'branch';
+}
+
+/**
+ * Уровень эскалации, который нужно отправить сейчас; 0 — ничего отправлять не нужно.
+ *
  * Регламент п. 100: первый уровень — в день выявления нарушения срока
  * (уведомление курирующему заместителю директора филиала с копией директору);
- * второй — если нарушение не устранено в течение 2 рабочих дней.
+ * второй — если нарушение не устранено в течение 2 рабочих дней **с даты
+ * направления уведомления первого уровня** (курирующему члену Правления).
  */
-export function requiredEscalationLevel(
-  record: StageRecord,
+export function nextEscalationLevel(
+  subject: EscalationSubject,
   at: string = today(),
   calendar: WorkCalendar = EMPTY_CALENDAR,
 ): 0 | 1 | 2 {
-  if (!record.dueAt || record.leftAt) return 0;
-  if (!isOverdue(record.dueAt, at)) return 0;
-  const overdueDays = workingDaysBetween(record.dueAt, at, calendar);
-  return overdueDays >= 2 ? 2 : 1;
+  if (!subject.branchDeadline || subject.closed || !subject.dueAt) return 0;
+  if (!isOverdue(subject.dueAt, at)) return 0;
+  if (subject.level === 0) return 1;
+  if (subject.level === 1 && subject.level1At &&
+      workingDaysBetween(subject.level1At, at, calendar) >= 2) return 2;
+  return 0;
 }
 
-/** Эскалации, которые нужно отправить сейчас (движок не дублирует уже отправленные). */
-export function pendingEscalations(
-  records: StageRecord[],
-  at: string = today(),
-  calendar: WorkCalendar = EMPTY_CALENDAR,
-): { record: StageRecord; level: 1 | 2; event: ProcessEvent }[] {
-  const out: { record: StageRecord; level: 1 | 2; event: ProcessEvent }[] = [];
-  for (const record of records) {
-    const level = requiredEscalationLevel(record, at, calendar);
-    if (level === 0 || level <= record.escalationLevel) continue;
-    out.push({
-      record,
-      level,
-      event: {
-        kind: 'escalation',
-        requestId: record.requestId,
-        stageCode: record.stageCode,
-        at,
-        message:
-          level === 1
-            ? 'Эскалация 1-го уровня: уведомление курирующему заместителю директора филиала с копией директору'
-            : 'Эскалация 2-го уровня: информирование курирующего члена Правления',
-        regulationRef: 'п. 100',
-      },
-    });
-  }
-  return out;
+/** Событие эскалации для журнала. */
+export function escalationEvent(requestId: number, stageCode: StageCode, level: 1 | 2, at: string): ProcessEvent {
+  return {
+    kind: 'escalation',
+    requestId,
+    stageCode,
+    at,
+    message:
+      level === 1
+        ? 'Эскалация 1-го уровня: уведомление курирующему заместителю директора филиала с копией директору'
+        : 'Эскалация 2-го уровня: информирование курирующего члена Правления',
+    regulationRef: 'п. 100',
+  };
 }
 
 /**

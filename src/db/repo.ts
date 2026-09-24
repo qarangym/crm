@@ -86,6 +86,34 @@ export async function bootstrapAdmin(db: Db, email: string, fullName: string): P
   });
 }
 
+/**
+ * Контрагент по БИН: находим существующего либо заводим карточку.
+ *
+ * Нужно для заявок, поступивших бумагой или почтой (п. 6 — такой канал
+ * сохраняется): сотрудник вносит их в систему, и организация определяется по
+ * БИН. Новая карточка создаётся со статусом «на проверке» — реквизиты
+ * подтверждает ответственное подразделение, права это не выдаёт.
+ */
+export async function resolveCounterparty(
+  db: Db,
+  applicant: { bin: string; company: string; email?: string; phone?: string; contact?: string },
+): Promise<{ id: string; created: boolean }> {
+  return db.tx(async (t) => {
+    const existing = await t.one<{ id: string }>(
+      'SELECT id FROM counterparties WHERE bin = $1', [applicant.bin]);
+    if (existing) return { id: existing.id, created: false };
+
+    const created = await t.one<{ id: string }>(
+      `INSERT INTO counterparties (bin, name_full, name_short, email, phone, contact_person, status)
+       VALUES ($1,$2,$2,$3,$4,$5,'pending')
+       ON CONFLICT (bin) DO UPDATE SET name_full = excluded.name_full
+       RETURNING id`,
+      [applicant.bin, applicant.company.trim(), applicant.email ?? '',
+       applicant.phone ?? '', applicant.contact ?? '']);
+    return { id: created!.id, created: true };
+  });
+}
+
 export function listUsers(db: Db, query?: string) {
   const like = query ? `%${query}%` : null;
   return db.query(
@@ -175,6 +203,19 @@ export function listFacilities(db: Db): Promise<FacilityRow[]> {
       ORDER BY f.name`);
 }
 
+/** Размещённое оборудование арендаторов — лист «Загрузка» Приложения 8. */
+export function listTenants(db: Db, facilityId: string) {
+  return db.query(
+    `SELECT t.id, t.equipment, t.weight_kg, t.windage_m2, t.power_kw,
+            t.mounted_at, t.dismounted_at, cp.name_full AS counterparty_name,
+            d.number AS tu_number
+       FROM facility_tenants t
+       LEFT JOIN counterparties cp ON cp.id = t.counterparty_id
+       LEFT JOIN documents d ON d.id = t.tu_document_id
+      WHERE t.facility_id = $1 AND t.dismounted_at IS NULL
+      ORDER BY cp.name_full`, [facilityId]);
+}
+
 export function listTiers(db: Db, facilityId: string) {
   return db.query(
     `SELECT id, height_m, capacity_kg, occupied_kg FROM facility_tiers
@@ -209,9 +250,16 @@ export type RequestRow = RequestSnapshot & {
   branchId: string;
   branchName: string;
   totalAmount: number | null;
+  /** Мотивированные замечания Заказчика к АВР (п. 94). */
+  avrObjection: string | null;
   createdAt: string;
   registeredAt: string | null;
   version: number;
+  /** Реквизиты открытого этапа — для доски и реестра. */
+  dueAt: string | null;
+  escalationLevel: number;
+  ownerParty: string | null;
+  stageEnteredAt: string | null;
 };
 
 const SELECT_REQUEST = `
@@ -224,16 +272,35 @@ const SELECT_REQUEST = `
          r.closing_confirmed, r.total_amount, r.registered_at, r.created_at, r.version,
          (SELECT array_agg(s.service ORDER BY s.service) FROM request_services s WHERE s.request_id = r.id) AS services,
          (SELECT count(*) FROM request_remarks m WHERE m.request_id = r.id AND m.resolved_at IS NULL) AS open_remarks,
-         (SELECT min(c.paid_at) FROM contracts c WHERE c.request_id = r.id AND c.paid_at IS NOT NULL) AS paid_at,
-         (SELECT c.number FROM contracts c WHERE c.request_id = r.id ORDER BY c.created_at LIMIT 1) AS contract_number,
+         r.avr_sent_at, r.avr_objection,
+         -- Договор и оплата — по каждой услуге (пп. 21, 32, 48, 59).
+         (SELECT coalesce(json_agg(json_build_object('service', c.service, 'number', c.number,
+                                                     'paidAt', c.paid_at) ORDER BY c.service), '[]'::json)
+            FROM contracts c
+           WHERE c.request_id = r.id AND c.service IS NOT NULL AND c.status <> 'terminated') AS contracts,
+         -- Безвозмездные позиции: ТУ на присоединение к сети телерадиовещания (п. 20).
+         (SELECT coalesce(array_agg(s.service), '{}') FROM request_services s
+           WHERE s.request_id = r.id AND s.service = 'ТУ' AND s.placement = 'network') AS free_services,
+         (SELECT coalesce(array_agg(DISTINCT st.stage_code), '{}') FROM request_stages st
+           WHERE st.request_id = r.id AND st.left_at IS NOT NULL) AS passed_stages,
          (SELECT max(d.doc_date) FROM documents d
            WHERE d.request_id = r.id AND d.kind = 'Акт приема-передачи' AND d.approved) AS transfer_act_date,
+         EXISTS (SELECT 1 FROM documents d
+                  WHERE d.request_id = r.id AND d.kind = 'Технический АВР' AND d.approved) AS technical_avr_approved,
          EXISTS (SELECT 1 FROM documents d WHERE d.request_id = r.id AND d.kind = 'АВР' AND d.approved) AS avr_approved,
-         (SELECT max(d.created_at) FROM documents d WHERE d.request_id = r.id AND d.kind = 'АВР') AS avr_sent_at
+         -- Открытый этап: контрольная дата и уровень эскалации нужны доске
+         -- для SLA-подписи на карточке, без отдельного запроса на каждую заявку.
+         open_stage.due_at, open_stage.escalation_level, open_stage.owner_party, open_stage.entered_at
     FROM requests r
     JOIN counterparties cp ON cp.id = r.counterparty_id
     JOIN facilities f ON f.id = r.facility_id
-    JOIN branches b ON b.id = r.branch_id`;
+    JOIN branches b ON b.id = r.branch_id
+    LEFT JOIN LATERAL (
+      SELECT s.due_at, s.escalation_level, s.owner_party, s.entered_at
+        FROM request_stages s
+       WHERE s.request_id = r.id AND s.left_at IS NULL
+       ORDER BY s.entered_at DESC LIMIT 1
+    ) open_stage ON true`;
 
 /** Даты приводим через общий помощник: см. src/domain/dates.ts о сдвиге пояса. */
 const iso = toIsoDate;
@@ -250,14 +317,18 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     tvStatus: row.tv_status as TvStatus,
     masterFileVersion: row.master_file_version,
     verificationCalcDecision: row.verification_calc,
-    contractNumber: row.contract_number,
+    contracts: ((row.contracts ?? []) as { service: Service; number: string; paidAt: string | null }[])
+      .map((c) => ({ service: c.service, number: c.number, paidAt: c.paidAt ? String(c.paidAt).slice(0, 10) : null })),
+    freeServices: (row.free_services ?? []) as Service[],
     freeOfCharge: row.free_of_charge,
-    paidAt: iso(row.paid_at),
+    passedStages: (row.passed_stages ?? []) as StageCode[],
     estimateApproved: row.estimate_approved,
     orderNumber: row.order_number,
     transferActApprovedDate: iso(row.transfer_act_date),
+    technicalAvrApproved: row.technical_avr_approved,
     avrApproved: row.avr_approved,
-    avrSentAt: toIsoTimestamp(row.avr_sent_at),
+    avrSentAt: iso(row.avr_sent_at),
+    avrObjection: row.avr_objection ?? null,
     closingConfirmed: row.closing_confirmed,
     resultDelivered: row.result_delivered,
     openRemarks: Number(row.open_remarks ?? 0),
@@ -271,6 +342,10 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     createdAt: toIsoTimestamp(row.created_at)!,
     registeredAt: toIsoTimestamp(row.registered_at),
     version: row.version,
+    dueAt: iso(row.due_at),
+    escalationLevel: Number(row.escalation_level ?? 0),
+    ownerParty: row.owner_party ?? null,
+    stageEnteredAt: iso(row.entered_at),
   };
 }
 
@@ -426,6 +501,35 @@ export async function updateStage(
   return rows.length > 0;
 }
 
+/**
+ * Изменение реквизитов заявки без смены этапа, с проверкой версии.
+ * Ключи задаёт код маршрута, а не клиент: значения передаются параметрами.
+ */
+export async function updateRequestFields(
+  db: Db, requestId: string, version: number, patch: Record<string, unknown>,
+): Promise<boolean> {
+  const sets = ['version = version + 1', 'updated_at = now()'];
+  const params: unknown[] = [requestId, version];
+  for (const [key, value] of Object.entries(patch)) {
+    if (!/^[a-z_]+$/.test(key)) throw new Error(`Недопустимое поле: ${key}`);
+    params.push(value);
+    sets.push(`${key} = $${params.length}`);
+  }
+  const rows = await db.query(
+    `UPDATE requests SET ${sets.join(', ')} WHERE id = $1 AND version = $2 RETURNING id`,
+    params as never);
+  return rows.length > 0;
+}
+
+/** Продление срока открытого этапа (пп. 33, 45). */
+export async function saveExtension(
+  db: Db, requestId: string, dueAt: string, extendedBy: number, reason: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE request_stages SET due_at = $2, extended_by = $3, extension_reason = $4
+      WHERE request_id = $1 AND left_at IS NULL`, [requestId, dueAt, extendedBy, reason]);
+}
+
 export function stageHistory(db: Db, requestId: string) {
   return db.query(
     `SELECT stage_code, entered_at, left_at, due_at, sla_value, sla_unit, owner_party,
@@ -458,10 +562,36 @@ export async function addRemark(db: Db, requestId: string, fieldKey: string, tex
      VALUES ($1,$2,$3,$4)`, [requestId, fieldKey, text, userId]);
 }
 
-export async function resolveRemarks(db: Db, requestId: string): Promise<void> {
-  await db.query(
+/** Открытые замечания заявки. */
+export function openRemarks(db: Db, requestId: string) {
+  return db.query<{ id: string; field_key: string; text: string; created_by: string }>(
+    `SELECT id, field_key, text, created_by FROM request_remarks
+      WHERE request_id = $1 AND resolved_at IS NULL ORDER BY created_at`, [requestId]);
+}
+
+/** Снятие конкретных замечаний: исправлено поле либо ОР ПСД сняло замечание вручную. */
+export async function resolveRemarkIds(db: Db, requestId: string, ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  const rows = await db.query(
     `UPDATE request_remarks SET resolved_at = now()
-      WHERE request_id = $1 AND resolved_at IS NULL`, [requestId]);
+      WHERE request_id = $1 AND id = ANY($2::uuid[]) AND resolved_at IS NULL RETURNING id`,
+    [requestId, ids]);
+  return rows.length;
+}
+
+/** Замена состава услуг исправленной заявки (ТЗ №11): номер и история сохраняются. */
+export async function replaceRequestServices(
+  db: Db, requestId: string, services: NewRequest['services'],
+): Promise<void> {
+  await db.query('DELETE FROM request_services WHERE request_id = $1', [requestId]);
+  for (const s of services) {
+    await db.query(
+      `INSERT INTO request_services (request_id, service, placement, params, tariff_id,
+                                     tariff_quantity, amount, basis_reference)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [requestId, s.service, s.placement, JSON.stringify(s.params ?? {}), s.tariffId ?? null,
+       s.tariffQuantity ?? null, s.amount ?? null, s.basisReference ?? null]);
+  }
 }
 
 /* ---------------------------- журнал действий ----------------------------- */

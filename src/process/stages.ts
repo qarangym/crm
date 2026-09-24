@@ -195,7 +195,7 @@ export const STAGES: readonly StageDefinition[] = [
     customerStatus: 'work',
     terminal: false,
     regulationRef: 'пп. 66, 70, 90–92',
-    hint: 'Формирование акта по типовой форме № 2В и электронной счёт-фактуры, направление Заказчику.',
+    hint: 'Формирование АВР (Р-1 для ТУ и ПСД, № 2В для СМР — п. 70) и электронной счёт-фактуры, направление Заказчику.',
   },
   {
     code: 'closing',

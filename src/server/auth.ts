@@ -99,12 +99,40 @@ export function requireIdentity(
 }
 
 /**
- * Защита от запросов с чужих сайтов: изменяющие операции принимаются только
- * без заголовка Origin либо с Origin, совпадающим с адресом приложения.
+ * Защита от запросов с чужих сайтов.
+ *
+ * Изменяющие операции принимаются без заголовка Origin (так их шлют curl и
+ * служебные скрипты) либо с Origin, совпадающим с адресом приложения. Если
+ * APP_ORIGIN не задан, сравниваем с собственным адресом запроса: браузер
+ * заголовок Origin подделать не даёт, поэтому такое сравнение отсекает
+ * межсайтовые запросы и без настройки. Раньше незаданный APP_ORIGIN делал
+ * систему доступной только для чтения — с невнятным отказом на каждое действие.
  */
-export function checkOrigin(origin: string | undefined, appOrigin: string | undefined): void {
+export function checkOrigin(
+  origin: string | undefined,
+  appOrigin: string | undefined,
+  selfOrigin?: string,
+): void {
   if (!origin) return;
-  if (!appOrigin || origin !== appOrigin) {
-    throw ApiError.forbidden('Запрос с другого сайта отклонён');
+  const expected = appOrigin?.trim() || selfOrigin;
+  if (!expected) {
+    throw ApiError.forbidden(
+      'Не удалось определить адрес приложения. Задайте APP_ORIGIN в настройках.');
   }
+  if (origin !== expected) throw ApiError.forbidden('Запрос с другого сайта отклонён');
+}
+
+/** Собственный адрес запроса: схема из заголовков прокси, узел из Host. */
+export function originOfRequest(
+  headers: Record<string, string | string[] | undefined>,
+  trustProxy: boolean,
+): string | undefined {
+  const value = (name: string): string => {
+    const v = headers[name];
+    return (Array.isArray(v) ? v[0] : v) ?? '';
+  };
+  const host = (trustProxy && value('x-forwarded-host')) || value('host');
+  if (!host) return undefined;
+  const proto = (trustProxy && value('x-forwarded-proto').split(',')[0]) || 'http';
+  return `${proto}://${host}`;
 }

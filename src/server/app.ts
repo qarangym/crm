@@ -16,12 +16,20 @@ import { FileStore, actFingerprint } from '../storage/files.ts';
 import { enqueue } from './notifications.ts';
 import { ApiError } from './errors.ts';
 import type { AuthConfig, Identity } from './auth.ts';
-import { checkOrigin, requireIdentity } from './auth.ts';
+import { checkOrigin, originOfRequest, requireIdentity } from './auth.ts';
 import type { Actor } from './rbac.ts';
 import * as rbac from './rbac.ts';
 import type { Ctx } from './http.ts';
-import { Router, clientIp, readJson, sendError, sendJson, sendStatic } from './http.ts';
+import { RAW_RESPONSE, Router, clientIp, readJson, sendError, sendJson, sendStatic } from './http.ts';
 import { RateLimiter } from './ratelimit.ts';
+import type { RouteDeps } from './context.ts';
+import { registerContractRoutes } from './contracts.ts';
+import { registerAssignmentRoutes } from './assignments.ts';
+import { registerMemoRoutes } from './memos.ts';
+import { registerAmendmentRoutes } from './amendments.ts';
+import * as contractsRepo from '../db/contracts.ts';
+import * as assignmentsRepo from '../db/assignments.ts';
+import * as memosRepo from '../db/memos.ts';
 
 import { STAGES, stage } from '../process/stages.ts';
 import { TRANSITIONS } from '../process/transitions.ts';
@@ -29,18 +37,14 @@ import { AUTOMATION_RULES } from '../process/rules.ts';
 import { applyTransition, canTransition, customerStatus, openStage, TransitionError } from '../process/engine.ts';
 import type { StageCode } from '../process/stages.ts';
 import { boardColumns, breakdownByParty, bottlenecks, stageMetrics } from '../process/metrics.ts';
-import { validateRequest } from '../domain/validation.ts';
+import { validateAmendment, validateRequest } from '../domain/validation.ts';
 import { estimate } from '../domain/pricing.ts';
 import { today } from '../domain/calendar.ts';
 import { toIsoDate } from '../domain/dates.ts';
 import { CUSTOMER_STATUS_NAME, OWNER_PARTY_NAME, ROLE_NAME, SERVICE_NAME } from '../domain/types.ts';
-import type { Role, Service, Tariff } from '../domain/types.ts';
+import type { RequestService, Role, Service, Tariff } from '../domain/types.ts';
 
-/**
- * Признак того, что обработчик сам записал ответ (отдача файла потоком).
- * Возврат обычного значения привёл бы к повторной отправке заголовков.
- */
-export const RAW_RESPONSE = Symbol('raw-response');
+export { RAW_RESPONSE } from './http.ts';
 
 export type AppOptions = {
   db: Db;
@@ -83,6 +87,13 @@ export function createApp(options: AppOptions) {
     if (!actor.isActive) throw ApiError.forbidden('Учётная запись отключена');
     return actor;
   }
+
+  /** Изменяющая операция принимается только со своего сайта. */
+  const guardOrigin = (ctx: Ctx) => checkOrigin(
+    ctx.req.headers.origin as string | undefined,
+    options.appOrigin,
+    originOfRequest(ctx.req.headers, options.trustProxy ?? false),
+  );
 
   const auditOf = (ctx: Ctx, actor: Actor | null) => ({
     actorId: actor?.id ?? null,
@@ -131,6 +142,19 @@ export function createApp(options: AppOptions) {
     return { facilities: await repo.listFacilities(db) };
   });
 
+  /** Карточка объекта: ярусы и размещённое оборудование — для оценки ТВ (п. 16.2). */
+  router.get('/api/v1/facilities/:id', async (ctx) => {
+    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    rbac.require(actor, 'registry.view');
+    const facility = (await repo.listFacilities(db)).find((f) => f.id === ctx.params.id);
+    if (!facility) throw ApiError.notFound('Объект не найден');
+    const [tiers, tenants] = await Promise.all([
+      repo.listTiers(db, facility.id),
+      repo.listTenants(db, facility.id),
+    ]);
+    return { facility, tiers, tenants };
+  });
+
   router.get('/api/v1/tariffs', async (ctx) => {
     await actorOf(requireIdentity(ctx.req.headers, auth));
     return { tariffs: await repo.listTariffs(db, today()) };
@@ -160,11 +184,14 @@ export function createApp(options: AppOptions) {
   router.get('/api/v1/requests/:id', async (ctx) => {
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     const request = await loadVisible(actor, ctx.params.id);
-    const [services, remarks, history, events] = await Promise.all([
+    const [services, remarks, history, events, contracts, memos, assignments] = await Promise.all([
       repo.listRequestServices(db, request.uuid),
       repo.listRemarks(db, request.uuid),
       repo.stageHistory(db, request.uuid),
       repo.listEvents(db, 'request', request.uuid, 100),
+      contractsRepo.listContracts(db, request.uuid),
+      memosRepo.forRequest(db, request.uuid),
+      rbac.can(actor, 'assignment.view') ? assignmentsRepo.forRequest(db, request.uuid) : Promise.resolve([]),
     ]);
     const current = await repo.currentStageRecord(db, request.uuid);
     const available = TRANSITIONS
@@ -182,9 +209,23 @@ export function createApp(options: AppOptions) {
       });
     return {
       request: { ...request, customerStatus: customerStatus(request) },
-      services, remarks, history, events, currentStage: current, transitions: available,
+      services, remarks, history, events, contracts, memos, assignments,
+      currentStage: current, transitions: available,
     };
   });
+
+  /** Поручение ОР ПСД по зарегистрированной заявке (ТЗ №7, №8). */
+  async function registerAssignment(
+    t: Db, requestId: string, number: string, cal: Awaited<ReturnType<typeof repo.calendar>>,
+    ctx: Ctx, actor: Actor,
+  ): Promise<void> {
+    const id = await assignmentsRepo.createForRequest(t, requestId, cal);
+    if (!id) return;
+    await repo.logEvent(t, {
+      ...auditOf(ctx, actor), action: 'Создано поручение ОР ПСД', entity: 'request', entityId: requestId,
+      detail: `${number}: ответ о технической возможности — не более 5 рабочих дней`, regulationRef: 'ТЗ №7, п. 9',
+    });
+  }
 
   async function loadVisible(actor: Actor, id: string) {
     rbac.require(actor, 'request.view');
@@ -203,7 +244,7 @@ export function createApp(options: AppOptions) {
 
   /** Подача заявки. Номер присваивается сразу (п. 6, ТЗ №7). */
   router.post('/api/v1/requests', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'request.create');
 
@@ -215,16 +256,43 @@ export function createApp(options: AppOptions) {
     }>();
 
     const draft = body.draft === true;
-    const counterpartyId = rbac.isCustomer(actor)
-      ? (actor.counterpartyId ?? '')            // Заказчик подаёт только от своей организации
-      : String(body.counterpartyId ?? '');
-    if (!counterpartyId) throw ApiError.badRequest('Не определена организация Заказчика');
+    const applicant = (body.applicant ?? {}) as Record<string, string>;
 
     const errors = validateRequest(
-      { ...(body.applicant ?? {}), facilityId: body.facilityId, services: body.services ?? [] } as never,
+      { ...applicant, facilityId: body.facilityId, services: body.services ?? [] } as never,
       draft,
     );
     if (Object.keys(errors).length) throw ApiError.badRequest('Проверьте заполнение формы', errors);
+
+    /*
+     * Организация Заказчика. Представитель подаёт заявку только от своей
+     * организации. Сотрудник Общества вносит заявку, поступившую бумагой или
+     * почтой (п. 6): организация определяется по БИН, при отсутствии карточки
+     * она заводится со статусом «на проверке».
+     */
+    let counterpartyId: string;
+    if (rbac.isCustomer(actor)) {
+      if (!actor.counterpartyId) {
+        throw ApiError.forbidden('Учётная запись не привязана к организации. Обратитесь в ДИТ.');
+      }
+      counterpartyId = actor.counterpartyId;
+    } else if (body.counterpartyId) {
+      counterpartyId = String(body.counterpartyId);
+    } else {
+      const resolved = await repo.resolveCounterparty(db, {
+        bin: String(applicant.bin ?? ''),
+        company: String(applicant.company ?? ''),
+        email: applicant.email, phone: applicant.phone, contact: applicant.contact,
+      });
+      counterpartyId = resolved.id;
+      if (resolved.created) {
+        await repo.logEvent(db, {
+          ...auditOf(ctx, actor), action: 'Заведена карточка контрагента по заявке',
+          entity: 'counterparty', entityId: counterpartyId,
+          detail: `${applicant.company} · БИН ${applicant.bin} · требует проверки реквизитов`,
+        });
+      }
+    }
 
     const facility = (await repo.listFacilities(db)).find((f) => f.id === body.facilityId);
     if (!facility) throw ApiError.badRequest('Выберите объект из справочника', { facilityId: 'Объект не найден' });
@@ -243,23 +311,27 @@ export function createApp(options: AppOptions) {
     const snapshot = { id: 0, services: services.map((s) => s.service) } as never;
     const record = openStage(snapshot, stageCode, today(), cal);
 
-    const created = await repo.createRequest(db, {
-      counterpartyId,
-      facilityId: facility.id,
-      branchId: facility.branch_id,
-      createdBy: actor.id,
-      stageCode,
-      freeOfCharge,
-      totalAmount: priced.hasUndetermined ? null : priced.total,
-      services: services.map((s, i) => ({ ...s, amount: priced.lines[i]?.amount ?? null })),
-    }, record);
-
-    await repo.logEvent(db, {
-      ...auditOf(ctx, actor),
-      action: draft ? 'Сохранён черновик заявки' : 'Заявка подана через портал',
-      entity: 'request', entityId: created.uuid,
-      detail: `${created.number} · ${services.map((s) => s.service).join(', ')}`,
-      regulationRef: 'п. 6',
+    // ТЗ №7: заявка регистрируется вместе с поручением — в одной транзакции.
+    const created = await db.tx(async (t) => {
+      const row = await repo.createRequest(t, {
+        counterpartyId,
+        facilityId: facility.id,
+        branchId: facility.branch_id,
+        createdBy: actor.id,
+        stageCode,
+        freeOfCharge,
+        totalAmount: priced.hasUndetermined ? null : priced.total,
+        services: services.map((s, i) => ({ ...s, amount: priced.lines[i]?.amount ?? null })),
+      }, record);
+      await repo.logEvent(t, {
+        ...auditOf(ctx, actor),
+        action: draft ? 'Сохранён черновик заявки' : 'Заявка подана через портал',
+        entity: 'request', entityId: row.uuid,
+        detail: `${row.number} · ${services.map((s) => s.service).join(', ')}`,
+        regulationRef: 'п. 6',
+      });
+      if (!draft) await registerAssignment(t, row.uuid, row.number ?? '', cal, ctx, actor);
+      return row;
     });
 
     if (!draft) {
@@ -291,7 +363,7 @@ export function createApp(options: AppOptions) {
    * документооборот, и система его не подменяет.
    */
   router.post('/api/v1/requests/:id/registration', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'request.register');
 
@@ -322,7 +394,7 @@ export function createApp(options: AppOptions) {
 
   /** Переход по этапам. Единственный способ сменить этап заявки. */
   router.post('/api/v1/requests/:id/transition', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'request.transition');
 
@@ -347,6 +419,20 @@ export function createApp(options: AppOptions) {
     const current = await repo.currentStageRecord(db, request.uuid);
     const input = { reason: body.reason, offerExpired: body.offerExpired, silenceAccepted: body.silenceAccepted };
 
+    // Подача черновика: те же проверки, что при подаче сразу (ТЗ №4, №5).
+    const submittingDraft = request.stageCode === 'draft' && body.to === 'registered';
+    if (submittingDraft) {
+      const stored = (await repo.listRequestServices(db, request.uuid)) as Record<string, any>[];
+      const errors = validateAmendment({
+        facilityId: request.facilityId,
+        services: stored.map((s) => ({
+          service: s.service, placement: s.placement, params: s.params ?? {},
+          tariffId: s.tariff_id, tariffQuantity: s.tariff_quantity, basisReference: s.basis_reference,
+        })) as RequestService[],
+      });
+      if (Object.keys(errors).length) throw ApiError.badRequest('Черновик заполнен не полностью', errors);
+    }
+
     let outcome;
     try {
       outcome = applyTransition(request, current, body.to, input, { calendar: cal, now: today() });
@@ -367,14 +453,14 @@ export function createApp(options: AppOptions) {
         customerStatus(outcome.request), body.version ?? request.version,
         body.to === 'closed_done' || String(body.to).startsWith('closed_')
           ? { closed_at: new Date().toISOString(), closed_reason: body.reason ?? null }
-          : {},
+          : submittingDraft ? { registered_at: new Date().toISOString() } : {},
       );
       if (!ok) throw ApiError.conflict('Карточка изменилась. Обновите заявку и повторите');
       if (outcome.closed) {
         await repo.closeStageRecord(t, request.uuid, today(), outcome.closed.breached);
       }
       await repo.openStageRecord(t, request.uuid, outcome.opened);
-      if (body.to !== 'draft') await repo.resolveRemarks(t, request.uuid);
+      if (submittingDraft) await registerAssignment(t, request.uuid, request.number ?? '', cal, ctx, actor);
       for (const event of outcome.events) {
         await repo.logEvent(t, {
           ...auditOf(ctx, actor), action: event.message, entity: 'request',
@@ -388,7 +474,7 @@ export function createApp(options: AppOptions) {
 
   /** Фиксация оценки технической возможности (раздел 4, п. 16.5). */
   router.post('/api/v1/requests/:id/tv', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'request.tv');
 
@@ -430,7 +516,7 @@ export function createApp(options: AppOptions) {
 
   /** Замечания к полям формы — основание возврата на доработку (ТЗ №11). */
   router.post('/api/v1/requests/:id/remarks', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'request.remark');
 
@@ -482,7 +568,7 @@ export function createApp(options: AppOptions) {
   });
 
   router.post('/api/v1/users', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'admin');
 
@@ -526,7 +612,7 @@ export function createApp(options: AppOptions) {
   });
 
   router.post('/api/v1/users/:id/disable', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'admin');
     if (ctx.params.id === actor.id) throw ApiError.badRequest('Нельзя отключить собственную учётную запись');
@@ -553,6 +639,20 @@ export function createApp(options: AppOptions) {
       }),
     };
   });
+
+  /* ------------------ договоры, поручения, служебные записки ---------------- */
+
+  const deps: RouteDeps = {
+    db,
+    actor: (ctx) => actorOf(requireIdentity(ctx.req.headers, auth)),
+    guardOrigin,
+    audit: auditOf,
+    loadVisible,
+  };
+  registerContractRoutes(router, deps);
+  registerAssignmentRoutes(router, deps);
+  registerMemoRoutes(router, deps);
+  registerAmendmentRoutes(router, deps);
 
   /* ------------------------------ архив актов ----------------------------- */
 
@@ -587,6 +687,24 @@ export function createApp(options: AppOptions) {
     return { document, versions: await docs.listVersions(db, document.id) };
   });
 
+  /**
+   * Форма акта по виду документа и составу услуг заявки.
+   * Пункт 70 относит типовую форму № 2В к подрядным работам (СМР); для услуг
+   * (ТУ, ПСД) применяется форма Р-1. Технический АВР филиала — по Приложению 6.
+   */
+  function resolveActForm(kind: string, requested: string, services: Service[]): string {
+    const allowed = ['Р-1', '2В', 'Прил. 6', 'произвольная'];
+    if (requested) return allowed.includes(requested) ? requested : 'invalid';
+    if (kind === 'Технический АВР') return 'Прил. 6';
+    if (kind === 'Акт приема-передачи') return 'произвольная'; // п. 58
+    if (kind !== 'АВР') return '';
+    const smr = services.includes('СМР');
+    const other = services.some((s) => s !== 'СМР');
+    if (smr && other) return 'ambiguous';
+    if (smr) return '2В';
+    return other ? 'Р-1' : '2В';
+  }
+
   function onlyBranch(actor: Actor): boolean {
     return actor.roles.includes('branch') &&
       !actor.roles.some((r) => ['admin', 'orpsd', 'assets', 'accounting', 'management'].includes(r));
@@ -608,7 +726,7 @@ export function createApp(options: AppOptions) {
    * (требование архива №11) и принадлежность филиалу.
    */
   router.post('/api/v1/documents', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'documents.upload');
     if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
@@ -619,7 +737,7 @@ export function createApp(options: AppOptions) {
 
     const meta = form.fields;
     const kind = String(meta.kind ?? '').trim();
-    const allowedKinds = ['Акт приема-передачи', 'АВР', 'ТУ', 'ПСД (РП)', 'Договор', 'Распоряжение', 'КП', 'Приложение'];
+    const allowedKinds = ['Акт приема-передачи', 'Технический АВР', 'АВР', 'ТУ', 'ПСД (РП)', 'Договор', 'Распоряжение', 'КП', 'Приложение'];
     if (!allowedKinds.includes(kind)) throw ApiError.badRequest('Укажите вид документа', { kind: 'Недопустимый вид' });
 
     // ОР ПСД загружает в архив окончательную версию АВР после подписания Заказчиком.
@@ -655,12 +773,24 @@ export function createApp(options: AppOptions) {
       }
     }
 
+    // Форма акта (п. 70): Р-1 для ТУ и ПСД, № 2В для СМР; технический АВР филиала — Приложение 6.
+    const requestId = String(meta.requestId ?? '') || null;
+    const linked = requestId ? await repo.getRequest(db, requestId) : null;
+    if (requestId && !linked) throw ApiError.badRequest('Заявка не найдена', { requestId: 'Проверьте номер заявки' });
+    const formCode = resolveActForm(kind, String(meta.formCode ?? '').trim(), linked?.services ?? []);
+    if (formCode === 'ambiguous') {
+      throw ApiError.badRequest('Укажите форму акта', {
+        formCode: 'В заявке есть и услуги (ТУ, ПСД — форма Р-1), и СМР (форма № 2В): выберите форму этого акта',
+      });
+    }
+    if (formCode === 'invalid') throw ApiError.badRequest('Недопустимая форма акта', { formCode: 'Допустимы: Р-1, 2В, Прил. 6' });
+
     const stored = await store.put(randomUUID(), file.filename, file.data);
     let documentId: string;
     try {
       documentId = await docs.createDocument(db, {
-        requestId: String(meta.requestId ?? '') || null,
-        kind, formCode: String(meta.formCode ?? '') || '2В',
+        requestId,
+        kind, formCode,
         number: String(meta.number).trim(),
         facilityId, ownerId: String(meta.ownerId ?? '') || null,
         contractorName: String(meta.contractor ?? '').trim(),
@@ -677,14 +807,15 @@ export function createApp(options: AppOptions) {
     await repo.logEvent(db, {
       ...auditOf(ctx, actor), action: 'Загружен документ', entity: 'document', entityId: documentId,
       detail: `${kind} ${meta.number} · файл ${stored.fileName} · ${stored.sha256.slice(0, 12)}`,
-      regulationRef: kind === 'Акт приема-передачи' ? 'п. 58' : kind === 'АВР' ? 'пп. 66, 70' : null,
+      regulationRef: kind === 'Акт приема-передачи' ? 'п. 58' : kind === 'Технический АВР' ? 'п. 66'
+        : kind === 'АВР' ? 'пп. 70, 91' : null,
     });
     return { document: await docs.getDocument(db, documentId) };
   });
 
   /** Замена файла: новая версия, визирование снимается. */
   router.post('/api/v1/documents/:id/versions', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'documents.upload');
     if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
@@ -709,7 +840,7 @@ export function createApp(options: AppOptions) {
 
   /** Визирование карточки. После него правка и удаление закрыты. */
   router.post('/api/v1/documents/:id/approve', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'documents.approve');
     const document = await loadDocument(actor, ctx.params.id);
@@ -721,14 +852,15 @@ export function createApp(options: AppOptions) {
     await repo.logEvent(db, {
       ...auditOf(ctx, actor), action: 'Документ завизирован', entity: 'document',
       entityId: document.id, detail: `${document.kind} ${document.number}`,
-      regulationRef: 'пп. 58, 66',
+      regulationRef: document.kind === 'Акт приема-передачи' ? 'п. 58'
+        : document.kind === 'Технический АВР' ? 'п. 66' : document.kind === 'АВР' ? 'пп. 70, 91' : null,
     });
     return { document: await docs.getDocument(db, document.id) };
   });
 
   /** Удаление карточки — только до визирования (требование ТЗ по архиву). */
   router.post('/api/v1/documents/:id/delete', async (ctx) => {
-    checkOrigin(ctx.req.headers.origin as string | undefined, options.appOrigin);
+    guardOrigin(ctx);
     const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
     rbac.require(actor, 'documents.upload');
     const document = await loadDocument(actor, ctx.params.id);
@@ -791,6 +923,7 @@ export function createApp(options: AppOptions) {
         counterparty: r.counterpartyName, facility: r.facilityName, branch: r.branchName,
         services: r.services, totalAmount: r.totalAmount, openRemarks: r.openRemarks,
         customerStatus: customerStatus(r),
+        dueAt: r.dueAt, escalationLevel: r.escalationLevel, ownerParty: r.ownerParty,
       })),
     };
   });
@@ -808,6 +941,7 @@ export function createApp(options: AppOptions) {
       byParty: breakdownByParty(records, today(), cal).map((p) => ({
         ...p, ownerName: OWNER_PARTY_NAME[p.ownerParty],
       })),
+      memos: await memosRepo.answerStats(db),
     };
   });
 

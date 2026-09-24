@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (name) => readFileSync(join(here, name), 'utf8');
 
 let html = read('index.html');
-for (const name of ['assets.js', 'config.js', 'demo-data.js']) {
+for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js']) {
   const tag = `<script src="${name}"></script>`;
   if (!html.includes(tag)) throw new Error(`В index.html нет подключения ${name}`);
   html = html.replace(tag, `<script>\n/* inline: ${name} */\n${read(name)}\n</script>`);

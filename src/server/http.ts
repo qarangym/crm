@@ -20,6 +20,12 @@ export type Ctx = {
 };
 
 export type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
+
+/**
+ * Признак того, что обработчик сам записал ответ (отдача файла потоком).
+ * Возврат обычного значения привёл бы к повторной отправке заголовков.
+ */
+export const RAW_RESPONSE = Symbol('raw-response');
 type Route = { method: string; parts: string[]; handler: Handler };
 
 export class Router {

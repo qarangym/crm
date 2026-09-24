@@ -16,6 +16,14 @@ import type { Service, TvStatus } from '../domain/types.ts';
 import type { StageCode } from './stages.ts';
 import { appliesTo, stage } from './stages.ts';
 
+/** Договор по одной услуге заявки (пп. 21, 32, 48). */
+export type ContractInfo = {
+  service: Service;
+  number: string;
+  /** Фактическая дата поступления 100 % оплаты по этому договору (п. 86). */
+  paidAt: string | null;
+};
+
 /** Снимок заявки, достаточный для проверки условий перехода. */
 export type RequestSnapshot = {
   id: number;
@@ -32,25 +40,32 @@ export type RequestSnapshot = {
   masterFileVersion: string | null;
   /** Решение инженера о поверочном расчёте, если загрузка близка к предельной (п. 16.4). */
   verificationCalcDecision: 'not_required' | 'required' | 'done' | null;
-  /** Договор либо основание безвозмездной услуги (пп. 21, 32, 48). */
-  contractNumber: string | null;
   /**
-   * Все позиции заявки безвозмездны — только ТУ на присоединение к сети
-   * телерадиовещания (п. 20). Вычисляется из состава услуг через
-   * `pricing.isFreeOfCharge`: сам по себе вид услуги «ТУ» от оплаты не освобождает.
+   * Действующие договоры по услугам. На каждую услугу — свой договор и своя
+   * 100 % оплата (пп. 21, 32, 48, 59): оплата договора на ПСД не открывает СМР.
    */
+  contracts: ContractInfo[];
+  /**
+   * Безвозмездные услуги заявки — ТУ на присоединение к сети телерадиовещания
+   * (п. 20). Вычисляется через `pricing.isFreeOfCharge`: сам по себе вид услуги
+   * «ТУ» от оплаты не освобождает.
+   */
+  freeServices: Service[];
+  /** Все позиции заявки безвозмездны (п. 20). */
   freeOfCharge: boolean;
-  /** Фактическая дата поступления 100 % оплаты (п. 86). */
-  paidAt: string | null;
+  /** Этапы, которые заявка уже прошла: этап услуги не повторяется. */
+  passedStages: StageCode[];
   /** Утверждение сметной документации (пп. 41, 52). */
   estimateApproved: boolean;
   /** Распоряжение о разрешении на выполнение СМР (п. 60). */
   orderNumber: string | null;
   /** Завизированный акт приёма-передачи оборудования (п. 58). */
   transferActApprovedDate: string | null;
-  /** Завизированный акт выполненных работ (пп. 66, 70). */
+  /** Завизированный технический АВР филиала, подписанный Заказчиком (п. 66). */
+  technicalAvrApproved: boolean;
+  /** Завизированный АВР расчётов с контрагентами (пп. 70, 91). */
   avrApproved: boolean;
-  /** АВР и ЭСФ направлены Заказчику (пп. 91–92). */
+  /** Дата направления АВР и ЭСФ Заказчику (пп. 91–92); от неё — 10 р.д. по п. 94. */
   avrSentAt: string | null;
   /** Подтверждение оформления закрывающих документов (п. 95). */
   closingConfirmed: boolean;
@@ -121,32 +136,105 @@ const guardReject: Guard = (r, input) => {
   return out;
 };
 
-/** Выставление счёта: договор либо основание безвозмездной услуги (пп. 21, 83–85). */
-const guardOffer: Guard = (r) => {
+/** Этап, на котором оказывается услуга. */
+export const SERVICE_STAGE: Record<Service, StageCode> = { 'ТУ': 'tu', 'ПСД': 'psd', 'СМР': 'smr_prep' };
+
+/** Действующий договор по услуге. */
+export function contractFor(r: RequestSnapshot, service: Service): ContractInfo | undefined {
+  return r.contracts.find((c) => c.service === service);
+}
+
+/** Дата оплаты договора по услуге; для безвозмездной услуги — не требуется (п. 20). */
+export function paidAtFor(r: RequestSnapshot, service: Service): string | null {
+  return contractFor(r, service)?.paidAt ?? null;
+}
+
+/** Услуги, которые ещё предстоит оказать: их этап не пройден и не открыт. */
+export function pendingServices(r: RequestSnapshot): Service[] {
+  return r.services.filter((s) => {
+    const code = SERVICE_STAGE[s];
+    if (r.passedStages.includes(code) || r.stageCode === code) return false;
+    // СМР после подготовки идёт этапом «Выполнение СМР» — услуга уже оказывается.
+    if (s === 'СМР' && (r.passedStages.includes('smr') || r.stageCode === 'smr')) return false;
+    return true;
+  });
+}
+
+/**
+ * Услуги, договоры по которым заключаются в текущем цикле «КП → договор → оплата».
+ * Безвозмездные услуги договора не требуют (п. 20). Договор на СМР при
+ * заказанной ПСД заключается после её утверждения: стоимость СМР формируется
+ * только по утверждённой сметной документации (пп. 49, 53).
+ */
+export function offerServices(r: RequestSnapshot): Service[] {
+  const pending = pendingServices(r);
+  return pending
+    .filter((s) => !r.freeServices.includes(s))
+    .filter((s) => !(s === 'СМР' && pending.includes('ПСД')));
+}
+
+/** Сметная документация на СМР утверждена (пп. 49, 53). */
+const guardEstimate: Guard = (r) =>
+  r.estimateApproved
+    ? []
+    : [fail('estimate_not_approved', 'Сметная документация не утверждена — договор на СМР заключается не ранее её утверждения', 'пп. 49, 53')];
+
+/**
+ * Договор и счёт направлены: на каждую услугу цикла заключён договор
+ * (пп. 21, 32, 48, 83–85); договор на СМР — не ранее утверждения сметы (п. 53).
+ */
+const guardOffer: Guard = (r, input) => {
   const out: GuardFailure[] = [];
-  if (!String(r.contractNumber ?? '').trim()) {
-    out.push(fail('no_contract', 'Укажите номер договора либо основание безвозмездного оказания услуги', 'пп. 21, 83'));
+  const due = offerServices(r);
+  for (const service of due) {
+    if (!contractFor(r, service)) {
+      out.push(fail('no_contract', `Зарегистрируйте договор на услугу «${service}»`, 'пп. 21, 32, 48, 83'));
+    }
   }
+  if (due.includes('СМР')) out.push(...guardEstimate(r, input));
   return out;
 };
 
 /**
- * Начало оказания услуг: 100 % предоплата (пп. 86, 89).
- * Исключение только одно — заявка целиком безвозмездна (п. 20).
+ * Начало оказания услуги: 100 % предоплата по договору этой услуги (пп. 86, 89).
+ * Исключение — безвозмездная услуга (п. 20).
  */
-const guardPaid: Guard = (r) => {
-  if (r.freeOfCharge) return [];
-  if (!r.paidAt) {
-    return [fail('not_paid', 'Подтвердите поступление 100 % предварительной оплаты', 'пп. 86, 89')];
+const guardPaidFor = (service: Service): Guard => (r) => {
+  if (r.freeServices.includes(service)) return [];
+  const contract = contractFor(r, service);
+  if (!contract) {
+    return [fail('no_contract', `Нет договора на услугу «${service}»`, 'пп. 21, 32, 48')];
+  }
+  if (!contract.paidAt) {
+    return [fail('not_paid', `Подтвердите поступление 100 % оплаты по договору ${contract.number} («${service}»)`, 'пп. 86, 89')];
   }
   return [];
 };
 
-/** Подготовка к СМР: договор не ранее утверждения сметной документации (пп. 49, 53). */
-const guardSmrPrep: Guard = (r) => {
+/** Этап услуги не повторяется: заявка его уже прошла. */
+const guardNotPassed = (code: StageCode): Guard => (r) =>
+  r.passedStages.includes(code)
+    ? [fail('stage_passed', `Этап «${stage(code).name}» уже пройден`, 'порядок этапов')]
+    : [];
+
+const all = (...guards: Guard[]): Guard => (r, input) => guards.flatMap((g) => g(r, input));
+
+/** Подготовка к СМР: утверждённая смета, договор на СМР и оплата по нему (пп. 49, 53, 59). */
+const guardSmrPrep: Guard = all(guardNotPassed('smr_prep'), guardEstimate, guardPaidFor('СМР'));
+
+/**
+ * Второй цикл для СМР после ПСД: смета утверждена, договор на СМР ещё не
+ * оплачен (пп. 48–53). Если оплата уже поступила, заявка идёт прямо к подготовке СМР.
+ */
+const guardSmrOffer: Guard = (r, input) => {
   const out: GuardFailure[] = [];
-  if (!r.estimateApproved) {
-    out.push(fail('estimate_not_approved', 'Сметная документация не утверждена — договор на СМР заключается не ранее её утверждения', 'пп. 49, 53'));
+  if (!r.services.includes('СМР')) {
+    out.push(fail('service_not_ordered', 'СМР в заявке не заказаны', 'п. 7.5'));
+    return out;
+  }
+  out.push(...guardEstimate(r, input));
+  if (paidAtFor(r, 'СМР')) {
+    out.push(fail('already_paid', 'Договор на СМР уже оплачен — переходите к подготовке СМР', 'пп. 54, 59'));
   }
   return out;
 };
@@ -163,13 +251,16 @@ const guardSmrStart: Guard = (r) => {
   return out;
 };
 
-/** Переход к оформлению АВР: работы завершены (п. 66). */
+/** Переход к оформлению АВР: работы завершены (пп. 24, 42, 66). */
 const guardToAvr: Guard = (r) => {
   const out: GuardFailure[] = [];
-  if (r.services.includes('СМР') && !r.transferActApprovedDate) {
-    out.push(fail('no_transfer_act', 'Нет завизированного акта приёма-передачи оборудования', 'п. 58'));
+  if (r.stageCode === 'smr') {
+    if (!r.technicalAvrApproved) {
+      out.push(fail('no_technical_avr', 'Загрузите и завизируйте технический АВР, подписанный филиалом и Заказчиком', 'п. 66'));
+    }
+    return out;
   }
-  if (!r.services.includes('СМР') && !r.resultDelivered) {
+  if (!r.resultDelivered) {
     out.push(fail('result_not_delivered', 'Подтвердите согласование, утверждение и передачу результата Заказчику', 'пп. 24, 42'));
   }
   return out;
@@ -179,10 +270,10 @@ const guardToAvr: Guard = (r) => {
 const guardToClosing: Guard = (r) => {
   const out: GuardFailure[] = [];
   if (!r.avrApproved) {
-    out.push(fail('no_avr', 'Нужен подписанный и завизированный акт выполненных работ', 'пп. 66, 70'));
+    out.push(fail('no_avr', 'Нужен подписанный и завизированный акт выполненных работ', 'пп. 70, 91'));
   }
   if (!r.avrSentAt) {
-    out.push(fail('avr_not_sent', 'Отметьте направление АВР и ЭСФ Заказчику', 'пп. 91–92'));
+    out.push(fail('avr_not_sent', 'Отметьте дату направления АВР и ЭСФ Заказчику', 'пп. 91–92'));
   }
   return out;
 };
@@ -199,10 +290,12 @@ const guardDone: Guard = (r, input) => {
   return out;
 };
 
-/** Закрытие по истечении оферты (табл. 1). */
+/** Закрытие по истечении оферты (табл. 1): оплата по договорам цикла не поступила. */
 const guardExpired: Guard = (r, input) => {
   const out: GuardFailure[] = [];
-  if (r.paidAt) out.push(fail('already_paid', 'Оплата поступила — заявка не может быть закрыта по оферте', 'табл. 1'));
+  if (offerServices(r).some((s) => paidAtFor(r, s))) {
+    out.push(fail('already_paid', 'Оплата поступила — заявка не может быть закрыта по оферте', 'табл. 1'));
+  }
   if (!input.offerExpired) out.push(fail('offer_active', 'Срок оферты ещё не истёк', 'табл. 1'));
   return out;
 };
@@ -233,20 +326,21 @@ export const TRANSITIONS: readonly TransitionDefinition[] = [
   { from: 'tv_review', to: 'offer', title: 'ТВ подтверждена — сформировать КП', guard: guardTvConfirmed, regulationRef: 'пп. 16.3, 16.5, 21', roles: ['orpsd', 'admin'] },
   { from: 'tv_review', to: 'closed_rejected', title: 'ТВ отсутствует — мотивированный отказ', guard: guardReject, regulationRef: 'табл. 1', roles: ['orpsd', 'admin'] },
 
-  { from: 'offer', to: 'awaiting_payment', title: 'Договор и счёт направлены', guard: guardOffer, regulationRef: 'пп. 84–85', roles: ['orpsd', 'accounting', 'admin'] },
+  { from: 'offer', to: 'awaiting_payment', title: 'Договор и счёт направлены', guard: guardOffer, regulationRef: 'пп. 21, 53, 84–85', roles: ['orpsd', 'accounting', 'admin'] },
   { from: 'offer', to: 'closed_cancelled', title: 'Расторжение / отзыв заявки', guard: guardCancel, regulationRef: 'пп. 96–97', roles: ['orpsd', 'admin'] },
 
-  { from: 'awaiting_payment', to: 'tu', title: 'Оплата получена — выдача ТУ', guard: guardPaid, regulationRef: 'пп. 20, 24, 86', roles: ['orpsd', 'admin'] },
-  { from: 'awaiting_payment', to: 'psd', title: 'Оплата получена — разработка ПСД', guard: guardPaid, regulationRef: 'пп. 33, 86', roles: ['orpsd', 'admin'] },
-  { from: 'awaiting_payment', to: 'smr_prep', title: 'Оплата получена — подготовка к СМР', guard: (r, i) => [...guardPaid(r, i), ...guardSmrPrep(r, i)], regulationRef: 'пп. 49, 53, 54', roles: ['orpsd', 'admin'] },
+  { from: 'awaiting_payment', to: 'tu', title: 'Оплата получена — выдача ТУ', guard: all(guardNotPassed('tu'), guardPaidFor('ТУ')), regulationRef: 'пп. 20, 24, 86', roles: ['orpsd', 'admin'] },
+  { from: 'awaiting_payment', to: 'psd', title: 'Оплата получена — разработка ПСД', guard: all(guardNotPassed('psd'), guardPaidFor('ПСД')), regulationRef: 'пп. 33, 86', roles: ['orpsd', 'admin'] },
+  { from: 'awaiting_payment', to: 'smr_prep', title: 'Оплата получена — подготовка к СМР', guard: guardSmrPrep, regulationRef: 'пп. 49, 53, 54, 59', roles: ['orpsd', 'admin'] },
   { from: 'awaiting_payment', to: 'closed_expired', title: 'Закрыть по истечении оферты', guard: guardExpired, regulationRef: 'табл. 1', roles: ['orpsd', 'admin'] },
   { from: 'awaiting_payment', to: 'closed_cancelled', title: 'Расторжение и возврат', guard: guardCancel, regulationRef: 'пп. 96–97', roles: ['orpsd', 'admin'] },
 
-  { from: 'tu', to: 'psd', title: 'ТУ выданы — к разработке ПСД', guard: () => [], regulationRef: 'пп. 24, 32', roles: ['orpsd', 'admin'] },
-  { from: 'tu', to: 'smr_prep', title: 'ТУ выданы — к подготовке СМР', guard: guardSmrPrep, regulationRef: 'пп. 49, 53', roles: ['orpsd', 'admin'] },
+  { from: 'tu', to: 'psd', title: 'ТУ выданы — к разработке ПСД', guard: guardPaidFor('ПСД'), regulationRef: 'пп. 24, 32, 86', roles: ['orpsd', 'admin'] },
+  { from: 'tu', to: 'smr_prep', title: 'ТУ выданы — к подготовке СМР', guard: guardSmrPrep, regulationRef: 'пп. 49, 53, 59', roles: ['orpsd', 'admin'] },
   { from: 'tu', to: 'avr', title: 'ТУ выданы — к оформлению АВР', guard: guardToAvr, regulationRef: 'пп. 25, 90', roles: ['orpsd', 'admin'] },
 
-  { from: 'psd', to: 'smr_prep', title: 'ПСД утверждена — к подготовке СМР', guard: guardSmrPrep, regulationRef: 'пп. 42, 49, 53', roles: ['orpsd', 'admin'] },
+  { from: 'psd', to: 'offer', title: 'ПСД утверждена — КП и договор на СМР', guard: guardSmrOffer, regulationRef: 'пп. 48–53', roles: ['orpsd', 'admin'] },
+  { from: 'psd', to: 'smr_prep', title: 'ПСД утверждена — к подготовке СМР', guard: guardSmrPrep, regulationRef: 'пп. 42, 49, 53, 59', roles: ['orpsd', 'admin'] },
   { from: 'psd', to: 'avr', title: 'ПСД передана — к оформлению АВР', guard: guardToAvr, regulationRef: 'пп. 42–43, 90', roles: ['orpsd', 'admin'] },
 
   { from: 'smr_prep', to: 'smr', title: 'Оборудование принято — начать СМР', guard: guardSmrStart, regulationRef: 'пп. 58–60', roles: ['orpsd', 'branch', 'admin'] },
@@ -285,5 +379,12 @@ export function checkTransition(r: RequestSnapshot, to: StageCode, input: GuardI
     return { ok: false, failures: [fail('service_not_ordered', 'Услуга не заказана в этой заявке', 'п. 7.5')] };
   }
   const failures = def.guard(r, input);
+  // ТЗ №11: замечание снимается исправлением заявки, а не переходом этапа.
+  // Закрыть заявку (отказ, расторжение, оферта) можно и при открытых замечаниях.
+  if (r.openRemarks > 0 && !stage(to).terminal) {
+    failures.push(fail('open_remarks',
+      `Есть неустранённые замечания (${r.openRemarks}): дождитесь исправления заявки Заказчиком либо снимите замечание`,
+      'ТЗ №11'));
+  }
   return failures.length ? { ok: false, failures } : { ok: true };
 }

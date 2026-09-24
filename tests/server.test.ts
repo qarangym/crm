@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { authConfigFromEnv, checkOrigin, identityFromHeaders, identityId } from '../src/server/auth.ts';
+import { authConfigFromEnv, checkOrigin, identityFromHeaders, identityId, originOfRequest } from '../src/server/auth.ts';
 import { ApiError } from '../src/server/errors.ts';
 import { Router } from '../src/server/http.ts';
 import * as rbac from '../src/server/rbac.ts';
@@ -63,6 +63,27 @@ test('запрос с чужого сайта отклоняется', () => {
   assert.doesNotThrow(() => checkOrigin(undefined, 'https://crm.qtr.kz'));
   assert.doesNotThrow(() => checkOrigin('https://crm.qtr.kz', 'https://crm.qtr.kz'));
   assert.throws(() => checkOrigin('https://evil.example', 'https://crm.qtr.kz'), /другого сайта/);
+});
+
+test('без заданного APP_ORIGIN действуют запросы со своего же адреса', () => {
+  // Иначе незаполненная переменная превращала систему в доступную только для чтения.
+  assert.doesNotThrow(() => checkOrigin('http://127.0.0.1:3010', undefined, 'http://127.0.0.1:3010'));
+  assert.throws(() => checkOrigin('https://evil.example', undefined, 'http://127.0.0.1:3010'),
+    /другого сайта/);
+  assert.throws(() => checkOrigin('https://any.example', undefined, undefined),
+    /Задайте APP_ORIGIN/);
+});
+
+test('собственный адрес берётся из заголовков, за прокси — из X-Forwarded-*', () => {
+  assert.equal(originOfRequest({ host: 'crm.qtr.kz' }, false), 'http://crm.qtr.kz');
+  assert.equal(
+    originOfRequest({ host: 'app:3000', 'x-forwarded-host': 'crm.qtr.kz', 'x-forwarded-proto': 'https' }, true),
+    'https://crm.qtr.kz');
+  // Без доверия прокси подставленные им заголовки игнорируются.
+  assert.equal(
+    originOfRequest({ host: 'app:3000', 'x-forwarded-host': 'evil.example' }, false),
+    'http://app:3000');
+  assert.equal(originOfRequest({}, true), undefined);
 });
 
 /* -------------------------------- права -------------------------------- */

@@ -96,8 +96,12 @@ export function validateFacility(form: Record<string, unknown>): FieldErrors {
   return e;
 }
 
-/** Параметры одной услуги заявки. */
-export function validateService(item: RequestService, index: number): FieldErrors {
+/**
+ * Параметры одной услуги заявки.
+ * `withPsd` — в той же заявке заказана ПСД: основанием СМР станет её
+ * утверждённая сметная документация (пп. 49, 53), отдельный номер не нужен.
+ */
+export function validateService(item: RequestService, index: number, withPsd = false): FieldErrors {
   const e: FieldErrors = {};
   const p = `services.${index}.`;
   const params = item.params ?? {};
@@ -148,7 +152,7 @@ export function validateService(item: RequestService, index: number): FieldError
     // Регламент п. 32 — задание на проектирование (Приложение 2 к договору).
     e[`${p}designTask`] = 'Укажите задание на проектирование';
   }
-  if (item.service === 'СМР' && !String(item.basisReference ?? '').trim()) {
+  if (item.service === 'СМР' && !withPsd && !String(item.basisReference ?? '').trim()) {
     // Регламент п. 53 — договор на СМР не ранее утверждения сметной документации.
     e[`${p}basisReference`] = 'Укажите номер утверждённой ПСД или иного основания для СМР';
   }
@@ -181,6 +185,17 @@ export function validateRequest(form: RequestDraft, draft = false): FieldErrors 
   if (!validText(form.company, 3)) errors.company = 'Укажите наименование организации';
   if (services.length === 0) errors.services = 'Выберите хотя бы одну услугу';
 
+  Object.assign(errors, validateServiceSet(services));
+  if (draft) return errors;
+
+  Object.assign(errors, validateApplicant(form as Record<string, unknown>));
+  Object.assign(errors, validateFacility(form as Record<string, unknown>));
+  Object.assign(errors, validateServices(services));
+  return errors;
+}
+
+function validateServiceSet(services: RequestService[]): FieldErrors {
+  const errors: FieldErrors = {};
   const seen = new Set<Service>();
   for (const item of services) {
     if (seen.has(item.service)) {
@@ -188,12 +203,28 @@ export function validateRequest(form: RequestDraft, draft = false): FieldErrors 
     }
     seen.add(item.service);
   }
+  return errors;
+}
 
+function validateServices(services: RequestService[]): FieldErrors {
+  const errors: FieldErrors = {};
+  const withPsd = services.some((s) => s.service === 'ПСД');
+  services.forEach((item, i) => Object.assign(errors, validateService(item, i, withPsd)));
+  return errors;
+}
+
+/**
+ * Проверка исправленной заявки (ТЗ №11): те же правила, что при подаче (ТЗ №4, №5),
+ * кроме реквизитов организации — она закреплена за заявкой и не меняется.
+ */
+export function validateAmendment(form: { facilityId?: unknown; services?: RequestService[] }, draft = false): FieldErrors {
+  const errors: FieldErrors = {};
+  const services = form.services ?? [];
+  if (services.length === 0) errors.services = 'Выберите хотя бы одну услугу';
+  Object.assign(errors, validateServiceSet(services));
   if (draft) return errors;
-
-  Object.assign(errors, validateApplicant(form as Record<string, unknown>));
   Object.assign(errors, validateFacility(form as Record<string, unknown>));
-  services.forEach((item, i) => Object.assign(errors, validateService(item, i)));
+  Object.assign(errors, validateServices(services));
   return errors;
 }
 

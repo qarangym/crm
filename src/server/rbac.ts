@@ -32,6 +32,13 @@ export type Permission =
   | 'request.transition'    // переходы по этапам
   | 'request.remark'        // возврат на доработку с замечаниями (ТЗ №11)
   | 'request.tv'            // фиксация оценки ТВ (раздел 4)
+  | 'request.contract'      // договоры по услугам, оплата, реквизиты закрытия (пп. 21, 83–95)
+  | 'request.extend'        // продление срока этапа с основанием (пп. 33, 45)
+  | 'assignment.view'       // поручения по зарегистрированным заявкам (ТЗ №7, №8)
+  | 'assignment.accept'     // принятие поручения в работу — ОР ПСД
+  | 'assignment.close'      // контроль и закрытие поручения — ОКО
+  | 'memo.create'           // служебная записка в филиал (п. 10)
+  | 'memo.answer'           // ответ филиала на служебную записку (п. 10)
   | 'documents.view'        // архив актов
   | 'documents.upload'
   | 'documents.approve'     // визирование
@@ -43,24 +50,32 @@ export type Permission =
 const MATRIX: Record<Role, Permission[]> = {
   admin: [
     'request.view', 'request.create', 'request.edit', 'request.register', 'request.transition',
-    'request.remark', 'request.tv', 'documents.view', 'documents.upload', 'documents.approve',
+    'request.remark', 'request.tv', 'request.contract', 'request.extend',
+    'assignment.view', 'assignment.accept', 'assignment.close', 'memo.create', 'memo.answer',
+    'documents.view', 'documents.upload', 'documents.approve',
     'registry.view', 'registry.edit', 'metrics.view', 'admin',
   ],
   // Право на переход даётся ролям, которые названы хотя бы в одном переходе
   // (см. TRANSITIONS). Какие именно переходы доступны, решает проверка ролей
   // на самом переходе: документооборот направляет заявку в ОР ПСД и филиал
   // (п. 6), филиал ведёт СМР (пп. 59, 66), бухгалтерия — АВР и ЭСФ (пп. 91–95).
-  records: ['request.view', 'request.register', 'request.edit', 'request.transition', 'registry.view'],
+  // Пункт 6: заявки поступают в СП ЦА, ответственное за документооборот, в том
+  // числе на бумаге и по почте. Значит это подразделение их и вносит в систему.
+  records: ['request.view', 'request.create', 'request.register', 'request.edit',
+    'request.transition', 'registry.view'],
   orpsd: [
     'request.view', 'request.create', 'request.edit', 'request.transition', 'request.remark',
-    'request.tv', 'documents.view', 'documents.upload', 'documents.approve', 'registry.view',
+    'request.tv', 'request.contract', 'request.extend', 'assignment.view', 'assignment.accept',
+    'memo.create', 'documents.view', 'documents.upload', 'documents.approve', 'registry.view',
     'metrics.view',
   ],
-  branch: ['request.view', 'request.transition', 'documents.view', 'documents.upload', 'registry.view'],
-  oko: ['request.view', 'metrics.view'],
+  branch: ['request.view', 'request.transition', 'memo.answer', 'documents.view', 'documents.upload', 'registry.view'],
+  // ОКО: отслеживание зарегистрированных заявок и поручений (ТЗ, раздел 4).
+  oko: ['request.view', 'assignment.view', 'assignment.close', 'metrics.view'],
   assets: ['documents.view', 'registry.view', 'registry.edit'],
-  accounting: ['request.view', 'request.transition', 'documents.view', 'metrics.view'],
-  management: ['request.view', 'documents.view', 'registry.view', 'metrics.view'],
+  // Расчёты с контрагентами: счёт, оплата, АВР и ЭСФ (пп. 84–85, 91).
+  accounting: ['request.view', 'request.transition', 'request.contract', 'documents.view', 'metrics.view'],
+  management: ['request.view', 'assignment.view', 'documents.view', 'registry.view', 'metrics.view'],
   customer: ['request.view', 'request.create', 'request.edit', 'request.transition'],
 };
 

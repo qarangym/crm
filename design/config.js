@@ -169,7 +169,7 @@ window.QTR_CONFIG = {
       "customerStatusName": "В работе",
       "terminal": false,
       "regulationRef": "пп. 66, 70, 90–92",
-      "hint": "Формирование акта по типовой форме № 2В и электронной счёт-фактуры, направление Заказчику."
+      "hint": "Формирование АВР (Р-1 для ТУ и ПСД, № 2В для СМР — п. 70) и электронной счёт-фактуры, направление Заказчику."
     },
     {
       "code": "closing",
@@ -320,7 +320,7 @@ window.QTR_CONFIG = {
         "accounting",
         "admin"
       ],
-      "regulationRef": "пп. 84–85"
+      "regulationRef": "пп. 21, 53, 84–85"
     },
     {
       "from": "offer",
@@ -360,7 +360,7 @@ window.QTR_CONFIG = {
         "orpsd",
         "admin"
       ],
-      "regulationRef": "пп. 49, 53, 54"
+      "regulationRef": "пп. 49, 53, 54, 59"
     },
     {
       "from": "awaiting_payment",
@@ -390,7 +390,7 @@ window.QTR_CONFIG = {
         "orpsd",
         "admin"
       ],
-      "regulationRef": "пп. 24, 32"
+      "regulationRef": "пп. 24, 32, 86"
     },
     {
       "from": "tu",
@@ -400,7 +400,7 @@ window.QTR_CONFIG = {
         "orpsd",
         "admin"
       ],
-      "regulationRef": "пп. 49, 53"
+      "regulationRef": "пп. 49, 53, 59"
     },
     {
       "from": "tu",
@@ -414,13 +414,23 @@ window.QTR_CONFIG = {
     },
     {
       "from": "psd",
+      "to": "offer",
+      "title": "ПСД утверждена — КП и договор на СМР",
+      "roles": [
+        "orpsd",
+        "admin"
+      ],
+      "regulationRef": "пп. 48–53"
+    },
+    {
+      "from": "psd",
       "to": "smr_prep",
       "title": "ПСД утверждена — к подготовке СМР",
       "roles": [
         "orpsd",
         "admin"
       ],
-      "regulationRef": "пп. 42, 49, 53"
+      "regulationRef": "пп. 42, 49, 53, 59"
     },
     {
       "from": "psd",

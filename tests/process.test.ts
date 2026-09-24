@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { WorkCalendar } from '../src/domain/types.ts';
-import { routeFor, applyTransition, canTransition, customerStatus, extendStage, openStage, pendingEscalations, requiredEscalationLevel, stageStartDate } from '../src/process/engine.ts';
+import { routeFor, applyTransition, canTransition, customerStatus, extendStage, isBranchDeadline, nextEscalationLevel, openStage, stageStartDate } from '../src/process/engine.ts';
 import type { StageRecord } from '../src/process/engine.ts';
 import { BOARD_STAGES, appliesTo, nextMainStage, stage } from '../src/process/stages.ts';
-import type { RequestSnapshot } from '../src/process/transitions.ts';
-import { transitionsFrom } from '../src/process/transitions.ts';
+import type { ContractInfo, RequestSnapshot } from '../src/process/transitions.ts';
+import { offerServices, transitionsFrom } from '../src/process/transitions.ts';
 import { boardColumns, breakdownByParty, bottlenecks, requestCycle, stageMetrics } from '../src/process/metrics.ts';
 import { AUTOMATION_RULES } from '../src/process/rules.ts';
 
@@ -24,12 +24,14 @@ function makeRequest(over: Partial<RequestSnapshot> = {}): RequestSnapshot {
     tvStatus: 'confirmed',
     masterFileVersion: '2026-09-01',
     verificationCalcDecision: 'not_required',
-    contractNumber: null,
+    contracts: [],
+    freeServices: [],
     freeOfCharge: false,
-    paidAt: null,
+    passedStages: [],
     estimateApproved: false,
     orderNumber: null,
     transferActApprovedDate: null,
+    technicalAvrApproved: false,
     avrApproved: false,
     avrSentAt: null,
     closingConfirmed: false,
@@ -38,6 +40,10 @@ function makeRequest(over: Partial<RequestSnapshot> = {}): RequestSnapshot {
     ...over,
   };
 }
+
+/** Договор по услуге; без даты оплаты — не оплачен. */
+const contract = (service: ContractInfo['service'], paidAt: string | null = null): ContractInfo =>
+  ({ service, number: 'ДП-' + service + '-101/26', paidAt });
 
 /* ------------------------- маршрут по составу услуг ------------------------- */
 
@@ -101,7 +107,7 @@ test('отказ без мотивированной причины невозм
 /* ------------------------------ оплата и услуги ----------------------------- */
 
 test('начать оказание услуги без 100 % предоплаты нельзя (пп. 86, 89)', () => {
-  const r = makeRequest({ stageCode: 'awaiting_payment', contractNumber: 'ДП-101/26' });
+  const r = makeRequest({ stageCode: 'awaiting_payment', contracts: [contract('ТУ')] });
   const check = canTransition(r, 'tu');
   assert.equal(check.ok, false);
   assert.ok(!check.ok && check.failures.some((f) => f.code === 'not_paid'));
@@ -110,7 +116,7 @@ test('начать оказание услуги без 100 % предоплат
 test('ТУ на присоединение к сети выдаются без оплаты (п. 20)', () => {
   const r = makeRequest({
     stageCode: 'awaiting_payment', services: ['ТУ'],
-    contractNumber: 'безвозмездно, п. 20', freeOfCharge: true,
+    freeServices: ['ТУ'], freeOfCharge: true,
   });
   assert.equal(canTransition(r, 'tu').ok, true);
 });
@@ -118,24 +124,75 @@ test('ТУ на присоединение к сети выдаются без �
 test('вид услуги «ТУ» сам по себе от оплаты не освобождает (пп. 20, 86)', () => {
   const onAms = makeRequest({
     stageCode: 'awaiting_payment', services: ['ТУ'],
-    contractNumber: 'ДП-101/26', freeOfCharge: false,
+    contracts: [contract('ТУ')], freeOfCharge: false,
   });
   const check = canTransition(onAms, 'tu');
   assert.equal(check.ok, false, 'ТУ на размещение оборудования платные по Прейскуранту');
   assert.ok(!check.ok && check.failures.some((f) => f.code === 'not_paid'));
 });
 
-test('заявка с платными позициями требует оплаты целиком (п. 86)', () => {
-  const r = makeRequest({ stageCode: 'awaiting_payment', services: ['ТУ', 'ПСД'], contractNumber: 'ДП-101/26' });
+test('оплата проверяется по договору той услуги, к которой идёт переход (пп. 21, 32, 86)', () => {
+  const r = makeRequest({
+    stageCode: 'awaiting_payment', services: ['ТУ', 'ПСД'],
+    contracts: [contract('ТУ', '2026-09-18'), contract('ПСД')],
+  });
+  assert.equal(canTransition(r, 'tu').ok, true, 'ТУ оплачены');
+  const psd = canTransition(r, 'psd');
+  assert.equal(psd.ok, false, 'договор на ПСД не оплачен');
+  assert.ok(!psd.ok && psd.failures.some((f) => f.code === 'not_paid'));
+});
+
+test('оплата ПСД не открывает СМР: нужен свой договор и своя оплата (пп. 48, 59)', () => {
+  const r = makeRequest({
+    stageCode: 'psd', services: ['ПСД', 'СМР'], passedStages: ['awaiting_payment'],
+    contracts: [contract('ПСД', '2026-09-01')], estimateApproved: true,
+  });
+  const direct = canTransition(r, 'smr_prep');
+  assert.equal(direct.ok, false);
+  assert.ok(!direct.ok && direct.failures.some((f) => f.code === 'no_contract'));
+  assert.equal(canTransition(r, 'offer').ok, true, 'второй цикл: КП и договор на СМР');
+});
+
+test('в первом цикле договор на СМР не требуется, если заказана ПСД (пп. 49, 53)', () => {
+  const r = makeRequest({ stageCode: 'offer', services: ['ПСД', 'СМР'] });
+  assert.deepEqual(offerServices(r), ['ПСД']);
+  assert.equal(canTransition({ ...r, contracts: [contract('ПСД')] }, 'awaiting_payment').ok, true);
+
+  const second = makeRequest({ stageCode: 'offer', services: ['ПСД', 'СМР'], passedStages: ['psd', 'awaiting_payment'] });
+  assert.deepEqual(offerServices(second), ['СМР']);
+});
+
+test('договор на СМР в цикле КП — только после утверждения сметы (п. 53)', () => {
+  const r = makeRequest({
+    stageCode: 'offer', services: ['СМР'], contracts: [contract('СМР')], estimateApproved: false,
+  });
+  const check = canTransition(r, 'awaiting_payment');
+  assert.equal(check.ok, false);
+  assert.ok(!check.ok && check.failures.some((f) => f.code === 'estimate_not_approved'));
+  assert.equal(canTransition({ ...r, estimateApproved: true }, 'awaiting_payment').ok, true);
+});
+
+test('в КП без договора на платную услугу переход к оплате закрыт (пп. 21, 83)', () => {
+  const r = makeRequest({ stageCode: 'offer', services: ['ТУ', 'ПСД'], contracts: [contract('ТУ')] });
+  const check = canTransition(r, 'awaiting_payment');
+  assert.equal(check.ok, false);
+  assert.ok(!check.ok && check.failures.some((f) => f.message.includes('ПСД')));
+});
+
+test('этап услуги не повторяется во втором цикле оплаты', () => {
+  const r = makeRequest({
+    stageCode: 'awaiting_payment', services: ['ПСД', 'СМР'], passedStages: ['psd', 'offer', 'awaiting_payment'],
+    contracts: [contract('ПСД', '2026-09-01'), contract('СМР', '2026-10-20')], estimateApproved: true,
+  });
   assert.equal(canTransition(r, 'psd').ok, false);
+  assert.equal(canTransition(r, 'smr_prep').ok, true);
 });
 
 test('договор на СМР не ранее утверждения сметной документации (пп. 49, 53)', () => {
   const r = makeRequest({
     stageCode: 'awaiting_payment',
     services: ['СМР'],
-    contractNumber: 'ДП-101/26',
-    paidAt: '2026-09-18',
+    contracts: [contract('СМР', '2026-09-18')],
     estimateApproved: false,
   });
   const check = canTransition(r, 'smr_prep');
@@ -144,25 +201,30 @@ test('договор на СМР не ранее утверждения смет
 });
 
 test('СМР не начинаются без завизированного акта и распоряжения (пп. 58, 60)', () => {
-  const r = makeRequest({ stageCode: 'smr_prep', services: ['СМР'], paidAt: '2026-09-01', estimateApproved: true });
+  const r = makeRequest({ stageCode: 'smr_prep', services: ['СМР'], contracts: [contract('СМР', '2026-09-01')], estimateApproved: true });
   const check = canTransition(r, 'smr');
   assert.equal(check.ok, false);
   assert.ok(!check.ok && check.failures.some((f) => f.code === 'no_transfer_act'));
   assert.ok(!check.ok && check.failures.some((f) => f.code === 'no_order'));
 
   const ready = makeRequest({
-    stageCode: 'smr_prep', services: ['СМР'], paidAt: '2026-09-01',
+    stageCode: 'smr_prep', services: ['СМР'], contracts: [contract('СМР', '2026-09-01')],
     estimateApproved: true, transferActApprovedDate: '2026-09-15', orderNumber: 'Р-77',
   });
   assert.equal(canTransition(ready, 'smr').ok, true);
 });
 
 test('срок СМР считается от более поздней из дат оплаты и акта (п. 59)', () => {
-  const late = makeRequest({ paidAt: '2026-09-01', transferActApprovedDate: '2026-09-15' });
+  const late = makeRequest({ services: ['СМР'], contracts: [contract('СМР', '2026-09-01')], transferActApprovedDate: '2026-09-15' });
   assert.equal(stageStartDate(late, 'smr', '2026-09-10'), '2026-09-15');
 
-  const paidLater = makeRequest({ paidAt: '2026-09-20', transferActApprovedDate: '2026-09-15' });
+  const paidLater = makeRequest({ services: ['СМР'], contracts: [contract('СМР', '2026-09-20')], transferActApprovedDate: '2026-09-15' });
   assert.equal(stageStartDate(paidLater, 'smr', '2026-09-10'), '2026-09-20');
+
+  const otherService = makeRequest({
+    services: ['ПСД', 'СМР'], contracts: [contract('ПСД', '2026-09-25')], transferActApprovedDate: '2026-09-15',
+  });
+  assert.equal(stageStartDate(otherService, 'smr', '2026-09-10'), '2026-09-15', 'оплата ПСД срок СМР не сдвигает');
 });
 
 /* ------------------------- применение перехода и сроки ---------------------- */
@@ -190,11 +252,11 @@ test('непредусмотренный переход отклоняется',
 });
 
 test('из этапа ожидания оплаты есть выход по оферте (табл. 1)', () => {
-  const r = makeRequest({ stageCode: 'awaiting_payment', contractNumber: 'ДП-101/26' });
+  const r = makeRequest({ stageCode: 'awaiting_payment', contracts: [contract('ТУ')] });
   assert.equal(canTransition(r, 'closed_expired', { offerExpired: false }).ok, false);
   assert.equal(canTransition(r, 'closed_expired', { offerExpired: true }).ok, true);
 
-  const paid = makeRequest({ stageCode: 'awaiting_payment', paidAt: '2026-09-18' });
+  const paid = makeRequest({ stageCode: 'awaiting_payment', contracts: [contract('ТУ', '2026-09-18')] });
   assert.equal(canTransition(paid, 'closed_expired', { offerExpired: true }).ok, false, 'оплаченную заявку закрыть по оферте нельзя');
 });
 
@@ -210,12 +272,22 @@ test('АВР должен быть завизирован и направлен 
   const check = canTransition(r, 'closing');
   assert.equal(check.ok, false);
   assert.ok(!check.ok && check.failures.some((f) => f.code === 'no_avr'));
+  assert.ok(!check.ok && check.failures.some((f) => f.code === 'avr_not_sent'));
+  assert.equal(canTransition({ ...r, avrApproved: true, avrSentAt: '2026-10-01' }, 'closing').ok, true);
+});
+
+test('СМР завершаются техническим АВР филиала, подписанным Заказчиком (п. 66)', () => {
+  const r = makeRequest({ stageCode: 'smr', services: ['СМР'], transferActApprovedDate: '2026-09-15' });
+  const check = canTransition(r, 'avr');
+  assert.equal(check.ok, false);
+  assert.ok(!check.ok && check.failures.some((f) => f.code === 'no_technical_avr'));
+  assert.equal(canTransition({ ...r, technicalAvrApproved: true }, 'avr').ok, true);
 });
 
 /* ------------------------------- продление срока ---------------------------- */
 
 test('продление ПСД не более 15 рабочих дней и только с основанием (п. 33)', () => {
-  const r = makeRequest({ stageCode: 'psd', services: ['ПСД'], paidAt: '2026-09-21' });
+  const r = makeRequest({ stageCode: 'psd', services: ['ПСД'], contracts: [contract('ПСД', '2026-09-21')] });
   const record = openStage(r, 'psd', '2026-09-21', calendar);
   assert.throws(() => extendStage(record, 10, '   ', calendar), /основание/);
   const extended = extendStage(record, 10, 'Письменное уведомление Заказчика исх. 145', calendar);
@@ -226,28 +298,34 @@ test('продление ПСД не более 15 рабочих дней и т
 
 /* --------------------------------- эскалация -------------------------------- */
 
-test('эскалация первого уровня — в день выявления просрочки (п. 100)', () => {
-  const r = makeRequest();
-  const record = openStage(r, 'tv_review', '2026-09-21', calendar); // срок 28.09
-  assert.equal(requiredEscalationLevel(record, '2026-09-28', calendar), 0, 'в день срока нарушения нет');
-  assert.equal(requiredEscalationLevel(record, '2026-09-29', calendar), 1);
+const subject = (over: Partial<Parameters<typeof nextEscalationLevel>[0]> = {}) => ({
+  dueAt: '2026-09-28', closed: false, branchDeadline: true, level: 0, level1At: null, ...over,
 });
 
-test('эскалация второго уровня — через 2 рабочих дня (п. 100)', () => {
-  const r = makeRequest();
-  const record = openStage(r, 'tv_review', '2026-09-21', calendar);
-  assert.equal(requiredEscalationLevel(record, '2026-09-30', calendar), 2);
+test('эскалация первого уровня — в день выявления просрочки филиалом (п. 100)', () => {
+  assert.equal(nextEscalationLevel(subject(), '2026-09-28', calendar), 0, 'в день срока нарушения нет');
+  assert.equal(nextEscalationLevel(subject(), '2026-09-29', calendar), 1);
 });
 
-test('уже отправленная эскалация повторно не формируется', () => {
-  const r = makeRequest();
-  const record = { ...openStage(r, 'tv_review', '2026-09-21', calendar), escalationLevel: 1 as const };
-  const first = pendingEscalations([record], '2026-09-29', calendar);
-  assert.equal(first.length, 0, 'первый уровень уже отправлен');
-  const second = pendingEscalations([record], '2026-09-30', calendar);
-  assert.equal(second.length, 1);
-  assert.equal(second[0].level, 2);
-  assert.match(second[0].event.message, /члена Правления/);
+test('эскалация второго уровня — через 2 рабочих дня после уведомления первого (п. 100)', () => {
+  const sent = subject({ level: 1, level1At: '2026-10-01' });
+  assert.equal(nextEscalationLevel(sent, '2026-10-02', calendar), 0, 'прошёл 1 рабочий день');
+  assert.equal(nextEscalationLevel(sent, '2026-10-05', calendar), 2, '2 рабочих дня: пятница и понедельник');
+});
+
+test('отправленный уровень повторно не формируется', () => {
+  assert.equal(nextEscalationLevel(subject({ level: 1, level1At: '2026-09-29' }), '2026-09-29', calendar), 0);
+  assert.equal(nextEscalationLevel(subject({ level: 2, level1At: '2026-09-29' }), '2026-10-20', calendar), 0);
+});
+
+test('просрочки Заказчика, ОР ПСД и бухгалтерии не эскалируются по п. 100', () => {
+  assert.equal(isBranchDeadline({ ownerParty: 'branch' }), true);
+  for (const party of ['customer', 'orpsd', 'accounting', 'records'] as const) {
+    assert.equal(isBranchDeadline({ ownerParty: party }), false, party);
+  }
+  assert.equal(nextEscalationLevel(subject({ branchDeadline: false }), '2026-10-20', calendar), 0);
+  assert.equal(nextEscalationLevel(subject({ closed: true }), '2026-10-20', calendar), 0, 'нарушение устранено');
+  assert.equal(stage('smr').ownerParty, 'branch', 'СМР — срок филиала (п. 59)');
 });
 
 /* ------------------------- статус для Заказчика (ТЗ №10) -------------------- */

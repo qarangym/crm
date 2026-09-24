@@ -128,6 +128,18 @@ test('СМР без основания не принимается (п. 53)', ()
   assert.ok(errors['services.0.basisReference']);
 });
 
+test('СМР вместе с ПСД в одной заявке не требует отдельного основания (пп. 49, 53)', () => {
+  const both = structuredClone(validForm);
+  const psd = structuredClone(both.services[0]);
+  psd.service = 'ПСД';
+  psd.params.designTask = 'Установка антенн на ярусе 45 м, разделы РТ, АС, ЭС';
+  const smr = structuredClone(both.services[0]);
+  smr.service = 'СМР';
+  both.services = [psd, smr];
+  const errors = validateRequest(both);
+  assert.equal(errors['services.1.basisReference'], undefined);
+});
+
 test('присоединение к сети оформляется только как ТУ (п. 20, Приложение 1)', () => {
   const net = structuredClone(validForm);
   net.services[0].placement = 'network';
