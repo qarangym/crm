@@ -35,14 +35,14 @@ export const ATTACHMENTS_REMARK = 'Приложения к заявке';
 const MAX_FILES = 10;
 
 /**
- * Можно ли сейчас менять приложения. Заказчик — до регистрации (нет входящего
- * номера) и при возврате на доработку; сотрудник — пока заявка не закрыта.
+ * Можно ли сейчас менять приложения. Заказчик — пока канцелярия не подтвердила
+ * регистрацию и при возврате на доработку; сотрудник — пока заявка не закрыта.
  */
 export function attachmentsOpen(actor: Actor, r: RequestRow): { ok: boolean; reason: string } {
   if (stage(r.stageCode).terminal) return { ok: false, reason: 'Заявка закрыта' };
   if (!rbac.isCustomer(actor)) return { ok: true, reason: '' };
   if (r.stageCode === 'draft') return { ok: true, reason: '' };
-  if (r.stageCode === 'registered' && !r.incomingNumber) return { ok: true, reason: '' };
+  if (r.stageCode === 'registered' && !r.registrationConfirmedAt) return { ok: true, reason: '' };
   if (r.openRemarks > 0) return { ok: true, reason: '' };
   return { ok: false, reason: 'Заявка зарегистрирована: дополнительные файлы прикладываются по запросу ОР ПСД' };
 }

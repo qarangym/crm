@@ -449,7 +449,7 @@ window.QTR_CONFIG = {
       "customerStatusName": "Зарегистрирована",
       "terminal": false,
       "regulationRef": "п. 6",
-      "hint": "Регистрация в СП ЦА, ответственном за документооборот, и направление в ОР ПСД и филиал."
+      "hint": "Номер и дата регистрации присвоены автоматически при подаче; канцелярия проверяет заявку, подтверждает регистрацию, и заявка уходит в ОР ПСД и филиал."
     },
     {
       "code": "tv_review",
@@ -689,13 +689,12 @@ window.QTR_CONFIG = {
     {
       "from": "registered",
       "to": "tv_review",
-      "title": "Направить на оценку ТВ",
+      "title": "Подтвердить регистрацию — в ОР ПСД",
       "roles": [
         "records",
-        "orpsd",
         "admin"
       ],
-      "regulationRef": "п. 6.1"
+      "regulationRef": "п. 6"
     },
     {
       "from": "registered",
@@ -1780,6 +1779,8 @@ function adaptRequest(r) {
     escalationLevel: Number(r.escalationLevel || 0),
     version: r.version,
     bin: '',
+    registrationConfirmedAt: r.registrationConfirmedAt || null,
+    registrationConfirmedBy: r.registrationConfirmedBy || null,
     // Исполнители (п. 102): ответственный ОР ПСД ведёт заявку, исполнитель этапа действует сейчас.
     responsibleId: r.responsibleId || null,
     responsibleName: r.responsibleName || null,
@@ -2786,7 +2787,7 @@ function gateItems(r) {
   const items = [];
   const add = (ok, text, ref) => items.push({ ok, text, ref });
   if (['registered'].includes(r.stageCode))
-    add(!!r.incomingNumber, 'Входящий номер и дата регистрации', 'п. 6');
+    add(!!r.incomingNumber, 'Регистрационный номер и дата (присваиваются при подаче)', 'п. 6');
   if (['tv_review'].includes(r.stageCode)) {
     add(r.tvStatus === 'confirmed', 'Техническая возможность подтверждена', 'п. 16.3');
     add(!!r.masterFileVersion, 'Зафиксирована версия мастер-файла «Реестр АМС и загрузки»', 'п. 16.5');
@@ -2917,14 +2918,21 @@ async function doTransition(button, to) {
   }
 }
 
-/** Регистрация делопроизводством: входящий номер и дата (п. 6). */
-async function saveRegistration(button) {
-  const incomingNumber = document.getElementById('regNumber').value.trim();
-  const incomingDate = document.getElementById('regDate').value;
+/** Исправление номера и даты регистрации канцелярией (п. 6) — например, номер из своего журнала. */
+async function editRegistration(button) {
   if (!state.live) { toast('Демонстрационный режим: реквизиты не сохраняются'); return; }
+  const values = await ask({
+    title: 'Реквизиты регистрации',
+    text: 'Номер и дата присвоены при подаче. Исправьте, если по правилам канцелярии нужен номер из журнала.',
+    fields: [
+      { key: 'incomingNumber', label: 'Регистрационный номер', required: true, value: sheetRequest.incomingNumber || sheetRequest.number },
+      { key: 'incomingDate', label: 'Дата регистрации', type: 'date', required: true, value: sheetRequest.incomingDate || today(), max: today() },
+    ],
+    ok: 'Сохранить',
+  });
+  if (!values) return;
   const result = await act(button,
-    () => api.register(sheetRequest.id, { incomingNumber, incomingDate, version: sheetRequest.version }),
-    'Реквизиты регистрации сохранены, заявка направлена в филиал');
+    () => api.register(sheetRequest.id, { ...values, version: sheetRequest.version }), 'Реквизиты регистрации исправлены');
   if (result) await refreshSheet();
 }
 
@@ -3095,7 +3103,9 @@ function renderSheet() {
         .filter((t) => t.from === r.stageCode &&
           (!stageBy[t.to].serviceScope || r.services.includes(stageBy[t.to].serviceScope)))
         .map((t) => ({ ...t, allowed: !blocked.length || t.to.startsWith('closed'), failures: [], needsReason: ['closed_rejected', 'closed_cancelled'].includes(t.to) })))
-    .filter((t) => !(t.failures || []).some((f) => f.code === 'stage_passed'));
+    .filter((t) => !(t.failures || []).some((f) => f.code === 'stage_passed'))
+    // Подтверждение регистрации — кнопкой в блоке регистрации, без дубля в списке переходов.
+    .filter((t) => !(r.stageCode === 'registered' && t.to === 'tv_review' && registrationBlock(r)));
 
   const myRoles = state.live ? (state.me?.roles ?? []) : null;
   const allowedForMe = (t) => !myRoles || t.roles.some((x) => myRoles.includes(x));
@@ -3144,8 +3154,11 @@ function renderSheet() {
         <b>Услуги</b><span>${svcChips(r)}</span>
         <b>Внутренний номер</b><span>${esc(r.number)} <span class="ref">присвоен при подаче</span></span>
         <b>Регистрация</b><span>${r.incomingNumber
-          ? esc(r.incomingNumber) + ' от ' + fmt(r.incomingDate)
-          : '<span class="ref">ожидает регистрации</span>'} <span class="ref">п. 6</span></span>
+          ? esc(r.incomingNumber) + ' от ' + fmt(r.incomingDate) + (!state.live ? ''
+            : r.registrationConfirmedAt
+              ? ` <span class="chip g">подтверждена</span> <span class="ref">${fmtFull(r.registrationConfirmedAt)}${r.registrationConfirmedBy ? ' · ' + esc(r.registrationConfirmedBy) : ''}</span>`
+              : ' <span class="chip w">ждёт подтверждения канцелярии</span>')
+          : '<span class="ref">присваивается при подаче</span>'} <span class="ref">п. 6</span></span>
         <b>Оценка ТВ</b><span>${r.tvStatus === 'confirmed'
           ? '<span class="chip g">подтверждена</span> реестр ' + esc(r.masterFileVersion || '')
             + (r.tvOverrideReason ? `<br><span class="ref">вопреки расчёту: ${esc(r.tvOverrideReason)}</span>` : '')
@@ -3287,22 +3300,28 @@ function facilityBlock(r) {
     </div></section>`;
 }
 
-/** Ввод реквизитов регистрации — доступен делопроизводству до направления на ТВ. */
+/**
+ * Регистрация автоматическая (п. 6): номер и дата присвоены при подаче. Канцелярия
+ * проверяет заявку и подтверждает регистрацию — заявка уходит в ОР ПСД и филиал.
+ * Номер и дату можно исправить, если нужен номер из журнала канцелярии.
+ */
 function registrationBlock(r) {
-  if (r.incomingNumber || !can('request.register') || r.stageCode !== 'registered') return '';
+  if (!can('request.register') || r.stageCode !== 'registered') return '';
+  const confirm = (sheetCard?.transitions || []).find((t) => t.to === 'tv_review');
+  const blocked = confirm && !confirm.allowed;
   return `<section class="panel">
-    <div class="panel-head"><div><h2>Регистрация заявки</h2>
-      <p>Входящий номер и дата — пункт 6 Регламента; в день регистрации заявка направляется в филиал</p></div></div>
+    <div class="panel-head"><div><h2>Подтверждение регистрации</h2>
+      <p>Номер и дата присвоены автоматически при подаче — пункт 6 Регламента</p></div></div>
     <div class="panel-body">
-      <div class="form-grid">
-        <div class="field"><label>Входящий номер</label>
-          <input id="regNumber" placeholder="вх-1201"></div>
-        <div class="field"><label>Дата регистрации</label>
-          <input id="regDate" type="date" value="${today()}" max="${today()}"></div>
+      <div class="kv">
+        <b>Регистрационный номер</b><span>${esc(r.incomingNumber || r.number)}</span>
+        <b>Дата регистрации</b><span>${fmtFull(r.incomingDate)}</span>
       </div>
+      ${blocked ? `<div class="blocked" style="margin-top:12px">${confirm.failures.map((f) => esc(f.message) + ' (' + esc(f.regulationRef) + ')').join('; ')}</div>` : ''}
       <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn primary sm" onclick="saveRegistration(this)">Сохранить реквизиты</button>
-        <span class="ref">Без них заявка не уходит на оценку технической возможности</span>
+        ${confirm ? `<button class="btn primary sm" ${blocked ? 'disabled' : ''} onclick="doTransition(this,'tv_review')">Подтвердить регистрацию</button>` : ''}
+        <button class="btn sm ghost" onclick="editRegistration(this)">Исправить номер или дату</button>
+        <span class="ref">После подтверждения заявка уходит в ОР ПСД, филиал получает письмо</span>
       </div>
     </div></section>`;
 }
@@ -3976,7 +3995,7 @@ function escalationsBlock() {
 /** Что происходит с заявкой — понятным Заказчику языком (ТЗ №10). */
 const CUSTOMER_STAGE_TEXT = {
   draft: 'Заявка сохранена как черновик и ещё не подана.',
-  registered: 'Заявка поступила и регистрируется. Номер присвоен, ответ о технической возможности — не более 5 рабочих дней с регистрации.',
+  registered: 'Заявка зарегистрирована. Канцелярия проверяет её и передаёт в отдел ПСД; ответ о технической возможности — не более 5 рабочих дней.',
   tv_review: 'Проверяем техническую возможность размещения на объекте.',
   offer: 'Техническая возможность подтверждена. Готовим коммерческое предложение и договор.',
   awaiting_payment: 'Ожидаем 100 % предоплату по договору. Работы начинаются после поступления оплаты.',
@@ -4024,7 +4043,7 @@ function renderCustomerSheet() {
       <b>Объект</b><span>${esc(r.object)}</span>
       <b>Услуги</b><span>${svcChips(r)}</span>
       <b>Подана</b><span>${fmtFull(r.createdAt)}</span>
-      <b>Регистрация</b><span>${r.incomingNumber ? `вх. ${esc(r.incomingNumber)} от ${fmtFull(r.incomingDate)}` : '<span class="ref">ожидает регистрации</span>'}</span>
+      <b>Регистрация</b><span>${r.incomingNumber ? `№ ${esc(r.incomingNumber)} от ${fmtFull(r.incomingDate)}` : '<span class="ref">присваивается при отправке</span>'}</span>
       <b>Предварительная стоимость</b><span>${money(r.amount)} <span class="ref">окончательная — в договоре</span></span>
     </div></div></section>
 
@@ -5216,7 +5235,7 @@ function renderWizard() {
   if (wiz.step === 4) {
     const f = D.facilities.find(x => String(x.inv) === String(wiz.facilityInv));
     body = `<section class="panel"><div class="panel-head"><div><h2>Проверьте заявку перед отправкой</h2>
-      <p>После подтверждения заявка получает номер и поступает на регистрацию (ТЗ №6)</p></div></div>
+      <p>После отправки заявка сразу регистрируется: номер и дата присваиваются автоматически (п. 6, ТЗ №7)</p></div></div>
       <div class="panel-body"><div class="review-grid">
         <b>Организация</b><span>${esc(wiz.applicant.company)} · БИН ${esc(wiz.applicant.bin)}</span>
         <b>Контактное лицо</b><span>${esc(wiz.applicant.contact)} · ${esc(wiz.applicant.phone)} · ${esc(wiz.applicant.email)}</span>

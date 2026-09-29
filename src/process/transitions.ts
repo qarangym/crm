@@ -113,7 +113,7 @@ const fail = (code: string, message: string, regulationRef: string): GuardFailur
 const guardRegister: Guard = (r) =>
   r.number ? [] : [fail('no_number', 'Заявке не присвоен номер', 'п. 6')];
 
-/** Направление на оценку ТВ: заявка зарегистрирована делопроизводством (п. 6). */
+/** Подтверждение регистрации: у заявки есть регистрационный номер и дата (п. 6), определён объект (п. 16.1). */
 const guardToTvReview: Guard = (r) => {
   const out: GuardFailure[] = [];
   if (!r.incomingNumber || !r.incomingDate) {
@@ -354,7 +354,8 @@ const SERVICE_STAGES: StageCode[] = ['tu', 'psd', 'smr_prep'];
 /** Переходы основного маршрута строятся из порядка этапов; условия задаются явно. */
 export const TRANSITIONS: readonly TransitionDefinition[] = [
   { from: 'draft', to: 'registered', title: 'Подать заявку', guard: guardRegister, regulationRef: 'п. 6', roles: ['customer', 'records', 'orpsd', 'admin'] },
-  { from: 'registered', to: 'tv_review', title: 'Направить на оценку ТВ', guard: guardToTvReview, regulationRef: 'п. 6.1', roles: ['records', 'orpsd', 'admin'] },
+  // Регистрацию подтверждает канцелярия (п. 6): ОР ПСД этот шаг не пропускает.
+  { from: 'registered', to: 'tv_review', title: 'Подтвердить регистрацию — в ОР ПСД', guard: guardToTvReview, regulationRef: 'п. 6', roles: ['records', 'admin'] },
   { from: 'registered', to: 'closed_rejected', title: 'Отклонить заявку', guard: guardReject, regulationRef: 'п. 19', roles: ['orpsd', 'admin'] },
 
   { from: 'tv_review', to: 'offer', title: 'ТВ подтверждена — сформировать КП', guard: guardTvConfirmed, regulationRef: 'пп. 16.3, 16.5, 21', roles: ['orpsd', 'admin'] },

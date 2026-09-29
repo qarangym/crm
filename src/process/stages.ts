@@ -79,7 +79,7 @@ export const STAGES: readonly StageDefinition[] = [
     customerStatus: 'registered',
     terminal: false,
     regulationRef: 'п. 6',
-    hint: 'Регистрация в СП ЦА, ответственном за документооборот, и направление в ОР ПСД и филиал.',
+    hint: 'Номер и дата регистрации присвоены автоматически при подаче; канцелярия проверяет заявку, подтверждает регистрацию, и заявка уходит в ОР ПСД и филиал.',
   },
   {
     code: 'tv_review',

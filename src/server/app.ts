@@ -443,6 +443,7 @@ export function createApp(options: AppOptions) {
         regulationRef: 'п. 6',
       });
       if (draft) return row;
+      await logAutoRegistration(t, row.uuid, row.number ?? '', ctx, actor);
       // У поданной заявки сразу есть исполнители: канцелярия и ответственный ОР ПСД (п. 102).
       await assignMissing(t, row, auditOf(ctx, actor));
       await registerAssignment(t, row.uuid, row.number ?? '', cal, ctx, actor);
@@ -452,6 +453,14 @@ export function createApp(options: AppOptions) {
     if (!draft) await afterSubmit(created, applicant.email, cal);
     return { request: rbac.isCustomer(actor) ? customerRequest(created) : created, estimate: priced };
   });
+
+  /** Автоматическая регистрация при подаче (п. 6): номер и дата присвоены, ждём подтверждения канцелярии. */
+  async function logAutoRegistration(t: Db, requestId: string, number: string, ctx: Ctx, actor: Actor) {
+    await repo.logEvent(t, {
+      ...auditOf(ctx, actor), action: 'Заявка зарегистрирована автоматически', entity: 'request', entityId: requestId,
+      detail: `рег. № ${number} от ${today()}; ожидает подтверждения канцелярией`, regulationRef: 'п. 6',
+    });
+  }
 
   /**
    * После подачи: подтверждение Заказчику с номером (ТЗ №9) и поручение на
@@ -463,9 +472,9 @@ export function createApp(options: AppOptions) {
       recipient: String(contactEmail ?? ''),
       subject: `Заявка ${created.number} принята`,
       body: [
-        'Ваша заявка принята и передана на регистрацию.',
+        'Ваша заявка принята и зарегистрирована.',
         '',
-        `Номер: ${created.number}`,
+        `Регистрационный номер: ${created.incomingNumber ?? created.number} от ${created.incomingDate ?? today()}`,
         `Объект: ${created.facilityName ?? created.facilityAddress ?? '—'}`,
         `Услуги: ${created.services.join(', ')}`,
         '',
@@ -507,15 +516,14 @@ export function createApp(options: AppOptions) {
       });
     });
     const updated = (await repo.getRequest(db, request.uuid))!;
-    if (updated.incomingNumber) await notices.requestRegistered(db, updated, await repo.calendar(db));
+    if (updated.registrationConfirmedAt) await notices.requestRegistered(db, updated, await repo.calendar(db));
     return { request: updated };
   });
 
   /**
-   * Регистрация заявки делопроизводством: входящий номер и дата (п. 6).
-   * Без этих реквизитов заявка не уходит на оценку технической возможности —
-   * порядок регистрации Регламентом закреплён за СП ЦА, ответственным за
-   * документооборот, и система его не подменяет.
+   * Исправление реквизитов регистрации канцелярией (п. 6). Номер и дату система
+   * присваивает сама при подаче; канцелярия меняет их, если по её правилам нужен
+   * номер из своего журнала. Регистрацию подтверждает переход «на оценку ТВ».
    */
   router.post('/api/v1/requests/:id/registration', async (ctx) => {
     guardOrigin(ctx);
@@ -540,14 +548,11 @@ export function createApp(options: AppOptions) {
     if (!ok) throw ApiError.conflict('Карточка изменилась. Обновите заявку и повторите');
 
     await repo.logEvent(db, {
-      ...auditOf(ctx, actor), action: 'Заявка зарегистрирована делопроизводством',
+      ...auditOf(ctx, actor), action: 'Канцелярия исправила реквизиты регистрации',
       entity: 'request', entityId: request.uuid,
-      detail: `вх. ${number} от ${date}`, regulationRef: 'п. 6',
+      detail: `${request.incomingNumber ?? '—'} от ${request.incomingDate ?? '—'} → ${number} от ${date}`, regulationRef: 'п. 6',
     });
-    const registered = (await repo.getRequest(db, request.uuid))!;
-    // В день регистрации заявка направляется в филиал (п. 6.2).
-    await notices.requestRegistered(db, registered, await repo.calendar(db));
-    return { request: registered };
+    return { request: (await repo.getRequest(db, request.uuid))! };
   });
 
   /** Переход по этапам. Единственный способ сменить этап заявки. */
@@ -581,6 +586,8 @@ export function createApp(options: AppOptions) {
 
     // Подача черновика: те же проверки, что при подаче сразу (ТЗ №4, №5).
     const submittingDraft = request.stageCode === 'draft' && body.to === 'registered';
+    // Подтверждение канцелярией автоматической регистрации (п. 6): заявка уходит в ОР ПСД и филиал.
+    const confirmingRegistration = request.stageCode === 'registered' && body.to === 'tv_review';
     if (submittingDraft) {
       const stored = (await repo.listRequestServices(db, request.uuid)) as Record<string, any>[];
       const errors = validateAmendment({
@@ -614,7 +621,8 @@ export function createApp(options: AppOptions) {
         customerStatus(outcome.request), body.version ?? request.version,
         body.to === 'closed_done' || String(body.to).startsWith('closed_')
           ? { closed_at: new Date().toISOString(), closed_reason: body.reason ?? null }
-          : submittingDraft ? { registered_at: new Date().toISOString() } : {},
+          : submittingDraft ? { registered_at: new Date().toISOString(), incoming_number: request.number, incoming_date: today() }
+          : confirmingRegistration ? { registration_confirmed_at: new Date().toISOString(), registration_confirmed_by: actor.id } : {},
       );
       if (!ok) throw ApiError.conflict('Карточка изменилась. Обновите заявку и повторите');
       if (outcome.closed) {
@@ -623,7 +631,17 @@ export function createApp(options: AppOptions) {
       await repo.openStageRecord(t, request.uuid, outcome.opened);
       // Исполнитель нового этапа назначается в том же действии — карточка не остаётся ничьей.
       if (!stage(outcome.opened.stageCode).terminal) await assignMissing(t, request, auditOf(ctx, actor));
-      if (submittingDraft) await registerAssignment(t, request.uuid, request.number ?? '', cal, ctx, actor);
+      if (submittingDraft) {
+        await logAutoRegistration(t, request.uuid, request.number ?? '', ctx, actor);
+        await registerAssignment(t, request.uuid, request.number ?? '', cal, ctx, actor);
+      }
+      if (confirmingRegistration) {
+        await repo.logEvent(t, {
+          ...auditOf(ctx, actor), action: 'Канцелярия подтвердила регистрацию', entity: 'request', entityId: request.uuid,
+          detail: `рег. № ${request.incomingNumber ?? request.number} от ${request.incomingDate ?? today()}; заявка направлена в ОР ПСД и филиал`,
+          regulationRef: 'п. 6',
+        });
+      }
       for (const event of outcome.events) {
         await repo.logEvent(t, {
           ...auditOf(ctx, actor), action: event.message, entity: 'request',
@@ -706,6 +724,8 @@ export function createApp(options: AppOptions) {
   /** Письма по итогам перехода (В4): кому и что сообщить — по норме Регламента. */
   async function notifyTransition(r: repo.RequestRow, from: StageCode, to: StageCode, reason: string | null,
     cal: Awaited<ReturnType<typeof repo.calendar>>) {
+    // В день регистрации заявка направляется в филиал (п. 6.2) — после подтверждения канцелярией.
+    if (from === 'registered' && to === 'tv_review') await notices.requestRegistered(db, r, cal);
     if (from === 'tv_review' && to === 'offer') await notices.tvAnswered(db, r, true, null);
     if (from === 'offer' && to === 'awaiting_payment') {
       const contracts = (await contractsRepo.activeContracts(db, r.uuid)).filter((c) => !c.paid_at);

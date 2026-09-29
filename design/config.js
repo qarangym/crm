@@ -33,7 +33,7 @@ window.QTR_CONFIG = {
       "customerStatusName": "Зарегистрирована",
       "terminal": false,
       "regulationRef": "п. 6",
-      "hint": "Регистрация в СП ЦА, ответственном за документооборот, и направление в ОР ПСД и филиал."
+      "hint": "Номер и дата регистрации присвоены автоматически при подаче; канцелярия проверяет заявку, подтверждает регистрацию, и заявка уходит в ОР ПСД и филиал."
     },
     {
       "code": "tv_review",
@@ -273,13 +273,12 @@ window.QTR_CONFIG = {
     {
       "from": "registered",
       "to": "tv_review",
-      "title": "Направить на оценку ТВ",
+      "title": "Подтвердить регистрацию — в ОР ПСД",
       "roles": [
         "records",
-        "orpsd",
         "admin"
       ],
-      "regulationRef": "п. 6.1"
+      "regulationRef": "п. 6"
     },
     {
       "from": "registered",

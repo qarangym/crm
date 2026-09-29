@@ -7,7 +7,7 @@ BEGIN;
 -- Этапы обработки заявки. Норматив и ответственная сторона — из Регламента.
 INSERT INTO stage_definitions (code, sort_order, name, short_name, sla_value, sla_unit, sla_text, owner_party, service_scope, customer_status, is_terminal, regulation_ref, hint) VALUES
   ('draft', 1, 'Черновик заявки', 'Черновик', 0, 'none', '—', 'customer', NULL, 'draft', false, 'ТЗ №1', 'Заказчик заполняет форму на портале. Заявка ещё не подана.'),
-  ('registered', 2, 'Зарегистрирована', 'Регистрация', 0, 'same_day', 'в день поступления', 'records', NULL, 'registered', false, 'п. 6', 'Регистрация в СП ЦА, ответственном за документооборот, и направление в ОР ПСД и филиал.'),
+  ('registered', 2, 'Зарегистрирована', 'Регистрация', 0, 'same_day', 'в день поступления', 'records', NULL, 'registered', false, 'п. 6', 'Номер и дата регистрации присвоены автоматически при подаче; канцелярия проверяет заявку, подтверждает регистрацию, и заявка уходит в ОР ПСД и филиал.'),
   ('tv_review', 3, 'Оценка технической возможности', 'Оценка ТВ', 5, 'working', '5 рабочих дней', 'orpsd', NULL, 'review', false, 'пп. 9, 16', 'Проверка по мастер-файлу «Реестр АМС и загрузки»; результат фиксируется с версией реестра.'),
   ('offer', 4, 'КП, договор, счёт', 'КП и договор', 1, 'operational', 'счёт — в день получения СЗ', 'orpsd', NULL, 'work', false, 'пп. 21, 32, 48, 84–85', 'Коммерческое предложение по Прейскуранту суммой позиций, проект договора, счёт в 1С.'),
   ('awaiting_payment', 5, 'Ожидание 100 % предоплаты', 'Оплата', 10, 'working', 'оферта 10 рабочих дней', 'customer', NULL, 'work', false, 'пп. 86–88, табл. 1', 'Ежедневный мониторинг поступления оплаты; по истечении оферты заявка закрывается.'),
@@ -31,7 +31,7 @@ ON CONFLICT (code) DO UPDATE SET
 -- Допустимые переходы. Условия проверяются движком по ключу guard_key.
 INSERT INTO stage_transitions (from_code, to_code, title, guard_key, roles, regulation_ref) VALUES
   ('draft', 'registered', 'Подать заявку', 'draft__registered', ARRAY['customer', 'records', 'orpsd', 'admin']::varchar(24)[], 'п. 6'),
-  ('registered', 'tv_review', 'Направить на оценку ТВ', 'registered__tv_review', ARRAY['records', 'orpsd', 'admin']::varchar(24)[], 'п. 6.1'),
+  ('registered', 'tv_review', 'Подтвердить регистрацию — в ОР ПСД', 'registered__tv_review', ARRAY['records', 'admin']::varchar(24)[], 'п. 6'),
   ('registered', 'closed_rejected', 'Отклонить заявку', 'registered__closed_rejected', ARRAY['orpsd', 'admin']::varchar(24)[], 'п. 19'),
   ('tv_review', 'offer', 'ТВ подтверждена — сформировать КП', 'tv_review__offer', ARRAY['orpsd', 'admin']::varchar(24)[], 'пп. 16.3, 16.5, 21'),
   ('tv_review', 'closed_rejected', 'ТВ отсутствует — мотивированный отказ', 'tv_review__closed_rejected', ARRAY['orpsd', 'admin']::varchar(24)[], 'табл. 1'),

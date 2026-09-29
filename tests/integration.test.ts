@@ -446,14 +446,20 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
 
   /* ------------------------- переходы по Регламенту ------------------------ */
 
-  test('без входящего номера заявка не уходит на оценку ТВ (п. 6)', async () => {
-    const res = await call('POST', `/api/v1/requests/${requestId}/transition`,
-      { as: users.records, body: { to: 'tv_review' } });
-    assert.equal(res.status, 422);
-    assert.ok(res.body.failures.some((f: any) => f.code === 'not_registered'));
+  test('регистрация автоматическая: номер и дата при подаче, подтверждает только канцелярия (п. 6)', async () => {
+    const r = (await call('GET', `/api/v1/requests/${requestId}`, { as: users.orpsd })).body.request;
+    assert.equal(r.incomingNumber, r.number, 'регистрационный номер — номер заявки');
+    assert.equal(r.incomingDate, todayIso(), 'дата регистрации — день подачи');
+    assert.equal(r.registrationConfirmedAt, null, 'ждёт подтверждения канцелярии');
+    const logged = await db.one(
+      `SELECT 1 AS x FROM events WHERE entity_id = $1 AND action = 'Заявка зарегистрирована автоматически'`, [requestId]);
+    assert.ok(logged, 'автоматическая регистрация — в журнале');
+    const byOrpsd = await call('POST', `/api/v1/requests/${requestId}/transition`,
+      { as: users.orpsd, body: { to: 'tv_review' } });
+    assert.equal(byOrpsd.status, 403, 'ОР ПСД не подтверждает регистрацию за канцелярию');
   });
 
-  test('регистрацию выполняет делопроизводство, а не ОР ПСД (п. 6)', async () => {
+  test('реквизиты регистрации исправляет канцелярия, а не ОР ПСД (п. 6)', async () => {
     const wrongRole = await call('POST', `/api/v1/requests/${requestId}/registration`,
       { as: users.orpsd, body: { incomingNumber: 'вх-1201', incomingDate: '2026-09-22' } });
     assert.equal(wrongRole.status, 403);
@@ -475,6 +481,9 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
     const moved = await call('POST', `/api/v1/requests/${requestId}/transition`,
       { as: users.records, body: { to: 'tv_review' } });
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
+    assert.ok(moved.body.request.registrationConfirmedAt, 'канцелярия подтвердила регистрацию');
+    assert.equal(moved.body.request.registrationConfirmedBy, users.records);
+    assert.equal(moved.body.request.incomingNumber, 'вх-1201', 'исправленный канцелярией номер сохранён');
     const res = await call('POST', `/api/v1/requests/${requestId}/transition`,
       { as: users.orpsd, body: { to: 'offer' } });
     assert.equal(res.status, 422);
@@ -1940,11 +1949,10 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
     });
     assert.equal(file.status, 200);
 
-    // Зарегистрированная заявка: без замечания файлы не принимаются.
-    await call('POST', `/api/v1/requests/${id}/registration`, { as: users.records, body: { incomingNumber: 'вх-2003', incomingDate: todayIso() } });
+    // Канцелярия подтвердила регистрацию: без замечания файлы не принимаются.
+    await go(id, 'tv_review', users.records);
     const closed = await upload(`/api/v1/requests/${id}/attachments`, users.customer, {}, { name: 'late.pdf', data: pdf('поздно') });
     assert.equal(closed.status, 409);
-    await go(id, 'tv_review', users.records);
     await call('POST', `/api/v1/requests/${id}/remarks`, { as: users.orpsd, body: { remarks: [{ field: 'Приложения к заявке', text: 'Приложите схему крепления' }] } });
     const again = await upload(`/api/v1/requests/${id}/attachments`, users.customer, {}, { name: 'mount.pdf', data: pdf('крепление') });
     assert.equal(again.status, 200, JSON.stringify(again.body));
@@ -1988,9 +1996,11 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
     const set = await call('POST', `/api/v1/requests/${id}/facility`, { as: users.records, body: { facilityId } });
     assert.equal(set.status, 200, JSON.stringify(set.body));
     assert.equal(set.body.request.branchName, 'Карагандинский филиал');
-    const notice = await db.one(`SELECT 1 FROM notifications WHERE event_key = 'request_registered_branch' AND payload->>'requestId' = $1`, [id]);
-    assert.ok(notice, 'куратору филиала — письмо о заявке по его объекту');
+    const branchLetter = () => db.one(
+      `SELECT 1 AS x FROM notifications WHERE event_key = 'request_registered_branch' AND payload->>'requestId' = $1`, [id]);
+    assert.equal(await branchLetter(), null, 'до подтверждения регистрации филиалу не пишем');
     await go(id, 'tv_review', users.records);
+    assert.ok(await branchLetter(), 'после подтверждения регистрации — письмо куратору филиала (п. 6.2)');
   });
 
   test('В5: ответ о ТВ отмечает исполнение поручения; ОКО поручает работу филиалу', async () => {

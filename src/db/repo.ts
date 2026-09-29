@@ -14,6 +14,7 @@ import type { RequestSnapshot } from '../process/transitions.ts';
 import type { StageRecord } from '../process/engine.ts';
 import type { Actor } from '../server/rbac.ts';
 import { toIsoDate, toIsoTimestamp } from '../domain/dates.ts';
+import { today } from '../domain/calendar.ts';
 
 /* ------------------------------ пользователи ------------------------------ */
 
@@ -272,6 +273,9 @@ export type RequestRow = RequestSnapshot & {
   avrObjection: string | null;
   createdAt: string;
   registeredAt: string | null;
+  /** Канцелярия подтвердила автоматическую регистрацию (п. 6); пусто — ждёт подтверждения. */
+  registrationConfirmedAt: string | null;
+  registrationConfirmedBy: string | null;
   version: number;
   /** Реквизиты открытого этапа — для доски и реестра. */
   dueAt: string | null;
@@ -293,6 +297,7 @@ const SELECT_REQUEST = `
          r.stage_code, r.tv_status, r.master_file_version, r.verification_calc,
          r.free_of_charge, r.estimate_approved, r.order_number, r.result_delivered,
          r.closing_confirmed, r.total_amount, r.registered_at, r.created_at, r.version,
+         r.registration_confirmed_at, rc.full_name AS registration_confirmed_by,
          r.closed_at, r.closed_reason,
          (SELECT array_agg(s.service ORDER BY s.service) FROM request_services s WHERE s.request_id = r.id) AS services,
          (SELECT count(*) FROM request_remarks m WHERE m.request_id = r.id AND m.resolved_at IS NULL) AS open_remarks,
@@ -334,6 +339,7 @@ const SELECT_REQUEST = `
        WHERE s.request_id = r.id AND s.left_at IS NULL
        ORDER BY s.entered_at DESC LIMIT 1
     ) open_stage ON true
+    LEFT JOIN users rc ON rc.id = r.registration_confirmed_by
     LEFT JOIN users ru ON ru.id = r.assignee_id AND ru.is_active
     LEFT JOIN users eu ON eu.id = open_stage.assignee_id AND eu.is_active`;
 
@@ -388,6 +394,8 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     totalAmount: row.total_amount === null ? null : Number(row.total_amount),
     createdAt: toIsoTimestamp(row.created_at)!,
     registeredAt: toIsoTimestamp(row.registered_at),
+    registrationConfirmedAt: toIsoTimestamp(row.registration_confirmed_at),
+    registrationConfirmedBy: row.registration_confirmed_by ?? null,
     version: row.version,
     dueAt: iso(row.due_at),
     escalationLevel: Number(row.escalation_level ?? 0),
@@ -495,16 +503,19 @@ export async function createRequest(db: Db, data: NewRequest, stage: StageRecord
     // параметра и как значения колонки, и в сравнении не даёт PostgreSQL
     // вывести его тип («inconsistent types deduced for parameter»).
     const isDraft = data.stageCode === 'draft';
+    // Регистрация автоматическая (п. 6): номер заявки — регистрационный номер, дата — день подачи.
+    // Канцелярия подтверждает регистрацию переходом на оценку ТВ и при необходимости исправляет реквизиты.
     const created = await t.one<{ id: string }>(
       `INSERT INTO requests (number, counterparty_id, facility_id, branch_id, created_by,
                              stage_code, customer_status, free_of_charge, total_amount, registered_at,
-                             facility_address)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                             facility_address, incoming_number, incoming_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [number, data.counterpartyId, data.facilityId, data.branchId, data.createdBy,
        data.stageCode, isDraft ? 'draft' : 'registered',
        data.freeOfCharge, data.totalAmount, isDraft ? null : new Date().toISOString(),
-       data.facilityAddress?.trim() || null],
+       data.facilityAddress?.trim() || null,
+       isDraft ? null : number, isDraft ? null : today()],
     );
     const id = created!.id;
 
