@@ -271,10 +271,34 @@ export const STAGES: readonly StageDefinition[] = [
 
 const BY_CODE = new Map(STAGES.map((s) => [s.code, s]));
 
+/**
+ * Нормативы, изменённые администратором ДИТ (С9). Регламент изменению не
+ * подлежит, но его следующая редакция не должна требовать пересборки: новый
+ * норматив накладывается на значение из кода и действует для этапов, открытых
+ * после изменения. Уже рассчитанные контрольные даты не пересчитываются.
+ */
+export type SlaOverride = { slaValue: number; slaUnit: SlaUnit; slaText: string };
+const OVERRIDES = new Map<StageCode, SlaOverride>();
+
+export function setStageOverrides(rows: { stageCode: StageCode; override: SlaOverride }[]): void {
+  OVERRIDES.clear();
+  for (const row of rows) if (BY_CODE.has(row.stageCode)) OVERRIDES.set(row.stageCode, row.override);
+}
+
+export function stageOverride(code: StageCode): SlaOverride | null {
+  return OVERRIDES.get(code) ?? null;
+}
+
 export function stage(code: StageCode): StageDefinition {
   const found = BY_CODE.get(code);
   if (!found) throw new Error(`Неизвестный этап: ${code}`);
-  return found;
+  const override = OVERRIDES.get(code);
+  return override ? { ...found, ...override } : found;
+}
+
+/** Все этапы с действующими нормативами — для конфигурации интерфейса. */
+export function currentStages(): StageDefinition[] {
+  return STAGES.map((s) => stage(s.code));
 }
 
 /** Этапы доски: рабочие колонки без терминальных исходов. */

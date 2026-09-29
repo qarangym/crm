@@ -92,7 +92,10 @@ export function validateApplicant(form: Record<string, unknown>): FieldErrors {
 /** Объект размещения — Регламент п. 16.1 (объект определяется по адресу в мастер-файле). */
 export function validateFacility(form: Record<string, unknown>): FieldErrors {
   const e: FieldErrors = {};
-  if (!form.facilityId) e.facilityId = 'Выберите объект из справочника';
+  // Объекта нет в справочнике — Заказчик указывает адрес, объект определяет Общество (С5).
+  if (!form.facilityId && !validText(form.facilityAddress, 10)) {
+    e.facilityId = 'Выберите объект из справочника либо укажите адрес объекта';
+  }
   return e;
 }
 
@@ -169,6 +172,7 @@ export type RequestDraft = {
   email?: unknown;
   phone?: unknown;
   facilityId?: unknown;
+  facilityAddress?: unknown;
   services?: RequestService[];
   attachments?: unknown[];
 };
@@ -217,7 +221,7 @@ function validateServices(services: RequestService[]): FieldErrors {
  * Проверка исправленной заявки (ТЗ №11): те же правила, что при подаче (ТЗ №4, №5),
  * кроме реквизитов организации — она закреплена за заявкой и не меняется.
  */
-export function validateAmendment(form: { facilityId?: unknown; services?: RequestService[] }, draft = false): FieldErrors {
+export function validateAmendment(form: { facilityId?: unknown; facilityAddress?: unknown; services?: RequestService[] }, draft = false): FieldErrors {
   const errors: FieldErrors = {};
   const services = form.services ?? [];
   if (services.length === 0) errors.services = 'Выберите хотя бы одну услугу';

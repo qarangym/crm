@@ -161,25 +161,37 @@ export async function setUserActive(db: Db, id: string, active: boolean): Promis
   return rows.length > 0;
 }
 
-export function searchEvents(
-  db: Db, filter: { entity?: string; actorId?: string; result?: string; limit?: number },
-) {
+export type EventFilter = {
+  entity?: string; entityId?: string; actorId?: string; actor?: string; result?: string;
+  /** Поиск по действию и подробностям — например, по имени файла или номеру заявки. */
+  q?: string;
+  dateFrom?: string; dateTo?: string; limit?: number; offset?: number;
+};
+
+/** Журнал действий с фильтрами (ТЗ №12, требования архива: кто и когда работал с файлом). */
+export function searchEvents(db: Db, filter: EventFilter) {
   const where: string[] = [];
   const params: unknown[] = [];
   const add = (clause: string, value: unknown) => {
     params.push(value);
-    where.push(clause.replace('?', `$${params.length}`));
+    where.push(clause.replaceAll('?', `$${params.length}`));
   };
   if (filter.entity) add('e.entity = ?', filter.entity);
+  if (filter.entityId) add('e.entity_id = ?', filter.entityId);
   if (filter.actorId) add('e.actor_id = ?', filter.actorId);
+  if (filter.actor) add(`e.actor_name ILIKE '%' || ? || '%'`, filter.actor);
   if (filter.result) add('e.result = ?', filter.result);
+  if (filter.q) add(`(e.action ILIKE '%' || ? || '%' OR e.detail ILIKE '%' || ? || '%')`, filter.q);
+  if (filter.dateFrom) add('e.occurred_at >= ?::date', filter.dateFrom);
+  if (filter.dateTo) add(`e.occurred_at < ?::date + interval '1 day'`, filter.dateTo);
   return db.query(
-    `SELECT e.occurred_at, e.actor_name, e.ip_address, e.action, e.entity, e.entity_id,
+    `SELECT e.id, e.occurred_at, e.actor_name, e.ip_address, e.action, e.entity, e.entity_id,
             e.detail, e.result, e.regulation_ref
        FROM events e
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY e.occurred_at DESC
-      LIMIT ${Math.min(filter.limit ?? 200, 1000)}`, params as never);
+      ORDER BY e.occurred_at DESC, e.id DESC
+      LIMIT ${Math.min(Math.max(Number(filter.limit) || 200, 1), 5000)}
+      OFFSET ${Math.max(Number(filter.offset) || 0, 0)}`, params as never);
 }
 
 /* -------------------------------- справочники ------------------------------ */
@@ -224,7 +236,7 @@ export function listTiers(db: Db, facilityId: string) {
 
 export function listTariffs(db: Db, on: string) {
   return db.query(
-    `SELECT id, service, name, unit, amount, source, effective_from, effective_to
+    `SELECT id, service, name, unit, amount, source, effective_from, effective_to, placement, is_default
        FROM tariffs
       WHERE effective_from <= $1 AND (effective_to IS NULL OR effective_to >= $1)
       ORDER BY service, name`, [on]);
@@ -245,10 +257,16 @@ export type RequestRow = RequestSnapshot & {
   uuid: string;
   counterpartyId: string;
   counterpartyName: string;
-  facilityId: string;
-  facilityName: string;
-  branchId: string;
-  branchName: string;
+  /** Объект из справочника; пусто, пока объект не определён по адресу (п. 16.1). */
+  facilityId: string | null;
+  facilityName: string | null;
+  facilityAddress: string | null;
+  branchId: string | null;
+  branchName: string | null;
+  /** Основание подтверждения ТВ вопреки расчёту (п. 16.4). */
+  tvOverrideReason: string | null;
+  closedAt: string | null;
+  closedReason: string | null;
   totalAmount: number | null;
   /** Мотивированные замечания Заказчика к АВР (п. 94). */
   avrObjection: string | null;
@@ -260,6 +278,11 @@ export type RequestRow = RequestSnapshot & {
   escalationLevel: number;
   ownerParty: string | null;
   stageEnteredAt: string | null;
+  /** Ответственный ОР ПСД и исполнитель текущего этапа (src/db/executors.ts); отключённый — как не назначенный. */
+  responsibleId: string | null;
+  responsibleName: string | null;
+  executorId: string | null;
+  executorName: string | null;
 };
 
 const SELECT_REQUEST = `
@@ -270,12 +293,20 @@ const SELECT_REQUEST = `
          r.stage_code, r.tv_status, r.master_file_version, r.verification_calc,
          r.free_of_charge, r.estimate_approved, r.order_number, r.result_delivered,
          r.closing_confirmed, r.total_amount, r.registered_at, r.created_at, r.version,
+         r.closed_at, r.closed_reason,
          (SELECT array_agg(s.service ORDER BY s.service) FROM request_services s WHERE s.request_id = r.id) AS services,
          (SELECT count(*) FROM request_remarks m WHERE m.request_id = r.id AND m.resolved_at IS NULL) AS open_remarks,
-         r.avr_sent_at, r.avr_objection,
+         coalesce(r.avr_sent_at, (SELECT max(c.avr_sent_at) FROM contracts c
+                                   WHERE c.request_id = r.id AND c.status <> 'terminated')) AS avr_sent_at,
+         r.avr_objection, r.tv_override_reason, r.facility_address, r.tv_recheck_required_at,
          -- Договор и оплата — по каждой услуге (пп. 21, 32, 48, 59).
          (SELECT coalesce(json_agg(json_build_object('service', c.service, 'number', c.number,
-                                                     'paidAt', c.paid_at) ORDER BY c.service), '[]'::json)
+                                                     'paidAt', c.paid_at, 'avrSentAt', c.avr_sent_at,
+                                                     'acceptedAt', c.accepted_at,
+                                                     'avrApproved', EXISTS (SELECT 1 FROM documents d
+                                                        WHERE d.kind = 'АВР' AND d.approved
+                                                          AND (d.contract_id = c.id OR (d.contract_id IS NULL AND d.request_id = r.id))))
+                                   ORDER BY c.service), '[]'::json)
             FROM contracts c
            WHERE c.request_id = r.id AND c.service IS NOT NULL AND c.status <> 'terminated') AS contracts,
          -- Безвозмездные позиции: ТУ на присоединение к сети телерадиовещания (п. 20).
@@ -290,17 +321,21 @@ const SELECT_REQUEST = `
          EXISTS (SELECT 1 FROM documents d WHERE d.request_id = r.id AND d.kind = 'АВР' AND d.approved) AS avr_approved,
          -- Открытый этап: контрольная дата и уровень эскалации нужны доске
          -- для SLA-подписи на карточке, без отдельного запроса на каждую заявку.
-         open_stage.due_at, open_stage.escalation_level, open_stage.owner_party, open_stage.entered_at
+         open_stage.due_at, open_stage.escalation_level, open_stage.owner_party, open_stage.entered_at,
+         ru.id AS responsible_id, ru.full_name AS responsible_name,
+         eu.id AS executor_id, eu.full_name AS executor_name
     FROM requests r
     JOIN counterparties cp ON cp.id = r.counterparty_id
-    JOIN facilities f ON f.id = r.facility_id
-    JOIN branches b ON b.id = r.branch_id
+    LEFT JOIN facilities f ON f.id = r.facility_id
+    LEFT JOIN branches b ON b.id = r.branch_id
     LEFT JOIN LATERAL (
-      SELECT s.due_at, s.escalation_level, s.owner_party, s.entered_at
+      SELECT s.due_at, s.escalation_level, s.owner_party, s.entered_at, s.assignee_id
         FROM request_stages s
        WHERE s.request_id = r.id AND s.left_at IS NULL
        ORDER BY s.entered_at DESC LIMIT 1
-    ) open_stage ON true`;
+    ) open_stage ON true
+    LEFT JOIN users ru ON ru.id = r.assignee_id AND ru.is_active
+    LEFT JOIN users eu ON eu.id = open_stage.assignee_id AND eu.is_active`;
 
 /** Даты приводим через общий помощник: см. src/domain/dates.ts о сдвиге пояса. */
 const iso = toIsoDate;
@@ -317,8 +352,14 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     tvStatus: row.tv_status as TvStatus,
     masterFileVersion: row.master_file_version,
     verificationCalcDecision: row.verification_calc,
-    contracts: ((row.contracts ?? []) as { service: Service; number: string; paidAt: string | null }[])
-      .map((c) => ({ service: c.service, number: c.number, paidAt: c.paidAt ? String(c.paidAt).slice(0, 10) : null })),
+    contracts: ((row.contracts ?? []) as { service: Service; number: string; paidAt: string | null;
+      avrSentAt: string | null; acceptedAt: string | null; avrApproved: boolean }[])
+      .map((c) => ({
+        service: c.service, number: c.number, paidAt: c.paidAt ? String(c.paidAt).slice(0, 10) : null,
+        avrApproved: !!c.avrApproved,
+        avrSentAt: c.avrSentAt ? String(c.avrSentAt).slice(0, 10) : null,
+        acceptedAt: c.acceptedAt ? String(c.acceptedAt).slice(0, 10) : null,
+      })),
     freeServices: (row.free_services ?? []) as Service[],
     freeOfCharge: row.free_of_charge,
     passedStages: (row.passed_stages ?? []) as StageCode[],
@@ -332,12 +373,18 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     closingConfirmed: row.closing_confirmed,
     resultDelivered: row.result_delivered,
     openRemarks: Number(row.open_remarks ?? 0),
+    facilityDetermined: !!row.facility_id,
+    tvRecheckRequired: !!row.tv_recheck_required_at,
     counterpartyId: row.counterparty_id,
     counterpartyName: row.counterparty_name,
-    facilityId: row.facility_id,
-    facilityName: row.facility_name,
-    branchId: row.branch_id,
-    branchName: row.branch_name,
+    facilityId: row.facility_id ?? null,
+    facilityName: row.facility_name ?? null,
+    facilityAddress: row.facility_address ?? null,
+    branchId: row.branch_id ?? null,
+    branchName: row.branch_name ?? null,
+    tvOverrideReason: row.tv_override_reason ?? null,
+    closedAt: toIsoTimestamp(row.closed_at),
+    closedReason: row.closed_reason ?? null,
     totalAmount: row.total_amount === null ? null : Number(row.total_amount),
     createdAt: toIsoTimestamp(row.created_at)!,
     registeredAt: toIsoTimestamp(row.registered_at),
@@ -346,6 +393,10 @@ function toSnapshot(row: Record<string, any>, seq: number): RequestRow {
     escalationLevel: Number(row.escalation_level ?? 0),
     ownerParty: row.owner_party ?? null,
     stageEnteredAt: iso(row.entered_at),
+    responsibleId: row.responsible_id ?? null,
+    responsibleName: row.responsible_name ?? null,
+    executorId: row.executor_id ?? null,
+    executorName: row.executor_name ?? null,
   };
 }
 
@@ -354,6 +405,14 @@ export type RequestFilter = {
   stageCode?: StageCode;
   branchId?: string;
   service?: Service;
+  /** Действующие либо закрытые заявки (С10). */
+  state?: 'open' | 'closed';
+  /** Поиск по номеру заявки, входящему номеру, Заказчику и БИН (С10). */
+  q?: string;
+  /** Сотрудник — ответственный ОР ПСД либо исполнитель текущего этапа. */
+  executorId?: string;
+  /** Открытые заявки, у которых нет действующего исполнителя этапа или ответственного. */
+  unassigned?: boolean;
   limit?: number;
   offset?: number;
 };
@@ -369,6 +428,22 @@ export async function listRequests(db: Db, filter: RequestFilter): Promise<Reque
   if (filter.stageCode) add('r.stage_code = ?', filter.stageCode);
   if (filter.branchId) add('r.branch_id = ?', filter.branchId);
   if (filter.service) add('EXISTS (SELECT 1 FROM request_services s WHERE s.request_id = r.id AND s.service = ?)', filter.service);
+  if (filter.state === 'open') where.push('r.closed_at IS NULL');
+  if (filter.state === 'closed') where.push('r.closed_at IS NOT NULL');
+  if (filter.q) {
+    params.push(`%${filter.q.trim()}%`);
+    const n = `$${params.length}`;
+    where.push(`(r.number ILIKE ${n} OR r.incoming_number ILIKE ${n} OR cp.name_full ILIKE ${n} OR cp.bin ILIKE ${n})`);
+  }
+  if (filter.executorId) {
+    if (!/^[0-9a-f-]{36}$/i.test(filter.executorId)) return [];
+    params.push(filter.executorId);
+    const n = `$${params.length}::uuid`;
+    where.push(`(ru.id = ${n} OR eu.id = ${n})`);
+  }
+  if (filter.unassigned) {
+    where.push(`r.closed_at IS NULL AND r.stage_code <> 'draft' AND (ru.id IS NULL OR eu.id IS NULL)`);
+  }
 
   const sql = `${SELECT_REQUEST}
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
@@ -399,8 +474,9 @@ export async function nextNumber(db: Db, year: number): Promise<string> {
 
 export type NewRequest = {
   counterpartyId: string;
-  facilityId: string;
-  branchId: string;
+  facilityId: string | null;
+  branchId: string | null;
+  facilityAddress?: string | null;
   createdBy: string;
   stageCode: StageCode;
   freeOfCharge: boolean;
@@ -421,12 +497,14 @@ export async function createRequest(db: Db, data: NewRequest, stage: StageRecord
     const isDraft = data.stageCode === 'draft';
     const created = await t.one<{ id: string }>(
       `INSERT INTO requests (number, counterparty_id, facility_id, branch_id, created_by,
-                             stage_code, customer_status, free_of_charge, total_amount, registered_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                             stage_code, customer_status, free_of_charge, total_amount, registered_at,
+                             facility_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING id`,
       [number, data.counterpartyId, data.facilityId, data.branchId, data.createdBy,
        data.stageCode, isDraft ? 'draft' : 'registered',
-       data.freeOfCharge, data.totalAmount, isDraft ? null : new Date().toISOString()],
+       data.freeOfCharge, data.totalAmount, isDraft ? null : new Date().toISOString(),
+       data.facilityAddress?.trim() || null],
     );
     const id = created!.id;
 
@@ -475,7 +553,10 @@ export async function currentStageRecord(db: Db, requestId: string): Promise<Sta
     extensionReason: row.extension_reason,
     escalationLevel: row.escalation_level,
     breached: row.breached,
-  };
+    pausedAt: iso(row.paused_at),
+    pausedDays: row.paused_days ?? 0,
+    pauseReason: row.pause_reason ?? null,
+  } as StageRecord & { pausedAt: string | null; pausedDays: number; pauseReason: string | null };
 }
 
 export async function closeStageRecord(db: Db, requestId: string, at: string, breached: boolean): Promise<void> {
@@ -534,7 +615,9 @@ export function stageHistory(db: Db, requestId: string) {
   return db.query(
     `SELECT stage_code, entered_at, left_at, due_at, sla_value, sla_unit, owner_party,
             extended_by, extension_reason, escalation_level, breached
-       FROM request_stages WHERE request_id = $1 ORDER BY entered_at`, [requestId]);
+       FROM request_stages WHERE request_id = $1
+      -- Даты входа совпадают, если этапы пройдены в один день: открытый этап — последним.
+      ORDER BY entered_at, left_at IS NULL, left_at`, [requestId]);
 }
 
 /** Все прохождения этапов — исходные данные для показателей узких мест. */

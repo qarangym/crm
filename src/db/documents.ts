@@ -12,6 +12,8 @@ import type { Actor } from '../server/rbac.ts';
 export type DocumentRow = {
   id: string;
   request_id: string | null;
+  request_number: string | null;
+  contract_id: string | null;
   kind: string;
   form_code: string;
   number: string;
@@ -33,11 +35,14 @@ export type DocumentRow = {
 };
 
 const SELECT = `
-  SELECT d.id, d.request_id, d.kind, d.form_code, d.number, d.facility_id, f.name AS facility_name,
+  SELECT d.id, d.request_id, r.number AS request_number, d.contract_id, d.kind, d.form_code, d.number, d.facility_id, f.name AS facility_name,
          d.owner_id, cp.name_full AS owner_name, d.contractor_name, d.branch_id, b.name AS branch_name,
-         d.doc_date, d.valid_until, d.approved, d.approved_at, d.current_version, d.created_at,
+         -- Даты — строкой: объект Date из драйвера в JSON сдвигается на сутки (см. src/domain/dates.ts).
+         d.doc_date::text AS doc_date, d.valid_until::text AS valid_until,
+         d.approved, d.approved_at, d.current_version, d.created_at, d.late_upload,
          v.file_name, v.size_bytes
     FROM documents d
+    LEFT JOIN requests r ON r.id = d.request_id
     LEFT JOIN facilities f ON f.id = d.facility_id
     LEFT JOIN counterparties cp ON cp.id = d.owner_id
     LEFT JOIN branches b ON b.id = d.branch_id
@@ -54,6 +59,10 @@ export type DocumentSearch = {
   requestId?: string;
   /** Филиал: роль «Филиал» видит только свои документы. */
   branchId?: string;
+  /** Только ожидающие визы (С14). */
+  pending?: boolean;
+  /** Номер заявки. */
+  requestNumber?: string;
   limit?: number;
   offset?: number;
 };
@@ -76,6 +85,8 @@ export async function searchDocuments(db: Db, filter: DocumentSearch): Promise<D
   if (filter.requestId) add('d.request_id = ?', filter.requestId);
   if (filter.dateFrom) add('d.doc_date >= ?', filter.dateFrom);
   if (filter.dateTo) add('d.doc_date <= ?', filter.dateTo);
+  if (filter.pending) where.push('NOT d.approved');
+  if (filter.requestNumber) add(`r.number ILIKE '%' || ? || '%'`, filter.requestNumber);
   // Нечёткое сравнение: наименования контрагентов часто вводят с опечатками.
   if (filter.facility) add('f.name %> ?', filter.facility);
   if (filter.owner) add('cp.name_full %> ?', filter.owner);
@@ -100,6 +111,8 @@ export async function findByFingerprint(db: Db, fingerprint: string): Promise<Do
 
 export type NewDocument = {
   requestId: string | null;
+  contractId?: string | null;
+  lateUpload?: boolean;
   kind: string;
   formCode: string;
   number: string;
@@ -120,10 +133,12 @@ export async function createDocument(
   return db.tx(async (t) => {
     const row = await t.one<{ id: string }>(
       `INSERT INTO documents (request_id, kind, form_code, number, facility_id, owner_id,
-                              contractor_name, branch_id, doc_date, valid_until, fingerprint, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+                              contractor_name, branch_id, doc_date, valid_until, fingerprint, created_by, contract_id,
+                              late_upload)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
       [data.requestId, data.kind, data.formCode, data.number, data.facilityId, data.ownerId,
-       data.contractorName, data.branchId, data.docDate, data.validUntil, data.fingerprint, data.createdBy],
+       data.contractorName, data.branchId, data.docDate, data.validUntil, data.fingerprint, data.createdBy,
+       data.contractId ?? null, data.lateUpload === true],
     );
     await addVersion(t, row!.id, 1, file, data.createdBy);
     return row!.id;
@@ -200,4 +215,13 @@ export function expiringDocuments(db: Db, withinDays: number) {
       WHERE d.valid_until IS NOT NULL
         AND d.valid_until BETWEEN current_date AND current_date + ($1 || ' days')::interval
       ORDER BY d.valid_until`, [String(withinDays)]);
+}
+
+/** Сколько документов ждёт визы — для отметки в меню ОР ПСД (С14). */
+export async function pendingCount(db: Db, branchId?: string): Promise<number> {
+  const row = await db.one<{ n: number }>(
+    `SELECT count(*)::int AS n FROM documents
+      WHERE NOT approved AND kind NOT IN ('Приложение') AND request_id IS NOT NULL
+        AND ($1::uuid IS NULL OR branch_id = $1)`, [branchId ?? null]);
+  return row?.n ?? 0;
 }

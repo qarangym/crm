@@ -13,7 +13,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (name) => readFileSync(join(here, name), 'utf8');
 
 let html = read('index.html');
-for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js']) {
+// Общее оформление вынесено в shell.css (одно для рабочего места и портала допусков).
+const cssTag = '<link rel="stylesheet" href="shell.css">';
+if (!html.includes(cssTag)) throw new Error('В index.html нет подключения shell.css');
+html = html.replace(cssTag, `<style>
+/* inline: shell.css */
+${read('shell.css')}
+</style>`);
+for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js', 'shell.js']) {
   const tag = `<script src="${name}"></script>`;
   if (!html.includes(tag)) throw new Error(`В index.html нет подключения ${name}`);
   html = html.replace(tag, `<script>\n/* inline: ${name} */\n${read(name)}\n</script>`);

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { WorkCalendar } from '../src/domain/types.ts';
 import { routeFor, applyTransition, canTransition, customerStatus, extendStage, isBranchDeadline, nextEscalationLevel, openStage, stageStartDate } from '../src/process/engine.ts';
 import type { StageRecord } from '../src/process/engine.ts';
-import { BOARD_STAGES, appliesTo, nextMainStage, stage } from '../src/process/stages.ts';
+import { BOARD_STAGES, appliesTo, currentStages, nextMainStage, setStageOverrides, stage } from '../src/process/stages.ts';
 import type { ContractInfo, RequestSnapshot } from '../src/process/transitions.ts';
 import { offerServices, transitionsFrom } from '../src/process/transitions.ts';
 import { boardColumns, breakdownByParty, bottlenecks, requestCycle, stageMetrics } from '../src/process/metrics.ts';
@@ -443,4 +443,74 @@ test('каждое правило автоматизации ссылается 
   }
   const ids = AUTOMATION_RULES.map((r) => r.id);
   assert.equal(new Set(ids).size, ids.length, 'идентификаторы правил должны быть уникальны');
+});
+
+/* ------------------- исправления по проверке функционала ------------------- */
+
+test('АВР по договору: приёмка начинается, когда АВР направлены по всем договорам (В6)', () => {
+  const sent = { ...contract('ТУ', '2026-09-01'), avrApproved: true, avrSentAt: '2026-09-10' };
+  const unsent = { ...contract('ПСД', '2026-09-01'), avrApproved: false };
+  const r = makeRequest({ stageCode: 'avr', services: ['ТУ', 'ПСД'], contracts: [sent, unsent] });
+  const check = canTransition(r, 'closing');
+  assert.equal(check.ok, false);
+  const codes = check.ok ? [] : check.failures.map((f) => f.code);
+  assert.deepEqual(codes.sort(), ['avr_not_sent', 'no_avr'], 'не отправлен и не завизирован только АВР по ПСД');
+  const ready = makeRequest({ stageCode: 'avr', services: ['ТУ', 'ПСД'],
+    contracts: [sent, { ...unsent, avrApproved: true, avrSentAt: '2026-09-11' }] });
+  assert.equal(canTransition(ready, 'closing').ok, true);
+});
+
+test('заявка закрывается, когда приняты все договоры, без отдельного подтверждения (п. 127)', () => {
+  const accepted = (s: ContractInfo['service']) => ({ ...contract(s, '2026-09-01'), avrSentAt: '2026-09-02', acceptedAt: '2026-09-20' });
+  const r = makeRequest({ stageCode: 'closing', services: ['ТУ', 'ПСД'], contracts: [accepted('ТУ'), { ...contract('ПСД', '2026-09-01'), avrSentAt: '2026-09-02' }] });
+  assert.equal(canTransition(r, 'closed_done').ok, false);
+  const all = makeRequest({ stageCode: 'closing', services: ['ТУ', 'ПСД'], contracts: [accepted('ТУ'), accepted('ПСД')] });
+  assert.equal(canTransition(all, 'closed_done').ok, true);
+});
+
+test('безвозмездная услуга не требует АВР (п. 20)', () => {
+  const r = makeRequest({ stageCode: 'avr', contracts: [], freeOfCharge: true, freeServices: ['ТУ'] });
+  assert.equal(canTransition(r, 'closing').ok, true);
+});
+
+test('объект не определён по адресу — на оценку ТВ заявка не уходит (п. 16.1)', () => {
+  const r = makeRequest({ stageCode: 'registered', facilityDetermined: false });
+  const check = canTransition(r, 'tv_review');
+  assert.equal(check.ok, false);
+  assert.ok(!check.ok && check.failures.some((f) => f.code === 'no_facility'));
+});
+
+test('через 3 месяца после ПСД к СМР — только после повторной оценки ТВ (п. 47)', () => {
+  const base = { stageCode: 'awaiting_payment' as const, services: ['ПСД', 'СМР'] as ContractInfo['service'][],
+    estimateApproved: true, passedStages: ['psd' as const], contracts: [contract('СМР', '2026-09-01')] };
+  assert.equal(canTransition(makeRequest(base), 'smr_prep').ok, true);
+  const stale = canTransition(makeRequest({ ...base, tvRecheckRequired: true }), 'smr_prep');
+  assert.ok(!stale.ok && stale.failures.some((f) => f.code === 'tv_recheck_required'));
+});
+
+test('журнал называет ответственное подразделение, а не код (Н1)', () => {
+  const r = makeRequest({ stageCode: 'tv_review' });
+  const outcome = applyTransition(r, null, 'offer', {}, ctx);
+  const entered = outcome.events.find((e) => e.kind === 'stage_entered');
+  assert.match(entered!.message, /Отвечает: ОР ПСД/);
+});
+
+test('норматив, изменённый ДИТ, накладывается на значение Регламента и снимается (С9)', () => {
+  setStageOverrides([{ stageCode: 'tv_review', override: { slaValue: 4, slaUnit: 'working', slaText: '4 рабочих дня' } }]);
+  try {
+    assert.equal(stage('tv_review').slaValue, 4);
+    assert.equal(currentStages().find((s) => s.code === 'tv_review')!.slaText, '4 рабочих дня');
+    const opened = openStage(makeRequest({ stageCode: 'registered' }), 'tv_review', '2026-09-21', calendar);
+    assert.equal(opened.slaValue, 4);
+  } finally {
+    setStageOverrides([]);
+  }
+  assert.equal(stage('tv_review').slaValue, 5);
+});
+
+test('каждое правило автоматизации описывает, как оно исполняется (С8)', () => {
+  for (const rule of AUTOMATION_RULES) {
+    assert.ok(['auto', 'partial'].includes(rule.implementation), `правило ${rule.id}`);
+    assert.ok(rule.how.length > 20, `правило ${rule.id}: описание исполнения`);
+  }
 });

@@ -25,6 +25,22 @@ import type { Router } from './http.ts';
 import * as rbac from './rbac.ts';
 import type { RouteDeps } from './context.ts';
 import { isoDateOrNull } from './context.ts';
+import { customerContract } from './customer.ts';
+import { notify, roleRecipients } from './notify.ts';
+import * as notices from './events.ts';
+import type { RequestRow } from '../db/repo.ts';
+import { missingCheckpoints, REQUIRED_FOR_ESTIMATE, REQUIRED_FOR_RESULT, tuSentToBranch } from './controls.ts';
+
+/**
+ * Услуга по договору оказана — можно оформлять АВР (раздел 11 Регламента):
+ * этап услуги пройден, для СМР — подписан технический АВР (п. 66).
+ */
+export function serviceDone(r: RequestRow, service: Service): boolean {
+  if (['avr', 'closing'].includes(r.stageCode)) return true;
+  if (service === 'ТУ') return r.passedStages.includes('tu');
+  if (service === 'ПСД') return r.passedStages.includes('psd');
+  return r.passedStages.includes('smr') || r.technicalAvrApproved;
+}
 
 export function registerContractRoutes(router: Router, deps: RouteDeps): void {
   const { db } = deps;
@@ -33,7 +49,8 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
   router.get('/api/v1/requests/:id/contracts', async (ctx) => {
     const actor = await deps.actor(ctx);
     const request = await deps.loadVisible(actor, ctx.params.id);
-    return { contracts: await contracts.listContracts(db, request.uuid) };
+    const rows = await contracts.listContracts(db, request.uuid);
+    return { contracts: rbac.isCustomer(actor) ? rows.map(customerContract) : rows };
   });
 
   /**
@@ -103,6 +120,8 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
         detail: `${service}: договор ${number}${amount !== null ? ` на ${amount}` : ''}`,
         regulationRef: service === 'СМР' ? 'пп. 48, 53' : service === 'ПСД' ? 'п. 32' : 'п. 21',
       });
+      // Счёт — в день получения служебной записки (пп. 84–85; правило 5).
+      await notices.contractRegistered(t, request, { service, number, amount });
       return row;
     });
     return { contract: created, request: await repo.getRequest(db, request.uuid) };
@@ -140,6 +159,7 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
         entityId: request.uuid, detail: `${contract.service}: договор ${contract.number}, оплата ${paidAt}`,
         regulationRef: 'пп. 86, 88',
       });
+      await notices.paymentReceived(t, request, contract, paidAt);
     });
     return { contract: await contracts.getContract(db, contract.id), request: await repo.getRequest(db, request.uuid) };
   });
@@ -173,6 +193,16 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
           (refund ? `. Возврат ${refund}` : ''),
         regulationRef: 'пп. 96–97',
       });
+      // Заявка на возврат денежных средств — расчётам с контрагентами (п. 97; правило 16).
+      if (refund) {
+        await notify(t, await roleRecipients(t, ['accounting']), {
+          eventKey: 'refund_requested', ruleId: 16,
+          subject: `Возврат по договору ${contract.number} (заявка ${request.number})`,
+          body: `Договор ${contract.number} («${contract.service}») расторгнут: ${reason}.\n` +
+            `Сумма к возврату Заказчику ${request.counterpartyName}: ${refund} ₸ (п. 97).`,
+          payload: { requestId: request.uuid, contractId: contract.id },
+        });
+      }
     });
     return { contract: await contracts.getContract(db, contract.id), request: await repo.getRequest(db, request.uuid) };
   });
@@ -210,6 +240,13 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
       if (!request.services.includes('СМР') && !request.services.includes('ПСД')) {
         fields.estimateApproved = 'Сметная документация составляется для ПСД и СМР';
       }
+      // Смета, разработанная в ПСД, утверждается после двух уровней проверки (пп. 40–41, 52).
+      if (body.estimateApproved && request.services.includes('ПСД')) {
+        const missing = await missingCheckpoints(db, request.uuid, REQUIRED_FOR_ESTIMATE);
+        if (missing.length) {
+          throw ApiError.regulation(missing.map((m) => ({ code: m.code, message: `Не отмечено: ${m.title.toLowerCase()}`, regulationRef: m.regulationRef })));
+        }
+      }
       patch.estimate_approved = body.estimateApproved === true;
       log.push({ action: body.estimateApproved ? 'Сметная документация утверждена' : 'Утверждение сметы отменено', detail: '', ref: 'пп. 41, 52' });
     }
@@ -223,6 +260,14 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
     }
     if (body.resultDelivered !== undefined) {
       orpsdOnly();
+      // ТУ — после согласования с филиалом и утверждения (п. 23); ПСД — после контрольных точек (пп. 34, 41).
+      const required = body.resultDelivered ? REQUIRED_FOR_RESULT[request.stageCode] : undefined;
+      if (required) {
+        const missing = await missingCheckpoints(db, request.uuid, required);
+        if (missing.length) {
+          throw ApiError.regulation(missing.map((m) => ({ code: m.code, message: `Не отмечено: ${m.title.toLowerCase()}`, regulationRef: m.regulationRef })));
+        }
+      }
       patch.result_delivered = body.resultDelivered === true;
       log.push({ action: body.resultDelivered ? 'Результат передан Заказчику' : 'Отметка о передаче результата снята', detail: '', ref: 'пп. 24, 42' });
     }
@@ -255,6 +300,20 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
     await db.tx(async (t) => {
       const ok = await repo.updateRequestFields(t, request.uuid, body.version ?? request.version, patch);
       if (!ok) throw ApiError.conflict('Карточка изменилась. Обновите заявку и повторите');
+      // Отметка по заявке целиком распространяется на её договоры (В6):
+      // АВР направлен — по всем оказанным услугам, приёмка — по всем направленным актам.
+      const active = await contracts.activeContracts(t, request.uuid);
+      if (patch.avr_sent_at) {
+        for (const c of active) {
+          if (c.avr_sent_at || c.accepted_at || !c.service || !serviceDone(request, c.service)) continue;
+          await contracts.updateAvr(t, c.id, { avr_sent_at: patch.avr_sent_at as string });
+        }
+      }
+      if (patch.closing_confirmed === true) {
+        for (const c of active) {
+          if (!c.accepted_at && c.avr_sent_at) await contracts.updateAvr(t, c.id, { accepted_at: today(), accepted_by_silence: false });
+        }
+      }
       for (const entry of log) {
         await repo.logEvent(t, {
           ...deps.audit(ctx, actor), action: entry.action, entity: 'request', entityId: request.uuid,
@@ -262,7 +321,91 @@ export function registerContractRoutes(router: Router, deps: RouteDeps): void {
         });
       }
     });
-    return { request: await repo.getRequest(db, request.uuid) };
+    const updated = (await repo.getRequest(db, request.uuid))!;
+    // Выданные ТУ направляются в филиал для контроля (п. 26).
+    if (patch.result_delivered === true && request.stageCode === 'tu') await tuSentToBranch(db, updated);
+    if (patch.avr_sent_at && updated.stageCode !== 'avr') {
+      await notices.avrSent(db, updated, patch.avr_sent_at as string, await repo.calendar(db));
+    }
+    return { request: updated };
+  });
+
+  /**
+   * АВР по договору (В6; раздел 11 Регламента). По завершении каждой услуги —
+   * АВР и ЭСФ в 1 операционный день (п. 91), направление Заказчику (п. 92),
+   * 10 рабочих дней на подписание или мотивированные замечания (п. 94).
+   * Договор исполнен, когда работы приняты (п. 127).
+   */
+  router.post('/api/v1/contracts/:id/avr', async (ctx) => {
+    deps.guardOrigin(ctx);
+    const actor = await deps.actor(ctx);
+    rbac.require(actor, 'request.contract');
+    const contract = await contracts.getContract(db, ctx.params.id);
+    if (!contract || !contract.request_id) throw ApiError.notFound('Договор не найден');
+    const request = await deps.loadVisible(actor, contract.request_id);
+    if (contract.status === 'terminated') throw ApiError.conflict('Договор расторгнут');
+
+    const body = await ctx.body<{ formedAt?: string | null; sentAt?: string | null; objection?: string | null; acceptedAt?: string | null }>();
+    const patch: contracts.AvrPatch = {};
+    const log: { action: string; detail: string; ref: string }[] = [];
+    const fields: Record<string, string> = {};
+    const date = (key: 'formedAt' | 'sentAt' | 'acceptedAt') => {
+      const v = isoDateOrNull(body[key]);
+      if (v === 'invalid') { fields[key] = 'Дата в формате ГГГГ-ММ-ДД'; return null; }
+      if (v && v > today()) { fields[key] = 'Дата не может быть в будущем'; return null; }
+      return v;
+    };
+    const done = contract.service ? serviceDone(request, contract.service) : false;
+
+    if (body.formedAt !== undefined) {
+      const v = date('formedAt');
+      if (v && !done) fields.formedAt = 'Услуга по договору ещё не оказана';
+      patch.avr_formed_at = v;
+      log.push({ action: v ? 'АВР и ЭСФ оформлены' : 'Отметка об оформлении АВР снята', detail: v ?? '', ref: 'п. 91' });
+    }
+    if (body.sentAt !== undefined) {
+      const v = date('sentAt');
+      const formed = patch.avr_formed_at !== undefined ? patch.avr_formed_at : contract.avr_formed_at;
+      if (v && !done) fields.sentAt = 'Услуга по договору ещё не оказана';
+      else if (v && !contract.avr_approved) fields.sentAt = 'Сначала загрузите и завизируйте АВР по договору';
+      else if (v && contract.accepted_at) fields.sentAt = 'Работы по договору уже приняты';
+      else if (v && formed && v < formed) fields.sentAt = 'АВР не может быть направлен раньше оформления';
+      patch.avr_sent_at = v;
+      if (v && !formed) patch.avr_formed_at = v;
+      log.push({ action: v ? 'АВР и ЭСФ направлены Заказчику' : 'Отметка о направлении АВР снята', detail: v ?? '', ref: 'пп. 91–92' });
+    }
+    if (body.objection !== undefined) {
+      const text = String(body.objection ?? '').trim();
+      if (text && text.length < 10) fields.objection = 'Замечания должны быть мотивированными: укажите недостатки и условия договора';
+      patch.avr_objection = text || null;
+      log.push({ action: text ? 'Получены мотивированные замечания Заказчика к АВР' : 'Замечания к АВР урегулированы', detail: text, ref: 'п. 94' });
+    }
+    if (body.acceptedAt !== undefined) {
+      const v = date('acceptedAt');
+      const sent = patch.avr_sent_at !== undefined ? patch.avr_sent_at : contract.avr_sent_at;
+      if (v && !sent) fields.acceptedAt = 'Сначала отметьте направление АВР Заказчику';
+      patch.accepted_at = v;
+      patch.accepted_by_silence = false;
+      if (v) patch.avr_objection = null;
+      log.push({ action: v ? 'Заказчик подписал АВР — работы по договору приняты' : 'Отметка о приёмке снята', detail: v ?? '', ref: 'пп. 94–95, 127' });
+    }
+    if (!log.length) throw ApiError.badRequest('Нет изменений');
+    if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте реквизиты АВР', fields);
+
+    await db.tx(async (t) => {
+      if (!await contracts.updateAvr(t, contract.id, patch)) throw ApiError.conflict('Договор расторгнут');
+      for (const entry of log) {
+        await repo.logEvent(t, {
+          ...deps.audit(ctx, actor), action: entry.action, entity: 'request', entityId: request.uuid,
+          detail: `${contract.service}: договор ${contract.number}${entry.detail ? ` · ${entry.detail}` : ''}`,
+          regulationRef: entry.ref,
+        });
+      }
+    });
+    if (patch.avr_sent_at) {
+      await notices.avrSent(db, request, patch.avr_sent_at, await repo.calendar(db), contract.number);
+    }
+    return { contract: await contracts.getContract(db, contract.id), request: await repo.getRequest(db, request.uuid) };
   });
 
   /**

@@ -50,6 +50,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-CRM ОР ПСД <no-reply@localhost>}
       JOBS_ENABLED: ${JOBS_ENABLED:-true}
       JOBS_INTERVAL_MINUTES: ${JOBS_INTERVAL_MINUTES:-15}
+      # Антивирусная проверка вложений: clamd ДИТ либо off (по умолчанию).
+      ANTIVIRUS: ${ANTIVIRUS:-off}
+      CLAMD_HOST: ${CLAMD_HOST:-127.0.0.1}
+      CLAMD_PORT: ${CLAMD_PORT:-3310}
     volumes:
       - app-files:/data/storage
     expose: ["3000"]

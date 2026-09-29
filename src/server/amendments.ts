@@ -76,29 +76,39 @@ export function registerAmendmentRoutes(router: Router, deps: RouteDeps): void {
       throw ApiError.conflict('Поданная заявка исправляется только по замечаниям ОР ПСД (ТЗ №11)');
     }
 
-    const body = await ctx.body<{ facilityId?: string; services?: ServiceInput[]; version?: number }>();
+    const body = await ctx.body<{ facilityId?: string; facilityAddress?: string; services?: ServiceInput[]; version?: number }>();
     const draft = request.stageCode === 'draft';
     const services = (body.services ?? []).map((s) => ({
       service: s.service, placement: s.placement, params: s.params ?? {},
       tariffId: s.tariffId ?? null, tariffQuantity: s.tariffQuantity ?? null,
       basisReference: s.basisReference ?? null,
     }));
-    const facilityId = body.facilityId ?? request.facilityId;
-    const errors = validateAmendment({ facilityId, services: services as RequestService[] }, draft);
+    // Объект из справочника либо адрес, если объекта в справочнике нет (п. 16.1, С5).
+    const facilityId = body.facilityId !== undefined ? (body.facilityId || null) : request.facilityId;
+    const facilityAddress = body.facilityAddress !== undefined ? String(body.facilityAddress ?? '').trim() : (request.facilityAddress ?? '');
+    const errors = validateAmendment({ facilityId, facilityAddress, services: services as RequestService[] }, draft);
     if (Object.keys(errors).length) throw ApiError.badRequest('Проверьте заполнение формы', errors);
 
-    const facility = (await repo.listFacilities(db)).find((f) => f.id === facilityId);
-    if (!facility) throw ApiError.badRequest('Выберите объект из справочника', { facilityId: 'Объект не найден' });
+    const facility = facilityId ? (await repo.listFacilities(db)).find((f) => f.id === facilityId) : null;
+    if (facilityId && !facility) throw ApiError.badRequest('Выберите объект из справочника', { facilityId: 'Объект не найден' });
+    if (!facility && !facilityAddress) {
+      throw ApiError.badRequest('Выберите объект из справочника либо укажите адрес', { facilityId: 'Объект не выбран' });
+    }
 
     const stored = (await repo.listRequestServices(db, request.uuid)) as unknown as ServiceInput[];
     const before = flattenRequest(request.facilityId, stored.map((s: any) => ({
       service: s.service, placement: s.placement, params: s.params, tariffId: s.tariff_id,
       tariffQuantity: s.tariff_quantity, basisReference: s.basis_reference,
     })));
-    const after = flattenRequest(facility.id, services);
+    const after = flattenRequest(facility?.id ?? null, services);
     const changed = [...new Set([...before.keys(), ...after.keys()])]
       .filter((k) => (before.get(k) ?? '') !== (after.get(k) ?? ''));
-    if (!changed.length) throw ApiError.badRequest('Изменений нет: исправьте поля, указанные в замечаниях');
+    if (!facility && facilityAddress !== (request.facilityAddress ?? '')) changed.push('facilityAddress');
+    if (!changed.length) {
+      // Повторное сохранение черновика без изменений — не ошибка.
+      if (draft) return { request: { ...request, customerStatus: customerStatus(request) }, remarks: [], estimate: null };
+      throw ApiError.badRequest('Изменений нет: исправьте поля, указанные в замечаниях');
+    }
 
     const tariffs = (await repo.listTariffs(db, today())) as unknown as Tariff[];
     const priced = estimate(services as never, tariffs, today());
@@ -107,8 +117,9 @@ export function registerAmendmentRoutes(router: Router, deps: RouteDeps): void {
 
     await db.tx(async (t) => {
       const patch: Record<string, unknown> = {
-        facility_id: facility.id,
-        branch_id: facility.branch_id,
+        facility_id: facility?.id ?? null,
+        branch_id: facility?.branch_id ?? null,
+        facility_address: facility ? null : facilityAddress,
         free_of_charge: priced.lines.every((l) => l.amount === 0),
         total_amount: priced.hasUndetermined ? null : priced.total,
       };

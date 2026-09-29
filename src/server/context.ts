@@ -8,6 +8,7 @@
 
 import type { Db } from '../db/client.ts';
 import type { RequestRow } from '../db/repo.ts';
+import type { FileStore } from '../storage/files.ts';
 import type { Ctx } from './http.ts';
 import type { Actor } from './rbac.ts';
 
@@ -22,6 +23,10 @@ export type RouteDeps = {
   audit(ctx: Ctx, actor: Actor | null): Audit;
   /** Заявка в пределах области видимости пользователя. */
   loadVisible(actor: Actor, id: string): Promise<RequestRow>;
+  /** Хранилище файлов; без него загрузка отвечает 503. */
+  store?: FileStore;
+  /** Антивирусная проверка файла до записи в хранилище (C2). */
+  scan(ctx: Ctx, actor: Actor, file: { filename: string; data: Buffer }, entityId: string): Promise<void>;
 };
 
 /** Дата в формате ГГГГ-ММ-ДД либо null, если поле пустое. */

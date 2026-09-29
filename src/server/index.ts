@@ -17,6 +17,7 @@ import { createMailer, mailConfigFromEnv, processQueue } from './notifications.t
 import { createDb, databaseUrl } from '../db/client.ts';
 import { migrate } from '../db/migrate.ts';
 import { FileStore } from '../storage/files.ts';
+import { scannerFromEnv } from '../storage/antivirus.ts';
 import { runAllJobs } from '../process/scheduler.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,10 +43,12 @@ if (process.env.MIGRATE_ON_START === 'true') {
 }
 
 const storageRoot = process.env.STORAGE_ROOT ?? resolve(here, '..', '..', 'storage');
+const scanner = scannerFromEnv();
 const handle = createApp({
   db,
   auth,
   store: new FileStore(storageRoot),
+  scanner,
   appOrigin: process.env.APP_ORIGIN,
   staticRoot: process.env.STATIC_ROOT ?? resolve(here, '..', '..', 'design'),
   trustProxy: process.env.TRUST_PROXY !== 'false',
@@ -57,6 +60,7 @@ server.listen(port, host, () => {
   console.log(`CRM ОР ПСД слушает http://${host}:${port}`);
   console.log(`Вход: ${auth.enabled ? 'корпоративный OIDC через обратный прокси' : 'режим разработки (DEV_LOGIN_EMAIL)'}`);
   console.log(`Файлы актов: ${storageRoot}`);
+  console.log(`Антивирусная проверка вложений: ${scanner ? `${scanner.name} (${process.env.CLAMD_HOST ?? '127.0.0.1'}:${process.env.CLAMD_PORT ?? 3310})` : 'выключена (ANTIVIRUS)'}`);
 });
 
 /**

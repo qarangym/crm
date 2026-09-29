@@ -44,13 +44,14 @@ const TIERS: Record<string, [number, number | null, number][]> = {
   '3011': [[58, 2500, 1200], [48, 3000, 2000]],
 };
 
-const TARIFFS: [string, string, string, number, string][] = [
-  ['ТУ', 'ТУ на размещение оборудования на АМС', 'услуга', 420000, 'Прейскурант, п. 3.1'],
-  ['ТУ', 'ТУ на размещение в помещении', 'услуга', 310000, 'Прейскурант, п. 3.2'],
-  ['ТУ', 'ТУ на прокладку кабеля', 'трасса', 265000, 'Прейскурант, п. 3.4'],
-  ['ТУ', 'ТУ на подключение электроснабжения', 'точка', 380000, 'Прейскурант, п. 3.5'],
-  ['ПСД', 'Разработка рабочего проекта (одностадийный РП)', 'проект', 980000, 'Прейскурант, п. 4.2'],
-  ['ПСД', 'Сметная документация к РП', 'комплект', 210000, 'Прейскурант, п. 4.3'],
+// Услуга, наименование, единица, стоимость, пункт, сценарий размещения, подставлять по умолчанию (С3).
+const TARIFFS: [string, string, string, number, string, string | null, boolean][] = [
+  ['ТУ', 'ТУ на размещение оборудования на АМС', 'услуга', 420000, 'Прейскурант, п. 3.1', 'ams', true],
+  ['ТУ', 'ТУ на размещение в помещении', 'услуга', 310000, 'Прейскурант, п. 3.2', 'room', true],
+  ['ТУ', 'ТУ на прокладку кабеля', 'трасса', 265000, 'Прейскурант, п. 3.4', 'cable', true],
+  ['ТУ', 'ТУ на подключение электроснабжения', 'точка', 380000, 'Прейскурант, п. 3.5', 'power', true],
+  ['ПСД', 'Разработка рабочего проекта (одностадийный РП)', 'проект', 980000, 'Прейскурант, п. 4.2', null, true],
+  ['ПСД', 'Сметная документация к РП', 'комплект', 210000, 'Прейскурант, п. 4.3', null, false],
 ];
 
 const COUNTERPARTIES: [string, string, string][] = [
@@ -93,13 +94,16 @@ try {
       }
     }
 
-    for (const [service, name, unit, amount, source] of TARIFFS) {
-      const exists = await t.one(`SELECT id FROM tariffs WHERE service = $1 AND name = $2`, [service, name]);
+    for (const [service, name, unit, amount, source, placement, isDefault] of TARIFFS) {
+      const exists = await t.one<{ id: string }>(`SELECT id FROM tariffs WHERE service = $1 AND name = $2`, [service, name]);
       if (!exists) {
         await t.query(
-          `INSERT INTO tariffs (service, name, unit, amount, source, effective_from)
-           VALUES ($1,$2,$3,$4,$5, date_trunc('year', now())::date)`,
-          [service, name, unit, amount, source]);
+          `INSERT INTO tariffs (service, name, unit, amount, source, effective_from, placement, is_default)
+           VALUES ($1,$2,$3,$4,$5, date_trunc('year', now())::date, $6, $7)`,
+          [service, name, unit, amount, source, placement, isDefault]);
+      } else {
+        await t.query(`UPDATE tariffs SET placement = coalesce(placement, $2), is_default = is_default OR $3 WHERE id = $1`,
+          [exists.id, placement, isDefault]);
       }
     }
 

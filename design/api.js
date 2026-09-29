@@ -73,6 +73,10 @@
 
   window.QTR_API = {
     ApiError,
+    /** Произвольный вызов: портал допусков строит свои методы поверх него. */
+    call: (method, path, body) => request(method, path, body === undefined ? {} : { body }),
+    query,
+    base: BASE,
 
     health: () => request('GET', '/health'),
     config: () => request('GET', '/config'),
@@ -85,6 +89,9 @@
 
     requests: (params) => request('GET', '/requests' + query(params)),
     request: (id) => request('GET', `/requests/${id}`),
+    /** Ответственный ОР ПСД, исполнитель этапа и кому их можно передать (п. 102). */
+    executors: (id) => request('GET', `/requests/${id}/executors`),
+    setExecutor: (id, body) => request('POST', `/requests/${id}/executor`, { body }),
     createRequest: (body) => request('POST', '/requests', { body }),
     /** Входящий номер и дата регистрации делопроизводством (п. 6). */
     register: (id, body) => request('POST', `/requests/${id}/registration`, { body }),
@@ -92,6 +99,9 @@
     transition: (id, body) => request('POST', `/requests/${id}/transition`, { body }),
     /** Фиксация оценки ТВ с версией мастер-файла (п. 16.5). */
     setTv: (id, body) => request('POST', `/requests/${id}/tv`, { body }),
+    /** Расчёт ТВ сервером по мастер-файлу; сохраняется с версией реестра (пп. 16.2, 16.5). */
+    capacityCheck: (id, tierId) => request('POST', `/requests/${id}/capacity-check`, { body: { tierId } }),
+    capacityChecks: (id) => request('GET', `/requests/${id}/capacity-checks`),
     /** Возврат на доработку с перечнем замечаний (ТЗ №11). */
     addRemarks: (id, remarks) => request('POST', `/requests/${id}/remarks`, { body: { remarks } }),
     /** Исправление заявки по замечаниям и повторная отправка (ТЗ №11). */
@@ -131,10 +141,86 @@
     deleteDocument: (id) => request('POST', `/documents/${id}/delete`, { body: {} }),
     /** Ссылка на файл: скачивание идёт обычным переходом, чтобы работал диалог сохранения. */
     fileUrl: (id, version) => `${BASE}/documents/${id}/file${version ? `?version=${version}` : ''}`,
+    /** Выгрузка найденных документов архива в CSV (С6). */
+    documentsExportUrl: (params) => `${BASE}/documents/export` + query(params),
+    /** Просмотр в браузере — для ролей без права скачивания (PDF и изображения). */
+    previewUrl: (id, version) => `${BASE}/documents/${id}/file?preview=1${version ? `&version=${version}` : ''}`,
 
     users: (q) => request('GET', '/users' + query({ q })),
     saveUser: (body) => request('POST', '/users', { body }),
     disableUser: (id) => request('POST', `/users/${id}/disable`, { body: {} }),
+    enableUser: (id) => request('POST', `/users/${id}/enable`, { body: {} }),
+    /** Импорт из кадровой выгрузки: apply=false — предпросмотр без записи. */
+    importUsers: (csv, apply) => request('POST', '/users/import', { body: { csv, apply } }),
+    branches: () => request('GET', '/branches'),
+    counterparties: (q) => request('GET', '/counterparties' + query({ q })),
     audit: (params) => request('GET', '/audit' + query(params)),
+    auditExportUrl: (params) => `${BASE}/audit/export` + query(params),
+
+    /** Отчёты (ТЗ №15, пп. 105, 109); format=xlsx|csv — выгрузка файлом. */
+    reportRequests: (params) => request('GET', '/reports/requests' + query(params)),
+    reportBranch: (params) => request('GET', '/reports/branch-monthly' + query(params)),
+    reportBranchStatus: (period) => request('GET', '/reports/branch-monthly/status' + query({ period })),
+    submitBranchReport: (body) => request('POST', '/reports/branch-monthly/submit', { body }),
+    reportAnnual: (year) => request('GET', '/reports/annual' + query({ year })),
+    reportUrl: (kind, params) => `${BASE}/reports/${kind}` + query(params),
+
+    /** Эскалации по п. 100 и очередь уведомлений. */
+    escalations: () => request('GET', '/escalations'),
+    notifications: (status) => request('GET', '/notifications' + query({ status })),
+    retryNotification: (id) => request('POST', `/notifications/${id}/retry`, { body: {} }),
+
+    /** Документы и приложения заявки (п. 7.6; К5, В1). */
+    requestDocuments: (id) => request('GET', `/requests/${id}/documents`),
+    requestFileUrl: (id, docId, version) =>
+      `${BASE}/requests/${id}/documents/${docId}/file${version ? `?version=${version}` : ''}`,
+    uploadAttachments: (id, form) => request('POST', `/requests/${id}/attachments`, { body: form }),
+    deleteAttachment: (id, docId) => request('POST', `/requests/${id}/attachments/${docId}/delete`, { body: {} }),
+    /** Объект по адресу из заявки (п. 16.1; С5). */
+    setFacility: (id, facilityId, version) => request('POST', `/requests/${id}/facility`, { body: { facilityId, version } }),
+    pendingCount: () => request('GET', '/documents/pending-count'),
+
+    /** АВР по договору (В6), дополнительные соглашения (пп. 45, 64–65). */
+    contractAvr: (contractId, body) => request('POST', `/contracts/${contractId}/avr`, { body }),
+    addAmendment: (contractId, body) => request('POST', `/contracts/${contractId}/amendments`, { body }),
+
+    /** Контрольные точки, приостановка срока (пп. 23, 34, 41, 57, 63, 67–69, 80). */
+    checkpoints: (id) => request('GET', `/requests/${id}/checkpoints`),
+    markCheckpoint: (id, body) => request('POST', `/requests/${id}/checkpoints`, { body }),
+    unmarkCheckpoint: (id, code) => request('POST', `/requests/${id}/checkpoints/${code}/delete`, { body: {} }),
+    pause: (id, reason) => request('POST', `/requests/${id}/pause`, { body: { reason } }),
+    resume: (id) => request('POST', `/requests/${id}/resume`, { body: {} }),
+
+    /** Поручения ОКО подразделениям (В5). */
+    assignmentDepartments: () => request('GET', '/assignments/departments'),
+    createAssignment: (id, body) => request('POST', `/requests/${id}/assignments`, { body }),
+
+    /** Реестр АМС: версии, запросы изменений, расчёт по объекту (К3, В7, С7). */
+    assessFacility: (id, body) => request('POST', `/facilities/${id}/assess`, { body }),
+    registryVersions: () => request('GET', '/registry/versions'),
+    publishRegistryVersion: (body) => request('POST', '/registry/versions', { body }),
+    registryChanges: (open) => request('GET', '/registry/changes' + query({ open: open ? 1 : '' })),
+    createRegistryChange: (body) => request('POST', '/registry/changes', { body }),
+    resolveRegistryChange: (id, resolution) => request('POST', `/registry/changes/${id}/resolve`, { body: { resolution } }),
+
+    /** Справочники (В3, С3, С9; календарь, объекты, контрагенты). */
+    adminBranches: () => request('GET', '/admin/branches'),
+    saveBranch: (body) => request('POST', '/admin/branches', { body }),
+    importBranches: (csv, apply) => request('POST', '/admin/branches/import', { body: { csv, apply } }),
+    adminTariffs: () => request('GET', '/admin/tariffs'),
+    saveTariff: (body) => request('POST', '/admin/tariffs', { body }),
+    adminCalendar: (year) => request('GET', '/admin/calendar' + query({ year })),
+    saveCalendarDay: (body) => request('POST', '/admin/calendar', { body }),
+    importCalendar: (csv, apply) => request('POST', '/admin/calendar/import', { body: { csv, apply } }),
+    adminFacilities: () => request('GET', '/admin/facilities'),
+    saveFacility: (body) => request('POST', '/admin/facilities', { body }),
+    adminCounterparties: (params) => request('GET', '/admin/counterparties' + query(params)),
+    saveCounterparty: (body) => request('POST', '/admin/counterparties', { body }),
+    adminStages: () => request('GET', '/admin/stages'),
+    saveStage: (code, body) => request('POST', `/admin/stages/${code}`, { body }),
+
+    /** Правила автоматизации: включение и выключение (С8). */
+    rules: () => request('GET', '/rules'),
+    setRule: (id, enabled) => request('POST', `/rules/${id}`, { body: { enabled } }),
   };
 })();

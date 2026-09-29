@@ -22,6 +22,8 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
   /** Служебные записки по заявке. */
   router.get('/api/v1/requests/:id/memos', async (ctx) => {
     const actor = await deps.actor(ctx);
+    // Служебные записки — внутренняя переписка Общества с филиалом (В1).
+    if (rbac.isCustomer(actor)) throw ApiError.forbidden();
     const request = await deps.loadVisible(actor, ctx.params.id);
     return { memos: await memos.forRequest(db, request.uuid) };
   });
@@ -31,6 +33,7 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
     const actor = await deps.actor(ctx);
     const branchOnly = actor.roles.includes('branch') &&
       !actor.roles.some((r) => ['admin', 'orpsd', 'oko', 'management'].includes(r));
+    if (rbac.isCustomer(actor)) throw ApiError.forbidden();
     if (!branchOnly) rbac.require(actor, 'request.view');
     if (branchOnly && !actor.branchId) throw ApiError.forbidden('Учётная запись не привязана к филиалу');
     return {
@@ -55,6 +58,7 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
     rbac.require(actor, 'memo.create');
     const request = await deps.loadVisible(actor, ctx.params.id);
     if (stage(request.stageCode).terminal) throw ApiError.conflict('Заявка закрыта');
+    if (!request.branchId) throw ApiError.conflict('Сначала определите объект заявки: от него зависит филиал (п. 16.1)');
 
     const body = await ctx.body<{ subject?: string; body?: string }>();
     const subject = String(body.subject ?? '').trim();
@@ -69,12 +73,12 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
          FROM branches b
          LEFT JOIN users cu ON cu.id = b.curator_id
          LEFT JOIN users en ON en.id = b.chief_engineer_id
-        WHERE b.id = $1`, [request.branchId]);
+        WHERE b.id = $1`, [request.branchId!]);
     const dueAt = addWorkingDays(today(), memos.MEMO_ANSWER_DAYS, await repo.calendar(db));
 
     const id = await db.tx(async (t) => {
       const memoId = await memos.createMemo(t, {
-        requestId: request.uuid, branchId: request.branchId, addresseeId: branch?.curator_id ?? null,
+        requestId: request.uuid, branchId: request.branchId!, addresseeId: branch?.curator_id ?? null,
         subject: subject.slice(0, 255), body: text, dueAt, createdBy: actor.id,
       });
       const message = {

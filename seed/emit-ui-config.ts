@@ -44,6 +44,8 @@ const payload = {
     regulationRef: r.regulationRef,
     timerDays: r.timerDays ?? null,
     enabled: r.enabled,
+    implementation: r.implementation,
+    how: r.how,
   })),
   ownerParties: OWNER_PARTY_NAME,
   services: SERVICE_NAME,

@@ -7,7 +7,7 @@
  */
 
 import type { CustomerStatus, OwnerParty, Service, SlaUnit, WorkCalendar } from '../domain/types.ts';
-import { EMPTY_CALENDAR } from '../domain/types.ts';
+import { EMPTY_CALENDAR, OWNER_PARTY_NAME } from '../domain/types.ts';
 import { addWorkingDays, dueDate, isOverdue, today, workingDaysBetween } from '../domain/calendar.ts';
 import type { StageCode } from './stages.ts';
 import { nextMainStage, stage } from './stages.ts';
@@ -150,7 +150,7 @@ export function applyTransition(
     requestId: r.id,
     stageCode: to,
     at,
-    message: `${def.title}. Норматив: ${stage(to).slaText}. Отвечает: ${stage(to).ownerParty}`,
+    message: `${def.title}. Норматив: ${stage(to).slaText}. Отвечает: ${OWNER_PARTY_NAME[stage(to).ownerParty]}`,
     regulationRef: def.regulationRef,
   });
 

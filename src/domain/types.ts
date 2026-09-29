@@ -90,7 +90,9 @@ export type Role =
   | 'assets'      // служба управления активами / технический учёт
   | 'accounting'  // расчёты с контрагентами
   | 'management'  // руководство (просмотр и отчётность)
-  | 'customer';   // Заказчик
+  | 'customer'    // Заказчик
+  | 'contractor'  // сторонняя организация: заявки на допуск (портал допусков СУА)
+  | 'permits';    // СУА: рассмотрение заявок на допуск
 
 export const ROLE_NAME: Record<Role, string> = {
   admin: 'ДИТ · Администратор',
@@ -102,7 +104,12 @@ export const ROLE_NAME: Record<Role, string> = {
   accounting: 'Расчёты с контрагентами',
   management: 'Руководство',
   customer: 'Заказчик',
+  contractor: 'Подрядчик (допуски)',
+  permits: 'СУА · допуски',
 };
+
+/** Внешние роли: представители сторонних организаций, а не сотрудники Общества. */
+export const EXTERNAL_ROLES: readonly Role[] = ['customer', 'contractor'];
 
 /** Вид документа в архиве. Регламент пп. 28, 58, 66, 70. */
 export type DocumentKind =

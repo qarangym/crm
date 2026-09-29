@@ -22,6 +22,12 @@ export type ContractInfo = {
   number: string;
   /** Фактическая дата поступления 100 % оплаты по этому договору (п. 86). */
   paidAt: string | null;
+  /** Завизированный АВР по договору (пп. 70, 91). */
+  avrApproved?: boolean;
+  /** АВР и ЭСФ направлены Заказчику (пп. 91–92). */
+  avrSentAt?: string | null;
+  /** Работы по договору приняты: АВР подписан либо истёк срок замечаний (пп. 94–95). */
+  acceptedAt?: string | null;
 };
 
 /** Снимок заявки, достаточный для проверки условий перехода. */
@@ -73,6 +79,13 @@ export type RequestSnapshot = {
   resultDelivered: boolean;
   /** Открытые замечания к заявке (ТЗ №11). */
   openRemarks: number;
+  /** Объект определён по справочнику (п. 16.1); false — известен только адрес. */
+  facilityDetermined?: boolean;
+  /**
+   * Условия установки по ПСД устарели: прошло 3 месяца с её получения, а СМР
+   * не начаты (п. 47). До повторной оценки ТВ к СМР не переходят.
+   */
+  tvRecheckRequired?: boolean;
 };
 
 export type GuardInput = {
@@ -105,6 +118,9 @@ const guardToTvReview: Guard = (r) => {
   const out: GuardFailure[] = [];
   if (!r.incomingNumber || !r.incomingDate) {
     out.push(fail('not_registered', 'Укажите входящий номер и дату регистрации заявки', 'п. 6'));
+  }
+  if (r.facilityDetermined === false) {
+    out.push(fail('no_facility', 'Определите объект по адресу из заявки: от него зависят филиал и реестр', 'п. 16.1'));
   }
   return out;
 };
@@ -219,8 +235,13 @@ const guardNotPassed = (code: StageCode): Guard => (r) =>
 
 const all = (...guards: Guard[]): Guard => (r, input) => guards.flatMap((g) => g(r, input));
 
+/** Условия ПСД актуальны 3 месяца с её получения — затем повторная оценка ТВ (п. 47). */
+const guardTvActual: Guard = (r) => r.tvRecheckRequired
+  ? [fail('tv_recheck_required', 'Прошло 3 месяца с получения ПСД: выполните повторную оценку технической возможности', 'п. 47')]
+  : [];
+
 /** Подготовка к СМР: утверждённая смета, договор на СМР и оплата по нему (пп. 49, 53, 59). */
-const guardSmrPrep: Guard = all(guardNotPassed('smr_prep'), guardEstimate, guardPaidFor('СМР'));
+const guardSmrPrep: Guard = all(guardNotPassed('smr_prep'), guardEstimate, guardPaidFor('СМР'), guardTvActual);
 
 /**
  * Второй цикл для СМР после ПСД: смета утверждена, договор на СМР ещё не
@@ -266,14 +287,26 @@ const guardToAvr: Guard = (r) => {
   return out;
 };
 
-/** Направление АВР Заказчику (пп. 91–92). */
+/**
+ * Направление АВР Заказчику (пп. 91–92). АВР оформляется по каждому договору:
+ * по услугам, оказанным раньше, акт мог уйти ещё до этого этапа. Приёмка
+ * начинается, когда АВР направлены по всем действующим договорам.
+ * Безвозмездная услуга (п. 20) АВР не требует.
+ */
 const guardToClosing: Guard = (r) => {
   const out: GuardFailure[] = [];
-  if (!r.avrApproved) {
-    out.push(fail('no_avr', 'Нужен подписанный и завизированный акт выполненных работ', 'пп. 70, 91'));
+  if (!r.contracts.length) {
+    if (r.freeOfCharge) return out;
+    if (!r.avrApproved) out.push(fail('no_avr', 'Нужен подписанный и завизированный акт выполненных работ', 'пп. 70, 91'));
+    if (!r.avrSentAt) out.push(fail('avr_not_sent', 'Отметьте дату направления АВР и ЭСФ Заказчику', 'пп. 91–92'));
+    return out;
   }
-  if (!r.avrSentAt) {
-    out.push(fail('avr_not_sent', 'Отметьте дату направления АВР и ЭСФ Заказчику', 'пп. 91–92'));
+  for (const c of r.contracts) {
+    if (c.avrSentAt || c.acceptedAt) continue;
+    if (!c.avrApproved) {
+      out.push(fail('no_avr', `Загрузите и завизируйте АВР по договору ${c.number} («${c.service}»)`, 'пп. 70, 91'));
+    }
+    out.push(fail('avr_not_sent', `Отметьте направление АВР и ЭСФ по договору ${c.number} («${c.service}»)`, 'пп. 91–92'));
   }
   return out;
 };
@@ -284,7 +317,8 @@ const guardToClosing: Guard = (r) => {
  */
 const guardDone: Guard = (r, input) => {
   const out: GuardFailure[] = [];
-  if (!r.closingConfirmed && !input.silenceAccepted) {
+  const allAccepted = r.contracts.length > 0 && r.contracts.every((c) => c.acceptedAt);
+  if (!r.closingConfirmed && !input.silenceAccepted && !allAccepted) {
     out.push(fail('closing_not_confirmed', 'Подтвердите приёмку Заказчиком либо истечение срока рассмотрения АВР', 'пп. 94–95'));
   }
   return out;

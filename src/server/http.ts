@@ -112,15 +112,28 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-/** Отдача статики с защитой от выхода за пределы каталога. */
+/**
+ * Отдача статики с защитой от выхода за пределы каталога. Адрес каталога
+ * отдаёт его index.html — так открывается портал допусков `/dopusk/`.
+ */
 export async function sendStatic(res: ServerResponse, root: string, pathname: string): Promise<boolean> {
   const rootPath = resolve(root);
   const rel = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '');
-  const file = resolve(join(rootPath, rel === '' ? 'index.html' : rel));
+  let file = resolve(join(rootPath, rel === '' ? 'index.html' : rel));
   if (file !== rootPath && !file.startsWith(rootPath + sep)) return false;
 
   try {
-    const info = await stat(file);
+    let info = await stat(file);
+    if (info.isDirectory()) {
+      // Без завершающей косой черты относительные ссылки страницы вели бы не туда.
+      if (!pathname.endsWith('/')) {
+        res.writeHead(301, { Location: pathname + '/' });
+        res.end();
+        return true;
+      }
+      file = join(file, 'index.html');
+      info = await stat(file);
+    }
     if (!info.isFile()) return false;
     const data = await readFile(file);
     res.writeHead(200, {

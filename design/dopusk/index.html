@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Портал допусков — АО «Казтелерадио»</title>
+<link rel="stylesheet" href="../shell.css">
+<style>
+/* Дополнения портала допусков к общему оформлению. */
+.basis-pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.basis-pick label{border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--surface);cursor:pointer;
+  display:flex;gap:10px;align-items:flex-start}
+.basis-pick label.on{border-color:var(--blue);background:var(--tint);box-shadow:0 0 0 1px var(--blue) inset}
+.basis-pick b{display:block;font-size:13.5px}
+.basis-pick small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.pick-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:11px;background:var(--surface);
+  max-height:420px;overflow:auto}
+.pick-list label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid #F1F4F9;cursor:pointer}
+.pick-list label:last-child{border-bottom:0}
+.pick-list label.off{opacity:.6;cursor:not-allowed}
+/* Общее правило .field input растягивает поля на всю ширину — отметки в списках его не наследуют. */
+.pick-list input[type=checkbox],.pick-list input[type=radio],.basis-pick input,.consent input{width:auto;flex:none;margin-top:3px;padding:0}
+.pick-list .sub{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.docs{display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.docs span{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.decision{display:flex;flex-direction:column;gap:10px}
+.decision textarea{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px;font:inherit;font-size:13.5px;min-height:70px}
+.decision .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:13px;background:var(--tint);border-radius:11px;padding:12px 14px}
+.who{font-size:12px;color:var(--muted);text-align:right;line-height:1.3}
+.who b{display:block;color:var(--ink);font-size:12.5px}
+@media(max-width:760px){.who{display:none}.portal-steps{display:none}.basis-pick{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <img id="brandMark" alt="QTR — АО «Казтелерадио»">
+      <div><b>Портал допусков</b><small>Служба управления активами</small></div>
+    </div>
+    <div class="side-label">ДОПУСК НА ОБЪЕКТЫ</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-label" id="otherLabel" style="display:none">ДРУГИЕ МОДУЛИ</div>
+    <nav class="nav" id="navOther"></nav>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
+        <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div>
+        <div class="eyebrow">ПОРТАЛ ДОПУСКОВ · АО «КАЗТЕЛЕРАДИО»</div>
+        <h1 id="title">Портал допусков</h1>
+        <p id="subtitle"></p>
+      </div>
+      <div class="sp"></div>
+      <div class="who" id="who"></div>
+      <button class="btn primary" id="newBtn" style="display:none" onclick="startWizard()"></button>
+    </header>
+    <div class="wrap" id="view"><div style="display:flex;gap:10px;align-items:center;color:var(--muted)">
+      <span class="spinner"></span>Загрузка…</div></div>
+  </main>
+</div>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet-panel" id="sheetPanel"></div>
+</div>
+
+<script src="../assets.js"></script>
+<script src="../api.js"></script>
+<script src="../shell.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

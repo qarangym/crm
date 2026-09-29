@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node --experimental-strip-types src/server/index.ts",
     "dev": "node --experimental-strip-types --watch src/server/index.ts",
+    "local": "node --env-file=.env.local --experimental-strip-types src/server/index.ts",
     "migrate": "node --experimental-strip-types src/db/migrate-cli.ts",
     "seed:demo": "node --experimental-strip-types src/db/seed-demo.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
@@ -18,7 +19,7 @@
     "design:assets": "node design/emit-assets.mjs > design/assets.js",
     "design": "npm run design:config && npm run design:assets && node design/build.mjs",
     "jobs": "node --experimental-strip-types src/process/jobs-cli.ts",
-    "test:integration": "node --experimental-strip-types --test tests/integration.test.ts",
+    "test:integration": "node --experimental-strip-types --test --test-concurrency=1 tests/integration.test.ts tests/permits.integration.test.ts",
     "test:all": "npm test && npm run test:integration"
   },
   "dependencies": {
