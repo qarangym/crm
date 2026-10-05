@@ -52,6 +52,19 @@ const fmt = (d) => {
 };
 const fmtFull = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('ru-RU') : '—';
 
+/* ---------------------------------- вход --------------------------------- */
+
+/** Нет сессии — на страницу входа с возвратом туда, где был пользователь. */
+function toLogin() {
+  location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search + location.hash));
+}
+
+/** Выход: сессия закрывается на сервере, cookie стирается. */
+async function logout() {
+  try { await window.QTR_API.call('POST', '/auth/logout'); } catch { /* сессия уже закрыта */ }
+  location.replace('/login.html');
+}
+
 /* -------------------------------- диалог -------------------------------- */
 
 /**
@@ -135,3 +148,72 @@ function toast(text, kind = 'info') {
   toastTimer = setTimeout(() => { box.style.display = 'none'; }, kind === 'bad' ? 7000 : 3500);
 }
 
+
+/* ------------------------------ колокольчик ------------------------------
+   Уведомления в системе: копия каждого письма пользователю. Кнопка в шапке,
+   число непрочитанных, список с переходом в карточку. Опрос раз в минуту. */
+
+let bellTimer = null;
+function mountBell(host) {
+  if (!host) return;
+  const api = window.QTR_API;
+  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
+    <div class="bell-panel" hidden></div>`;
+  const button = host.querySelector('.bell');
+  const badge = host.querySelector('.bell-n');
+  const panel = host.querySelector('.bell-panel');
+  const show = (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); };
+  const refresh = async () => { try { show((await api.call('GET', '/inbox/count')).unread); } catch { /* сеть */ } };
+  const when = (v) => new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  async function open() {
+    panel.hidden = false;
+    panel.innerHTML = '<div class="ref" style="padding:14px">Загрузка…</div>';
+    try {
+      const { items, unread } = await api.call('GET', '/inbox?limit=40');
+      show(unread);
+      panel.innerHTML = `<div class="bell-head"><b>Уведомления</b>
+        ${unread ? '<button class="btn ghost sm" data-all>Прочитать все</button>' : ''}</div>
+        ${items.length ? items.map((i) => `<a class="bell-item ${i.read_at ? '' : 'new'}" data-id="${i.id}" href="${esc(i.link || '#')}">
+          <b>${esc(i.subject)}</b><span>${esc(String(i.body || '').split('\n')[0].slice(0, 160))}</span><time>${when(i.created_at)}</time></a>`).join('')
+          : '<div class="ref" style="padding:14px">Уведомлений нет</div>'}`;
+    } catch (error) {
+      panel.innerHTML = `<div class="ref" style="padding:14px">${esc(describeError(error))}</div>`;
+    }
+  }
+  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : (panel.hidden = true); });
+  panel.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    if (ev.target.closest('[data-all]')) {
+      show((await api.call('POST', '/inbox/read', { all: true })).unread);
+      return open();
+    }
+    const item = ev.target.closest('.bell-item');
+    if (!item) return;
+    const href = item.getAttribute('href');
+    if (href === '#') ev.preventDefault();
+    try { show((await api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] })).unread); } catch { /* сеть */ }
+    // Ссылка на текущую страницу с другим якорем — перейти и открыть карточку без перезагрузки.
+    if (href !== '#' && href.split('#')[0] === location.pathname) {
+      ev.preventDefault();
+      panel.hidden = true;
+      location.hash = href.split('#')[1] || '';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    }
+  });
+  document.addEventListener('click', () => { panel.hidden = true; });
+  refresh();
+  clearInterval(bellTimer);
+  bellTimer = setInterval(refresh, 60_000);
+}
+
+/* --------------------------- демонстрационный стенд ---------------------------
+   Сервер с DEMO_MODE отвечает в /me признаком demo: полоса вверху страницы, чтобы
+   стенд с вымышленными данными нельзя было спутать с рабочей системой. */
+
+function mountDemoRibbon(me) {
+  if (!me?.demo || document.querySelector('.demo-ribbon')) return;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'demo-ribbon';
+  ribbon.textContent = 'Демонстрационный стенд · данные вымышлены · код входа показывается на экране';
+  document.body.prepend(ribbon);
+}

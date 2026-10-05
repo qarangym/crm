@@ -7,6 +7,7 @@
  */
 
 import type { Db } from './client.ts';
+import { pickApprover } from './executors.ts';
 import type { Actor } from '../server/rbac.ts';
 
 export type DocumentRow = {
@@ -131,14 +132,16 @@ export async function createDocument(
   file: { key: string; fileName: string; mime: string; size: number; sha256: string },
 ): Promise<string> {
   return db.tx(async (t) => {
+    // Визирует ответственный ОР ПСД заявки (п. 102); приложения не визируются.
+    const approver = data.kind === 'Приложение' ? null : await pickApprover(t, data.requestId);
     const row = await t.one<{ id: string }>(
       `INSERT INTO documents (request_id, kind, form_code, number, facility_id, owner_id,
                               contractor_name, branch_id, doc_date, valid_until, fingerprint, created_by, contract_id,
-                              late_upload)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+                              late_upload, approver_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
       [data.requestId, data.kind, data.formCode, data.number, data.facilityId, data.ownerId,
        data.contractorName, data.branchId, data.docDate, data.validUntil, data.fingerprint, data.createdBy,
-       data.contractId ?? null, data.lateUpload === true],
+       data.contractId ?? null, data.lateUpload === true, approver?.id ?? null],
     );
     await addVersion(t, row!.id, 1, file, data.createdBy);
     return row!.id;

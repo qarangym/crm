@@ -20,7 +20,7 @@ html = html.replace(cssTag, `<style>
 /* inline: shell.css */
 ${read('shell.css')}
 </style>`);
-for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js', 'shell.js']) {
+for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js', 'phone.js', 'shell.js']) {
   const tag = `<script src="${name}"></script>`;
   if (!html.includes(tag)) throw new Error(`В index.html нет подключения ${name}`);
   html = html.replace(tag, `<script>\n/* inline: ${name} */\n${read(name)}\n</script>`);

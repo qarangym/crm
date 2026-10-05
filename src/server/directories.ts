@@ -33,6 +33,8 @@ const CONTACTS = {
   curator: { column: 'curator_id', label: 'Курирующий заместитель директора филиала' },
   engineer: { column: 'chief_engineer_id', label: 'Главный инженер области' },
   board: { column: 'board_curator_id', label: 'Курирующий член Правления' },
+  // Инструкция о допуске, п. 20: инженер по эксплуатации сети ТРВ либо работник, определённый приказом.
+  site: { column: 'site_officer_id', label: 'Ответственное лицо по допускам на объекты' },
 } as const;
 type ContactKey = keyof typeof CONTACTS;
 type Contact = { name?: string; email?: string } | null;
@@ -124,6 +126,8 @@ const BRANCH_COLUMNS = {
   engineerEmail: ['почта главного инженера', 'email главного инженера'],
   boardName: ['член правления', 'курирующий член правления'],
   boardEmail: ['почта члена правления', 'email члена правления'],
+  siteName: ['ответственный по допускам', 'инженер по эксплуатации сети трв', 'ответственное лицо'],
+  siteEmail: ['почта ответственного по допускам', 'почта инженера трв'],
 };
 
 /** Нормативы, изменённые ДИТ (С9): загружаются при запуске и после изменения. */
@@ -214,6 +218,7 @@ export function registerDirectoryRoutes(router: Router, deps: RouteDeps): void {
         `SELECT b.id, b.code, b.name, b.region, b.service_area, b.is_active,
                 ${person('director', 'director_id')}, ${person('curator', 'curator_id')},
                 ${person('engineer', 'chief_engineer_id')}, ${person('board', 'board_curator_id')},
+                ${person('site', 'site_officer_id')},
                 (SELECT count(*)::int FROM facilities f WHERE f.branch_id = b.id AND f.is_active) AS facilities,
                 (SELECT count(*)::int FROM requests r WHERE r.branch_id = b.id AND r.closed_at IS NULL) AS open_requests
            FROM branches b ORDER BY b.name`),
@@ -263,6 +268,8 @@ export function registerDirectoryRoutes(router: Router, deps: RouteDeps): void {
           curator: { name: r.curatorName, email: r.curatorEmail },
           engineer: { name: r.engineerName, email: r.engineerEmail },
           board: { name: r.boardName, email: r.boardEmail },
+          // Колонки ответственного по допускам нет — прежнее назначение не трогаем.
+          ...(missing.includes('siteEmail') ? {} : { site: { name: r.siteName, email: r.siteEmail } }),
         },
       };
       const errors = checkBranch(input);

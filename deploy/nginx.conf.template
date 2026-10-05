@@ -1,9 +1,10 @@
-# Обратный прокси: TLS, корпоративный вход и передача проверенной личности.
+# Обратный прокси для Docker Compose: TLS, ограничение частоты входа, передача в приложение.
 #
-# Приложение доверяет заголовкам X-QTR-* только при совпадении секрета
-# AUTH_PROXY_SHARED_SECRET. Поэтому прокси обязан затирать эти заголовки,
-# пришедшие снаружи, и подставлять свои — иначе любой сможет представиться
-# чужим сотрудником.
+# Вход — в самом приложении (почта, пароль, код на почту). Служебные заголовки
+# X-QTR-*, пришедшие снаружи, стираются: они нужны только для необязательного
+# корпоративного входа (SSO_ENABLED), который в этом составе не используется.
+
+limit_req_zone $binary_remote_addr zone=qtr_auth:10m rate=10r/m;
 
 server {
     listen 80;
@@ -28,69 +29,31 @@ server {
 
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
+    add_header X-Frame-Options DENY always;
     add_header Strict-Transport-Security "max-age=31536000" always;
 
     # Запросы на чужое имя отбрасываются без ответа.
     if ($host != ${SERVER_NAME}) { return 444; }
 
-    # Служебные маршруты корпоративного входа.
-    location /oauth2/ {
-        proxy_pass http://oauth2-proxy:4180;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Auth-Request-Redirect $request_uri;
-        proxy_set_header Authorization "";
-    }
+    proxy_http_version 1.1;
+    proxy_read_timeout 90s;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-QTR-Proxy-Key "";
+    proxy_set_header X-QTR-User-Id "";
+    proxy_set_header X-QTR-User-Email "";
+    proxy_set_header X-QTR-User-Name "";
 
-    location = /_qtr_auth {
-        internal;
-        proxy_pass http://oauth2-proxy:4180/oauth2/auth;
-        proxy_pass_request_body off;
-        proxy_set_header Content-Length "";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Uri $request_uri;
-    }
-
-    # Проверка доступности без входа — для мониторинга.
-    location = /api/v1/health {
+    # Вход, регистрация, восстановление пароля — не чаще 10 запросов в минуту с адреса.
+    location /api/v1/auth/ {
+        limit_req zone=qtr_auth burst=10 nodelay;
+        limit_req_status 429;
         proxy_pass http://app:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-QTR-Proxy-Key "";
-        proxy_set_header X-QTR-User-Id "";
-        proxy_set_header X-QTR-User-Email "";
-        proxy_set_header X-QTR-User-Name "";
     }
 
     location / {
-        auth_request /_qtr_auth;
-        error_page 401 = @signin;
-
-        auth_request_set $qtr_user  $upstream_http_x_auth_request_user;
-        auth_request_set $qtr_email $upstream_http_x_auth_request_email;
-        auth_request_set $qtr_name  $upstream_http_x_auth_request_preferred_username;
-        auth_request_set $qtr_cookie $upstream_http_set_cookie;
-        add_header Set-Cookie $qtr_cookie always;
-
         proxy_pass http://app:3000;
-        proxy_http_version 1.1;
-        proxy_read_timeout 90s;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Подставляем проверенную личность и затираем всё, что пришло снаружи.
-        proxy_set_header X-QTR-Proxy-Key "${AUTH_PROXY_SHARED_SECRET}";
-        proxy_set_header X-QTR-User-Id    $qtr_user;
-        proxy_set_header X-QTR-User-Email $qtr_email;
-        proxy_set_header X-QTR-User-Name  $qtr_name;
-        proxy_set_header Authorization "";
-    }
-
-    location @signin {
-        return 302 https://${SERVER_NAME}/oauth2/start?rd=$request_uri;
     }
 }

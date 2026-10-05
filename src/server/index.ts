@@ -30,8 +30,25 @@ if (auth.enabled && auth.proxySecret.length < 32) {
   console.error('AUTH_PROXY_SHARED_SECRET короче 32 символов — запуск с включённым SSO отменён.');
   process.exit(1);
 }
-if (!auth.enabled && !auth.devIdentity) {
-  console.warn('Внимание: SSO выключен и DEV_LOGIN_EMAIL не задан — API будет отвечать 401.');
+// Вход по паролю и коду на почту (src/server/login.ts): секрет для свёрток кодов обязателен.
+const authSecret = process.env.AUTH_SECRET ?? '';
+if (authSecret.length < 32) {
+  console.error('AUTH_SECRET короче 32 символов — запуск отменён. Сгенерируйте: openssl rand -hex 32');
+  process.exit(1);
+}
+if (auth.devIdentity) {
+  if (process.env.NODE_ENV === 'production') {
+    // Иначе любой посетитель без входа работал бы от этой учётной записи.
+    console.error('DEV_LOGIN_EMAIL задан при NODE_ENV=production — запуск отменён. Удалите DEV_LOGIN_EMAIL из .env.');
+    process.exit(1);
+  }
+  console.warn('Внимание: задан DEV_LOGIN_EMAIL — без входа запросы идут от этой учётной записи. Только для разработки.');
+}
+
+const demoMode = process.env.DEMO_MODE === 'true';
+if (demoMode) {
+  console.warn('Внимание: DEMO_MODE — демонстрационный стенд. Код входа показывается на экране, второго фактора нет. ' +
+    'Только для вымышленных данных; на рабочем контуре DEMO_MODE не задавать.');
 }
 
 const db = createDb(databaseUrl());
@@ -41,6 +58,8 @@ if (process.env.MIGRATE_ON_START === 'true') {
     if (r.status === 'applied') console.log(`миграция применена: ${r.name}`);
   }
 }
+
+const mailer = createMailer(mailConfigFromEnv());
 
 const storageRoot = process.env.STORAGE_ROOT ?? resolve(here, '..', '..', 'storage');
 const scanner = scannerFromEnv();
@@ -53,12 +72,23 @@ const handle = createApp({
   staticRoot: process.env.STATIC_ROOT ?? resolve(here, '..', '..', 'design'),
   trustProxy: process.env.TRUST_PROXY !== 'false',
   bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL,
+  localAuth: {
+    secret: authSecret,
+    // Secure-cookie обязательна за HTTPS; выключается только для разработки по http.
+    cookieSecure: process.env.COOKIE_SECURE !== 'false',
+    selfRegistration: process.env.AUTH_SELF_REGISTRATION !== 'false',
+    // Коды и ссылки уходят сразу, минуя очередь: код живёт 10 минут.
+    sendMail: mailer ? (to, subject, text) => mailer.send(to, subject, text) : null,
+    demoMode,
+    demoPassword: process.env.DEMO_PASSWORD,
+  },
 });
 
 const server = createServer((req, res) => { void handle(req, res); });
 server.listen(port, host, () => {
   console.log(`CRM ОР ПСД слушает http://${host}:${port}`);
-  console.log(`Вход: ${auth.enabled ? 'корпоративный OIDC через обратный прокси' : 'режим разработки (DEV_LOGIN_EMAIL)'}`);
+  console.log(`Вход: почта, пароль и код на почту${auth.enabled ? '; также корпоративный OIDC через обратный прокси' : ''}` +
+    `${mailer ? '' : ' — почта выключена, коды пишутся в журнал сервера'}`);
   console.log(`Файлы актов: ${storageRoot}`);
   console.log(`Антивирусная проверка вложений: ${scanner ? `${scanner.name} (${process.env.CLAMD_HOST ?? '127.0.0.1'}:${process.env.CLAMD_PORT ?? 3310})` : 'выключена (ANTIVIRUS)'}`);
 });
@@ -71,7 +101,6 @@ server.listen(port, host, () => {
  */
 const jobsEnabled = process.env.JOBS_ENABLED !== 'false';
 const jobIntervalMs = Math.max(Number(process.env.JOBS_INTERVAL_MINUTES ?? 15), 1) * 60_000;
-const mailer = createMailer(mailConfigFromEnv());
 let jobsRunning = false;
 
 async function tick(): Promise<void> {

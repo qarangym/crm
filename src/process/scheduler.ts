@@ -23,6 +23,7 @@ import type { WorkCalendar } from '../domain/types.ts';
 import { stage } from './stages.ts';
 import { nextEscalationLevel } from './engine.ts';
 import { offerServices, paidAtFor } from './transitions.ts';
+import { runPermitJobs } from '../permits/jobs.ts';
 
 export type JobResult = { job: string; regulationRef: string; affected: number; details?: string[] };
 
@@ -656,6 +657,22 @@ export async function runExecutorCheck(db: Db): Promise<JobResult> {
       });
     }
   }
+  // Документы на визу, запросы реестра, заявки на допуск и служебные записки без действующего исполнителя.
+  const moved = await executors.reassignOrphans(db);
+  const others = moved.documents + moved.registry + moved.permits + moved.memos;
+  if (others) {
+    affected += others;
+    details.push(`передано: документов ${moved.documents}, запросов реестра ${moved.registry}, ` +
+      `заявок на допуск ${moved.permits}, служебных записок ${moved.memos}`);
+  }
+  if (moved.unfilled && !await alreadySent(db, 'executor_missing', 'kind', 'others')) {
+    await sendAll(db, await roleRecipients(db, ['admin']), {
+      eventKey: 'executor_missing', subject: 'Есть объекты без исполнителя: в подразделении некого назначить',
+      body: `Не назначен исполнитель у ${moved.unfilled} объектов (документы на визу, запросы реестра, заявки на допуск ` +
+        'или служебные записки): нет действующих сотрудников нужной роли. Добавьте их на экране «Пользователи» (п. 102).',
+      payload: { kind: 'others' },
+    });
+  }
   return { job: 'Исполнители заявок', regulationRef: 'п. 102', affected, details };
 }
 
@@ -676,5 +693,6 @@ export async function runAllJobs(db: Db): Promise<JobResult[]> {
     await runPsdConditionsExpiry(db),
     await runAvrFormationControl(db, calendar),
     await runAnnualReportReminder(db),
+    ...await runPermitJobs(db),
   ];
 }

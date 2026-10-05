@@ -36,9 +36,9 @@ import { processQueue } from '../src/server/notifications.ts';
 const URL_ENV = process.env.TEST_DATABASE_URL;
 
 /** Таблицы портала допусков: ссылаются на пользователей и документы, чистятся первыми. */
-const PERMIT_TABLES = ['access_request_vehicles', 'access_request_workers', 'access_requests',
+const PERMIT_TABLES = ['site_admissions', 'access_request_vehicles', 'access_request_workers', 'access_requests',
   'access_request_counters', 'crew_vehicles', 'crew_members', 'contractor_crews', 'worker_documents',
-  'contractor_vehicles', 'contractor_workers', 'permit_files'];
+  'contractor_vehicles', 'contractor_workers', 'permit_files', 'lease_contract_facilities', 'lease_contracts'];
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : 'не задан TEST_DATABASE_URL' }, () => {
@@ -101,11 +101,18 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
       `UPDATE branches SET curator_id = NULL, director_id = NULL, chief_engineer_id = NULL, board_curator_id = NULL`);
     await db.query(`UPDATE automation_rules SET updated_by = NULL, enabled = true`);
     await db.query(`UPDATE settings SET updated_by = NULL`);
-    for (const table of [...PERMIT_TABLES, 'branch_reports', 'capacity_checks', 'registry_change_requests', 'request_checkpoints',
+    await db.query(`UPDATE mail_templates SET updated_by = NULL`);
+    for (const table of [...PERMIT_TABLES, 'inbox', 'user_absences', 'auth_challenges', 'auth_sessions', 'branch_reports', 'capacity_checks', 'registry_change_requests', 'request_checkpoints',
       'contract_amendments', 'stage_sla_overrides', 'file_versions', 'documents', 'escalations', 'memos', 'assignments',
       'request_remarks', 'request_stages', 'request_services', 'contracts', 'requests',
       'request_counters', 'notifications', 'events', 'registry_versions', 'user_roles', 'users']) {
-      await db.query(`DELETE FROM ${table}`);
+      // Журнал неизменяем (миграция 013); тестовая база очищается с явным флагом сеанса.
+      if (table === 'events') {
+        await db.tx(async (t) => {
+          await t.query(`SELECT set_config('qtr.audit_purge', 'on', true)`);
+          await t.query(`DELETE FROM events`);
+        });
+      } else await db.query(`DELETE FROM ${table}`);
     }
     // Тестовые филиалы — после служебных записок и заявок, которые на них ссылаются.
     await db.query(`DELETE FROM branches WHERE code LIKE 'T-%'`);
@@ -1484,7 +1491,8 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
     assert.equal(created.status, 200, JSON.stringify(created.body));
     const memo = created.body.memo;
     assert.ok(memo.due_at > todayIso(), 'срок ответа — 3 рабочих дня');
-    assert.equal(memo.addressee_name, 'curator');
+    // Адресат — конкретный сотрудник филиала: главный инженер, иначе сотрудник филиала (п. 102).
+    assert.equal(memo.addressee_name, users.branchUser);
 
     const queue = await call('GET', '/api/v1/memos?open=1', { as: users.branchUser });
     assert.ok(queue.body.memos.some((m: any) => m.id === memo.id), 'записка в очереди филиала');
@@ -1826,7 +1834,8 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
 
   test('полный проход заданий выполняется без ошибок', async () => {
     const results = await runAllJobs(db);
-    assert.equal(results.length, 13);
+    // 13 заданий процесса Регламента и 3 задания портала допусков (src/permits/jobs.ts).
+    assert.equal(results.length, 16);
     assert.ok(results.every((r) => r.regulationRef));
   });
 
@@ -2004,12 +2013,18 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
   });
 
   test('В5: ответ о ТВ отмечает исполнение поручения; ОКО поручает работу филиалу', async () => {
-    const { id } = await customerTu();
+    const { id, number } = await customerTu();
     await toOffer(id, 'вх-2005');
     const a = await db.one<{ fulfilled_at: string | null; fulfilled_on_time: boolean }>(
       `SELECT fulfilled_at, fulfilled_on_time FROM assignments WHERE request_id = $1 AND kind = 'control'`, [id]);
     assert.ok(a!.fulfilled_at);
     assert.equal(a!.fulfilled_on_time, true);
+    // Исполненное поручение у исполнителя больше не висит — закрыть его остаётся ОКО.
+    const mine = await call('GET', '/api/v1/tasks', { as: users.orpsd });
+    assert.ok(!mine.body.tasks.some((t: any) => t.kind === 'assignment' && t.ref === number), 'у ОР ПСД задачи по поручению нет');
+    const oko = await call('GET', '/api/v1/tasks', { as: users.oko });
+    assert.ok(oko.body.tasks.some((t: any) => t.kind === 'assignment' && t.ref === number && /Закрыть исполненное/.test(t.title)),
+      'ОКО закрывает исполненное поручение');
 
     assert.equal((await call('POST', `/api/v1/requests/${id}/assignments`, { as: users.orpsd, body: {} })).status, 403);
     const created = await call('POST', `/api/v1/requests/${id}/assignments`, { as: users.oko, body: {
@@ -2298,6 +2313,105 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
     } finally {
       await db.query('UPDATE users SET is_active = false WHERE id = $1', [second!.id]);
     }
+  });
+
+  test('п. 102: записка, документ на визу и запрос реестра получают исполнителя; «Мои задачи» и нагрузка', async () => {
+    const { id, number } = await customerTu();
+    await db.query(`UPDATE users SET branch_id = (SELECT branch_id FROM requests WHERE id = $1) WHERE email = $2`, [id, users.branchUser]);
+    const memo = await call('POST', `/api/v1/requests/${id}/memos`, { as: users.orpsd, body: {
+      subject: 'Паспорт АМС', body: 'Направьте актуальный паспорт АМС с допустимой нагрузкой по ярусам' } });
+    assert.equal(memo.status, 200, JSON.stringify(memo.body));
+    const branchId = await userId(users.branchUser);
+    const addressee = await db.one<{ addressee_id: string }>('SELECT addressee_id FROM memos WHERE id = $1', [memo.body.memo.id]);
+    assert.ok(addressee!.addressee_id, 'адресат записки — конкретный человек');
+    const branchTasks = await call('GET', '/api/v1/tasks', { as: users.branchUser });
+    if (addressee!.addressee_id === branchId) {
+      assert.ok(branchTasks.body.tasks.some((t: any) => t.kind === 'memo' && t.ref === number), 'записка — в задачах адресата');
+    }
+
+    const orpsdCard = (await call('GET', `/api/v1/requests/${id}`, { as: users.orpsd })).body.request;
+    const doc = await upload('/api/v1/documents', users.orpsd, {
+      kind: 'АВР', number: 'АВР-9101', facilityId, ownerId: counterpartyId, contractor: 'АО «Казтелерадио»',
+      docDate: todayIso(), requestId: id, formCode: 'Р-1' }, { name: 'avr-9101.pdf', data: pdf('АВР на визу') });
+    assert.equal(doc.status, 200, JSON.stringify(doc.body));
+    const approver = await db.one<{ approver_id: string }>('SELECT approver_id FROM documents WHERE id = $1', [doc.body.document.id]);
+    assert.equal(approver!.approver_id, orpsdCard.responsibleId, 'визирует ответственный ОР ПСД заявки');
+
+    const change = await call('POST', '/api/v1/registry/changes', { as: users.orpsd, body: { facilityId, requestId: id,
+      body: 'Внести оборудование Заказчика на ярус 48 м' } });
+    assert.equal(change.status, 200, JSON.stringify(change.body));
+    const assets = await userId(users.assets);
+    const row = await db.one<{ assignee_id: string }>('SELECT assignee_id FROM registry_change_requests WHERE id = $1', [change.body.id]);
+    assert.equal(row!.assignee_id, assets, 'запрос реестра — конкретному специалисту техучёта');
+    const assetsTasks = await call('GET', '/api/v1/tasks', { as: users.assets });
+    assert.ok(assetsTasks.body.tasks.some((t: any) => t.kind === 'registry'), 'и он видит его в «Моих задачах»');
+
+    const mine = await call('GET', '/api/v1/tasks', { as: users.orpsd });
+    assert.equal(mine.status, 200);
+    assert.ok(mine.body.tasks.some((t: any) => t.kind === 'document' && t.ref === 'АВР-9101'));
+    assert.ok(mine.body.tasks.some((t: any) => t.ref === number), 'заявка — в задачах ответственного');
+    assert.ok(mine.body.counts.total >= 2);
+    assert.equal((await call('GET', '/api/v1/tasks/count', { as: users.orpsd })).status, 200);
+
+    // Чужие задачи и нагрузка — только руководителям; Заказчику — никогда.
+    assert.equal((await call('GET', `/api/v1/tasks?user=${orpsdCard.responsibleId}`, { as: users.branchUser })).status, 403);
+    assert.equal((await call('GET', `/api/v1/tasks?user=${orpsdCard.responsibleId}`, { as: users.management })).status, 200);
+    assert.equal((await call('GET', '/api/v1/tasks/load', { as: users.branchUser })).status, 403);
+    assert.equal((await call('GET', '/api/v1/tasks', { as: users.customer })).status, 403);
+    const load = await call('GET', '/api/v1/tasks/load', { as: users.management });
+    assert.equal(load.status, 200, JSON.stringify(load.body));
+    const person = load.body.people.find((p: any) => p.id === orpsdCard.responsibleId);
+    assert.ok(person && person.total >= 2, 'нагрузка сотрудника считается');
+
+    // Отключили визирующего — ежедневная проверка передаёт документ другому.
+    await db.query('UPDATE users SET is_active = false WHERE id = $1', [orpsdCard.responsibleId]);
+    try {
+      await runExecutorCheck(db);
+      const after = await db.one<{ approver_id: string }>('SELECT approver_id FROM documents WHERE id = $1', [doc.body.document.id]);
+      assert.ok(after!.approver_id && after!.approver_id !== orpsdCard.responsibleId, 'документ передан действующему сотруднику');
+    } finally {
+      await db.query('UPDATE users SET is_active = true WHERE id = $1', [orpsdCard.responsibleId]);
+    }
+  });
+
+  test('перенос действующих заявок из таблицы: предпросмотр, запись, повтор не дублирует', async () => {
+    const bin = (await db.one<{ bin: string }>('SELECT bin FROM counterparties WHERE id = $1', [counterpartyId]))!.bin;
+    const d = (n: number) => { const x = new Date(); x.setDate(x.getDate() - n); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
+    const csv = [
+      'Номер;Дата;БИН;Заказчик;Объект;Адрес;Услуги;Этап;Дата этапа;Договор;Сумма;Дата оплаты;Ответственный',
+      `ПЕР-1;${d(20)};${bin};ТОО «Перенос»;;г. Темиртау, ул. Мира 5;ТУ;Регистрация;${d(20)};;;;`,
+      `ПЕР-2;${d(15)};${bin};ТОО «Перенос»;1187;;ТУ, ПСД;Оплата;${d(10)};ТУ:ДП-П1 | ПСД:ДП-П2;500000;;`,
+      `ПЕР-3;${d(30)};${bin};ТОО «Перенос»;1187;;ПСД;ПСД;${d(12)};ДП-П3;800000;${d(13)};${users.orpsd}`,
+      `ПЕР-4;${d(5)};123;ТОО «Ошибка»;;;;Космос;;;;;`,
+    ].join('\n');
+    assert.equal((await call('POST', '/api/v1/admin/import-requests', { as: users.orpsd, body: { csv } })).status, 403, 'только ДИТ');
+    const preview = await call('POST', '/api/v1/admin/import-requests', { as: users.admin, body: { csv } });
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.deepEqual(preview.body.summary, { total: 4, create: 3, skip: 1 }, JSON.stringify(preview.body.rows.filter((r: any) => r.action === 'skip')));
+    const bad = preview.body.rows.find((r: any) => r.action === 'skip');
+    assert.ok(bad.errors.bin && bad.errors.stage, JSON.stringify(bad.errors));
+    assert.equal(await db.one(`SELECT 1 AS x FROM requests WHERE incoming_number = 'ПЕР-1'`), null, 'предпросмотр ничего не пишет');
+
+    const done = await call('POST', '/api/v1/admin/import-requests', { as: users.admin, body: { csv, apply: true } });
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+    assert.equal(done.body.created.length, 3);
+    const byOld = async (n: string) => (await call('GET', `/api/v1/requests?q=${encodeURIComponent(n)}`, { as: users.admin })).body.requests[0];
+    const r2 = await byOld('ПЕР-2');
+    assert.equal(r2.stageCode, 'awaiting_payment');
+    assert.equal(r2.tvStatus, 'confirmed');
+    assert.ok(r2.executorId && r2.responsibleId, 'у перенесённой заявки есть исполнители');
+    assert.equal(r2.contracts.length, 2, 'договоры по каждой услуге');
+    const r3 = await byOld('ПЕР-3');
+    assert.equal(r3.stageCode, 'psd');
+    assert.equal(r3.responsibleName, users.orpsd, 'указанный ответственный назначен');
+    assert.ok(r3.contracts[0].paidAt, 'оплата перенесена');
+    const r1 = await byOld('ПЕР-1');
+    assert.equal(r1.stageCode, 'registered');
+    assert.equal(r1.facilityId, null, 'объект определит канцелярия по адресу');
+    assert.ok(new Date(r3.dueAt) >= new Date(), 'срок этапа считается от даты входа в этап');
+
+    const again = await call('POST', '/api/v1/admin/import-requests', { as: users.admin, body: { csv, apply: true } });
+    assert.equal(again.body?.summary?.create ?? 0, 0, 'повторная загрузка не дублирует заявки');
   });
 
   test('п. 102: поручение без выбранного сотрудника получает исполнителя', async () => {

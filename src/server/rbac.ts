@@ -55,6 +55,8 @@ export type Permission =
   | 'permit.own'            // портал допусков: заявки, работники и бригады своей организации
   | 'permit.view'           // портал допусков: все заявки и отчёт
   | 'permit.review'         // портал допусков: одобрение с файлом допуска, отказ, подтверждение основания
+  | 'permit.branch'         // портал допусков: допуски на объекты своего филиала, согласование, проверка на объекте
+  | 'audit.view'            // журнал действий: просмотр и выгрузка (ДИТ, ОКО, аудитор)
   | 'admin';                // справочники, роли, правила, аудит
 
 const MATRIX: Record<Role, Permission[]> = {
@@ -65,7 +67,7 @@ const MATRIX: Record<Role, Permission[]> = {
     'reports.view', 'reports.branch',
     'documents.view', 'documents.download', 'documents.upload', 'documents.approve',
     'registry.view', 'registry.edit', 'registry.request', 'counterparty.verify', 'metrics.view',
-    'permit.view', 'permit.review', 'admin',
+    'permit.view', 'permit.review', 'permit.branch', 'audit.view', 'admin',
   ],
   // Право на переход даётся ролям, которые названы хотя бы в одном переходе
   // (см. TRANSITIONS). Какие именно переходы доступны, решает проверка ролей
@@ -82,10 +84,12 @@ const MATRIX: Record<Role, Permission[]> = {
     'memo.create', 'reports.view', 'documents.view', 'documents.download', 'documents.upload', 'documents.approve', 'registry.view',
     'registry.request', 'counterparty.verify', 'metrics.view',
   ],
+  // Филиал также ведёт допуски на свои объекты: согласование руководством, инструктаж и СИЗ на объекте
+  // (Инструкция о допуске, пп. 8, 14, 18, 20–23).
   branch: ['request.view', 'request.transition', 'memo.answer', 'reports.branch', 'documents.view', 'documents.download',
-    'documents.upload', 'registry.view', 'registry.request', 'assignment.view', 'assignment.accept'],
+    'documents.upload', 'registry.view', 'registry.request', 'assignment.view', 'assignment.accept', 'permit.branch'],
   // ОКО: отслеживание зарегистрированных заявок и поручений (ТЗ, раздел 4).
-  oko: ['request.view', 'assignment.view', 'assignment.close', 'reports.view', 'metrics.view', 'permit.view'],
+  oko: ['request.view', 'assignment.view', 'assignment.close', 'reports.view', 'metrics.view', 'permit.view', 'audit.view'],
   assets: ['documents.view', 'documents.download', 'registry.view', 'registry.edit', 'assignment.view', 'assignment.accept'],
   // Расчёты с контрагентами: счёт, оплата, АВР и ЭСФ (пп. 84–85, 91).
   accounting: ['request.view', 'request.transition', 'request.contract', 'documents.view', 'documents.download',
@@ -97,6 +101,8 @@ const MATRIX: Record<Role, Permission[]> = {
   // специалист СУА рассматривает заявки и смотрит архив актов, как в ТЗ портала §1.3.
   contractor: ['permit.own'],
   permits: ['permit.view', 'permit.review', 'documents.view', 'documents.download'],
+  // СБ и комплаенс: журнал действий только для чтения (А8).
+  auditor: ['audit.view'],
 };
 
 export function permissionsOf(roles: Role[]): Set<Permission> {

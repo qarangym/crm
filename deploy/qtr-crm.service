@@ -20,7 +20,7 @@ User=qtrcrm
 Group=qtrcrm
 WorkingDirectory=/opt/qtr-crm
 
-# Настройки берутся из .env: DATABASE_URL, APP_ORIGIN, AUTH_PROXY_SHARED_SECRET и т. д.
+# Настройки берутся из .env: DATABASE_URL, APP_ORIGIN, AUTH_SECRET, SMTP_* и т. д.
 # Файл должен быть доступен только пользователю службы: chmod 600 /opt/qtr-crm/.env
 EnvironmentFile=/opt/qtr-crm/.env
 Environment=NODE_ENV=production

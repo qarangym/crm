@@ -55,12 +55,30 @@ export function validEmail(value: unknown): boolean {
   return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 }
 
-/** Казахстанский номер: 11 цифр, начинается с 7, без однообразных последовательностей. */
+/**
+ * Номер Казахстана: +7 и десять цифр, первая из них — 7 (мобильные 7XX,
+ * городские 7XXX); без однообразных последовательностей. Та же проверка —
+ * в маске ввода design/phone.js.
+ */
 export function validPhone(value: unknown): boolean {
-  const digits = String(value ?? '').replace(/\D/g, '');
-  if (!/^7\d{10}$/.test(digits)) return false;
+  const digits = formatPhone(value).replace(/\D/g, '');
+  if (!/^77\d{9}$/.test(digits)) return false;
   if (/(\d)\1{7}/.test(digits)) return false;
   return true;
+}
+
+/**
+ * Единый вид номера в базе и письмах: «+7 701 123 45 67». Понимает те же
+ * записи, что маска ввода: «8 701 …», «+7 (701) …», десять цифр без кода.
+ * Нераспознанный номер возвращается как есть — его отклонит validPhone.
+ */
+export function formatPhone(value: unknown): string {
+  let digits = String(value ?? '').replace(/\D/g, '');
+  if (/^8\d{10}$/.test(digits)) digits = '7' + digits.slice(1);
+  if (/^\d{10}$/.test(digits)) digits = '7' + digits;
+  if (!/^7\d{10}$/.test(digits)) return String(value ?? '').trim();
+  const d = digits.slice(1);
+  return `+7 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 8)} ${d.slice(8, 10)}`;
 }
 
 type NumRule = { key: string; label: string; max: number; allowZero?: boolean; integer?: boolean };

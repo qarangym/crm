@@ -1,10 +1,11 @@
 /**
  * Проверка основания для допуска (ТЗ портала, §4.2; План модуля допусков, §5.3).
  *
- * Основание ищется в данных, которые система уже ведёт: ТУ и акты
- * приёма-передачи — в архиве документов, договоры на СМР — в договорах модуля
- * ОР ПСД. Договоров аренды в системе нет: их номер указывается текстом, скан
- * прикладывается, а специалист СУА подтверждает основание вручную.
+ * Основание ищется в данных, которые система ведёт: ТУ, акты приёма-передачи и
+ * распоряжения Общества — в архиве документов, договоры на СМР — в договорах
+ * модуля ОР ПСД, договоры аренды — в реестре договоров аренды СУА. Если договора
+ * аренды в реестре нет, прикладывается скан, а специалист СУА подтверждает
+ * основание вручную и вносит договор в реестр.
  *
  * Режим задаётся для каждого типа отдельно:
  *   мягкий  — не найдено или истекло: предупреждение, заявку можно отправить,
@@ -13,24 +14,25 @@
  * Здесь только решение по найденной записи; поиск — в слое данных.
  */
 
-export type BasisType = 'lease' | 'tu' | 'smr_contract' | 'transfer_act';
+export type BasisType = 'lease' | 'tu' | 'smr_contract' | 'transfer_act' | 'order';
 
-export const BASIS_TYPES: readonly BasisType[] = ['lease', 'tu', 'smr_contract', 'transfer_act'];
+export const BASIS_TYPES: readonly BasisType[] = ['lease', 'tu', 'smr_contract', 'transfer_act', 'order'];
 
 export const BASIS_NAME: Record<BasisType, string> = {
   lease: 'Договор аренды',
   tu: 'Технические условия',
   smr_contract: 'СМР по договору',
   transfer_act: 'Акт приёма-передачи оборудования',
+  order: 'Распоряжение Общества на выполнение монтажных работ',
 };
 
 export type BasisMode = 'soft' | 'strict';
 export type BasisModes = Record<BasisType, BasisMode>;
 
-export const DEFAULT_MODES: BasisModes = { lease: 'soft', tu: 'soft', smr_contract: 'soft', transfer_act: 'soft' };
+export const DEFAULT_MODES: BasisModes = { lease: 'soft', tu: 'soft', smr_contract: 'soft', transfer_act: 'soft', order: 'soft' };
 
-/** Типы, для которых в системе есть реестр. Для договора аренды строгий режим невозможен. */
-export const REGISTRY_BACKED: readonly BasisType[] = ['tu', 'smr_contract', 'transfer_act'];
+/** Типы, для которых в системе есть реестр: по каждому возможен строгий режим. */
+export const REGISTRY_BACKED: readonly BasisType[] = ['lease', 'tu', 'smr_contract', 'transfer_act', 'order'];
 
 export function isBasisType(value: unknown): value is BasisType {
   return typeof value === 'string' && (BASIS_TYPES as readonly string[]).includes(value);
@@ -91,25 +93,32 @@ export type BasisVerdict = {
 
 const fmtDate = (iso: string) => iso.split('-').reverse().join('.');
 
-const NOT_FOUND: Record<Exclude<BasisType, 'lease'>, string> = {
+const NOT_FOUND: Record<BasisType, string> = {
+  lease: 'Договор аренды с таким номером в реестре договоров аренды не найден',
   tu: 'Технические условия с таким номером у вашей организации в системе не найдены',
   smr_contract: 'Договор на СМР с таким номером у вашей организации в системе не найден',
   transfer_act: 'Акт приёма-передачи по этому объекту и вашей организации в архиве не найден',
+  order: 'Распоряжение Общества с таким номером в архиве не найдено',
 };
 
+/** Без записи в реестре заявка идёт по скану основания: его проверит специалист СУА. */
+const SCAN_WHEN_MISSING: readonly BasisType[] = ['lease', 'transfer_act'];
+
 function problemOf(input: BasisInput, found: BasisRecord | null): { code: BasisCode; message: string } | null {
-  const type = input.type as Exclude<BasisType, 'lease'>;
+  const type = input.type as BasisType;
   if (!found) return { code: 'not_found', message: NOT_FOUND[type] };
-  if (found.counterpartyId !== input.counterpartyId) {
+  // Распоряжение — внутренний документ Общества: проверяется объект, а не организация.
+  if (type !== 'order' && found.counterpartyId !== input.counterpartyId) {
     return { code: 'foreign', message: `Основание № ${found.number} оформлено на другую организацию` };
   }
-  if (type === 'transfer_act' && input.facilityId && found.facilityId !== input.facilityId) {
-    return { code: 'other_facility', message: `Акт № ${found.number} относится к другому объекту` };
+  if ((type === 'transfer_act' || type === 'order' || type === 'lease') && input.facilityId && found.facilityId &&
+      found.facilityId !== input.facilityId) {
+    return { code: 'other_facility', message: `${BASIS_NAME[type]} № ${found.number} относится к другому объекту` };
   }
   if (!found.approved) {
     return {
       code: 'not_approved',
-      message: type === 'smr_contract'
+      message: type === 'smr_contract' || type === 'lease'
         ? `Договор № ${found.number} ещё не подписан`
         : `${BASIS_NAME[type]} № ${found.number} ещё не завизированы в архиве`,
     };
@@ -131,16 +140,6 @@ export function verifyBasis(input: BasisInput, found: BasisRecord | null, modes:
   }
   const mode = modes[input.type];
 
-  if (input.type === 'lease') {
-    // Реестра договоров аренды в системе нет: подтверждение — по скану.
-    return {
-      ...base, code: 'no_registry', mode, blocking: !input.hasScan, needsConfirmation: true, needsScan: true,
-      message: input.hasScan
-        ? 'Договоры аренды в системе не ведутся: специалист СУА подтвердит основание по скану договора'
-        : 'Приложите скан договора аренды: реестра договоров аренды в системе нет',
-    };
-  }
-
   const reference = found ? { id: found.id, number: found.number, validUntil: found.validUntil } : null;
   const problem = problemOf(input, found);
   if (!problem) {
@@ -153,13 +152,13 @@ export function verifyBasis(input: BasisInput, found: BasisRecord | null, modes:
   if (mode === 'strict') {
     return { ...base, code: problem.code, mode, reference, message: `${problem.message} — заявку отправить нельзя` };
   }
-  // Мягкий режим. Без акта в архиве заявка идёт по скану — временному основанию.
-  const needsScan = input.type === 'transfer_act';
+  // Мягкий режим. Без договора аренды или акта в реестре заявка идёт по скану.
+  const needsScan = SCAN_WHEN_MISSING.includes(input.type);
   const blocking = needsScan && !input.hasScan;
   return {
     code: problem.code, ok: false, blocking, needsConfirmation: true, needsScan, mode, reference,
     message: blocking
-      ? `${problem.message}. Приложите скан акта — специалист СУА подтвердит его вручную`
+      ? `${problem.message}. Приложите скан ${input.type === 'lease' ? 'договора' : 'акта'} — специалист СУА подтвердит его вручную`
       : `${problem.message}. Специалист СУА проверит основание вручную`,
   };
 }

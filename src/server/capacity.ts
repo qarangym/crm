@@ -18,6 +18,7 @@ import type { Router } from './http.ts';
 import * as rbac from './rbac.ts';
 import type { RouteDeps } from './context.ts';
 import { notify, roleRecipients } from './notify.ts';
+import { pickAssets } from '../db/executors.ts';
 
 /** Данные мастер-файла по объекту и расчёт по ним — общий для заявки и экрана реестра. */
 async function assessFacility(db: Db, facilityId: string, input: CapacityRequest): Promise<{ result: CapacityResult; registryVersion: string | null }> {
@@ -183,11 +184,13 @@ export function registerCapacityRoutes(router: Router, deps: RouteDeps): void {
       changes: await db.query(
         `SELECT c.id, c.facility_id, f.name AS facility_name, f.inv_no, c.request_id, r.number AS request_number,
                 c.body, c.created_at, a.full_name AS author, c.due_at::text AS due_at, c.resolved_at,
+                c.assignee_id, asg.full_name AS assignee_name,
                 rb.full_name AS resolved_by_name, c.resolution
            FROM registry_change_requests c
            JOIN facilities f ON f.id = c.facility_id
            LEFT JOIN requests r ON r.id = c.request_id
            LEFT JOIN users a ON a.id = c.created_by
+           LEFT JOIN users asg ON asg.id = c.assignee_id AND asg.is_active
            LEFT JOIN users rb ON rb.id = c.resolved_by
           WHERE ($1::boolean IS FALSE OR c.resolved_at IS NULL)
           ORDER BY c.resolved_at IS NULL DESC, c.created_at DESC LIMIT 300`, [open]),
@@ -208,14 +211,15 @@ export function registerCapacityRoutes(router: Router, deps: RouteDeps): void {
     if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте запрос', fields);
     const dueAt = addWorkingDays(today(), 1, await repo.calendar(db));
     const id = await db.tx(async (t) => {
+      const assignee = await pickAssets(t);
       const row = await t.one<{ id: string }>(
-        `INSERT INTO registry_change_requests (facility_id, request_id, body, created_by, due_at)
-         VALUES ($1,$2,$3,$4,$5) RETURNING id`, [facility!.id, body.requestId || null, text, actor.id, dueAt]);
+        `INSERT INTO registry_change_requests (facility_id, request_id, body, created_by, due_at, assignee_id)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [facility!.id, body.requestId || null, text, actor.id, dueAt, assignee?.id ?? null]);
       await repo.logEvent(t, {
         ...deps.audit(ctx, actor), action: 'Запрос изменения реестра АМС', entity: 'registry', entityId: row!.id,
         detail: `${facility!.name} (инв. № ${facility!.inv_no}): ${text}`, regulationRef: 'пп. 12–14',
       });
-      await notify(t, await roleRecipients(t, ['assets']), {
+      await notify(t, assignee ? [assignee.email] : await roleRecipients(t, ['assets']), {
         eventKey: 'registry_change_requested', ruleId: 19,
         subject: `Изменение реестра АМС: ${facility!.name}`,
         body: `${text}\n\nОбъект: ${facility!.name}, инв. № ${facility!.inv_no}.\n` +

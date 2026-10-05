@@ -87,6 +87,24 @@ export async function bootstrapAdmin(db: Db, email: string, fullName: string): P
   });
 }
 
+/** Учётная запись по id — для входа по сессии (src/server/login.ts). */
+export async function findActorById(db: Db, id: string): Promise<Actor | null> {
+  const row = await db.one<{
+    id: string; email: string; full_name: string; branch_id: string | null;
+    counterparty_id: string | null; is_active: boolean; roles: Role[] | null;
+  }>(
+    `SELECT u.id, u.email, u.full_name, u.branch_id, u.counterparty_id, u.is_active,
+            array_remove(array_agg(r.role), NULL) AS roles
+       FROM users u LEFT JOIN user_roles r ON r.user_id = u.id
+      WHERE u.id = $1 GROUP BY u.id`, [id]);
+  if (!row) return null;
+  return {
+    id: row.id, userId: `local:${row.id}`, email: row.email, fullName: row.full_name,
+    roles: (row.roles ?? []) as Role[], branchId: row.branch_id, counterpartyId: row.counterparty_id,
+    isActive: row.is_active,
+  };
+}
+
 /**
  * Контрагент по БИН: находим существующего либо заводим карточку.
  *
@@ -118,7 +136,8 @@ export async function resolveCounterparty(
 export function listUsers(db: Db, query?: string) {
   const like = query ? `%${query}%` : null;
   return db.query(
-    `SELECT u.id, u.email, u.full_name, u.position, u.department, u.is_active,
+    `SELECT u.id, u.email, u.full_name, u.position, u.department, u.is_active, u.is_head,
+            u.registration_pending, u.last_login_at, u.password_hash IS NOT NULL AS has_password,
             u.branch_id, b.name AS branch_name, u.counterparty_id, cp.name_full AS counterparty_name,
             array_remove(array_agg(r.role), NULL) AS roles
        FROM users u
@@ -133,21 +152,24 @@ export function listUsers(db: Db, query?: string) {
 export type UserInput = {
   email: string; fullName: string; position: string; department: string;
   branchId: string | null; counterpartyId: string | null; isActive: boolean; roles: Role[];
+  /** Руководитель подразделения; не указано — не меняется (импорт из кадровой выгрузки). */
+  isHead?: boolean | null;
 };
 
 /** Создание либо обновление учётной записи вместе с набором ролей. */
 export async function upsertUser(db: Db, input: UserInput): Promise<{ id: string; email: string; roles: Role[] }> {
   return db.tx(async (t) => {
     const row = await t.one<{ id: string }>(
-      `INSERT INTO users (email, full_name, position, department, branch_id, counterparty_id, is_active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO users (email, full_name, position, department, branch_id, counterparty_id, is_active, is_head)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,coalesce($8, false))
        ON CONFLICT (email) DO UPDATE SET
          full_name = excluded.full_name, position = excluded.position,
          department = excluded.department, branch_id = excluded.branch_id,
-         counterparty_id = excluded.counterparty_id, is_active = excluded.is_active
+         counterparty_id = excluded.counterparty_id, is_active = excluded.is_active,
+         is_head = coalesce($8, users.is_head)
        RETURNING id`,
       [input.email, input.fullName, input.position, input.department,
-       input.branchId, input.counterpartyId, input.isActive]);
+       input.branchId, input.counterpartyId, input.isActive, input.isHead ?? null]);
 
     await t.query('DELETE FROM user_roles WHERE user_id = $1', [row!.id]);
     for (const role of input.roles) {

@@ -89,6 +89,18 @@
 
     requests: (params) => request('GET', '/requests' + query(params)),
     request: (id) => request('GET', `/requests/${id}`),
+    /** «Мои задачи» сотрудника и нагрузка команды (п. 102). */
+    tasks: (user) => request('GET', '/tasks' + query({ user })),
+    tasksCount: () => request('GET', '/tasks/count'),
+    tasksLoad: () => request('GET', '/tasks/load'),
+    /** Замещение на время отсутствия (src/server/people.ts). */
+    absences: () => request('GET', '/absences'),
+    saveAbsence: (body) => request('POST', '/absences', { body }),
+    deleteAbsence: (id) => request('POST', `/absences/${id}/delete`, { body: {} }),
+    colleagues: () => request('GET', '/colleagues'),
+    /** Тексты писем в справочнике (src/server/templates.ts). */
+    mailTemplates: () => request('GET', '/mail-templates'),
+    saveMailTemplate: (key, body) => request('POST', `/mail-templates/${key}`, { body }),
     /** Ответственный ОР ПСД, исполнитель этапа и кому их можно передать (п. 102). */
     executors: (id) => request('GET', `/requests/${id}/executors`),
     setExecutor: (id, body) => request('POST', `/requests/${id}/executor`, { body }),
@@ -150,8 +162,12 @@
     saveUser: (body) => request('POST', '/users', { body }),
     disableUser: (id) => request('POST', `/users/${id}/disable`, { body: {} }),
     enableUser: (id) => request('POST', `/users/${id}/enable`, { body: {} }),
+    /** Ссылка на первый пароль по почте (src/server/login.ts). */
+    inviteUser: (id) => request('POST', `/users/${id}/invite`, { body: {} }),
     /** Импорт из кадровой выгрузки: apply=false — предпросмотр без записи. */
     importUsers: (csv, apply) => request('POST', '/users/import', { body: { csv, apply } }),
+    /** Перенос действующих заявок из таблицы ОР ПСД (src/server/migration.ts). */
+    importRequests: (csv, apply) => request('POST', '/admin/import-requests', { body: { csv, apply } }),
     branches: () => request('GET', '/branches'),
     counterparties: (q) => request('GET', '/counterparties' + query({ q })),
     audit: (params) => request('GET', '/audit' + query(params)),

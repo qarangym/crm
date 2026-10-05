@@ -13,6 +13,7 @@
 
 import nodemailer from 'nodemailer';
 import type { Db } from '../db/client.ts';
+import { applyTemplate } from './templates.ts';
 
 export type NotificationChannel = 'email' | 'in_app';
 
@@ -25,16 +26,50 @@ export type NewNotification = {
   payload?: Record<string, unknown>;
 };
 
-/** Постановка в очередь. Вызывается в той же транзакции, что и действие. */
-export async function enqueue(db: Db, message: NewNotification): Promise<void> {
-  if (!message.recipient?.trim()) return;
+/**
+ * Постановка в очередь. Вызывается в той же транзакции, что и действие.
+ *
+ * Письмо пользователю системы дублируется в «колокольчик» (таблица inbox). Если
+ * получатель сегодня отсутствует и назначил замещающего (А3), письмо и отметка
+ * в системе уходят и замещающему: задача не ждёт возвращения из отпуска.
+ */
+export async function enqueue(db: Db, original: NewNotification): Promise<void> {
+  if (!original.recipient?.trim()) return;
+  const recipient = original.recipient.trim();
+  // Текст письма из справочника (А5), если ОР ПСД или СУА его настроили.
+  const text = await applyTemplate(db, original.eventKey, original.subject, original.body, original.payload);
+  const message = { ...original, subject: text.subject, body: text.body };
+  await insert(db, message, recipient, message.subject);
+  if ((message.channel ?? 'email') !== 'email') return;
+  const user = await db.one<{ id: string; full_name: string }>(
+    `SELECT id, full_name FROM users WHERE lower(email) = lower($1) AND is_active`, [recipient]);
+  if (!user) return;
+  const link = typeof message.payload?.link === 'string' ? message.payload.link : null;
+  await toInbox(db, user.id, message, message.subject, link);
+  const substitutes = await db.query<{ id: string; email: string }>(
+    `SELECT u.id, u.email FROM user_absences a JOIN users u ON u.id = a.substitute_id
+      WHERE a.user_id = $1 AND current_date BETWEEN a.date_from AND a.date_to AND u.is_active`, [user.id]);
+  for (const s of substitutes) {
+    if (s.email.toLowerCase() === recipient.toLowerCase()) continue;
+    const subject = `[за ${user.full_name}] ${message.subject}`;
+    await insert(db, { ...message, payload: { ...(message.payload ?? {}), onBehalfOf: user.id } }, s.email, subject);
+    await toInbox(db, s.id, message, subject, link);
+  }
+}
+
+async function insert(db: Db, message: NewNotification, recipient: string, subject: string): Promise<void> {
   await db.query(
     `INSERT INTO notifications (event_key, channel, recipient, subject, payload)
      VALUES ($1,$2,$3,$4,$5)`,
-    [message.eventKey, message.channel ?? 'email', message.recipient.trim(),
-     message.subject.slice(0, 255),
+    [message.eventKey, message.channel ?? 'email', recipient, subject.slice(0, 255),
      JSON.stringify({ body: message.body, ...(message.payload ?? {}) })],
   );
+}
+
+async function toInbox(db: Db, userId: string, message: NewNotification, subject: string, link: string | null): Promise<void> {
+  await db.query(
+    `INSERT INTO inbox (user_id, event_key, subject, body, link) VALUES ($1,$2,$3,$4,$5)`,
+    [userId, message.eventKey, subject.slice(0, 255), message.body.slice(0, 8000), link?.slice(0, 255) ?? null]);
 }
 
 export type MailConfig = {
@@ -44,6 +79,12 @@ export type MailConfig = {
   secure: boolean;
   user?: string;
   password?: string;
+  /**
+   * Не включать STARTTLS, даже если сервер его предлагает — как Django при
+   * EMAIL_USE_TLS=False. Нужно для локального почтового сервера (localhost:25)
+   * с самоподписанным сертификатом; для сервера в сети не включайте.
+   */
+  ignoreTls: boolean;
   from: string;
 };
 
@@ -55,6 +96,7 @@ export function mailConfigFromEnv(env: NodeJS.ProcessEnv = process.env): MailCon
     secure: env.SMTP_SECURE === 'true',
     user: env.SMTP_USER || undefined,
     password: env.SMTP_PASSWORD || undefined,
+    ignoreTls: env.SMTP_IGNORE_TLS === 'true',
     from: env.SMTP_FROM ?? 'CRM ОР ПСД <no-reply@localhost>',
   };
 }
@@ -69,6 +111,7 @@ export function createMailer(config: MailConfig): Mailer | null {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    ignoreTLS: !config.secure && config.ignoreTls,
     auth: config.user ? { user: config.user, pass: config.password } : undefined,
   });
   return {
