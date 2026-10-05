@@ -176,3 +176,10 @@ test('нарушение Регламента собирается в одно �
   assert.match(e.message, /пп\. 86, 89/);
   assert.equal(e.failures?.length, 2);
 });
+
+test('контрольная сумма миграции не зависит от концов строк (CRLF на Windows, LF на сервере)', async () => {
+  const { migrationChecksum } = await import('../src/db/migrate.ts');
+  const lf = 'CREATE TABLE t (id int);\nINSERT INTO t VALUES (1);\n';
+  assert.equal(migrationChecksum(lf.replace(/\n/g, '\r\n')), migrationChecksum(lf));
+  assert.notEqual(migrationChecksum(lf), migrationChecksum(lf + '-- правка\n'));
+});
