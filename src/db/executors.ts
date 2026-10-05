@@ -40,14 +40,26 @@ const LOAD = `(
      AND (q.assignee_id = u.id OR EXISTS (SELECT 1 FROM request_stages s
            WHERE s.request_id = q.id AND s.left_at IS NULL AND s.assignee_id = u.id)))`;
 
-/** Сотрудники, которые могут исполнять этап роли (филиал — только свой). */
+/**
+ * Сотрудник отсутствует сегодня (отпуск, командировка — А3): новые карточки ему
+ * не назначаются, его задачи видит замещающий.
+ */
+export const PRESENT = `NOT EXISTS (SELECT 1 FROM user_absences ab
+  WHERE ab.user_id = u.id AND current_date BETWEEN ab.date_from AND ab.date_to)`;
+
+/**
+ * Сотрудники, которые могут исполнять этап роли (филиал — только свой). Отсутствующие — в конце списка.
+ * В филиале работу ведут инженеры; директор и курирующий заместитель — последними: они согласуют,
+ * а не исполняют.
+ */
 export function candidates(db: Db, role: Role, branchId: string | null) {
-  return db.query<{ id: string; name: string; email: string; load: number }>(
-    `SELECT u.id, u.full_name AS name, u.email, ${LOAD}::int AS load
+  return db.query<{ id: string; name: string; email: string; load: number; absent: boolean }>(
+    `SELECT u.id, u.full_name AS name, u.email, ${LOAD}::int AS load, NOT ${PRESENT} AS absent
        FROM users u JOIN user_roles r ON r.user_id = u.id
+       LEFT JOIN branches b ON b.id = $2::uuid
       WHERE u.is_active AND r.role = $1
         AND ($1 <> 'branch' OR u.branch_id = $2::uuid)
-      ORDER BY load, u.full_name`, [role, branchId]);
+      ORDER BY absent, ($1 = 'branch' AND u.id IN (b.director_id, b.curator_id)) IS TRUE, load, u.full_name`, [role, branchId]);
 }
 
 /** Может ли сотрудник исполнять этап этой роли. */
@@ -205,4 +217,104 @@ export function needingExecutors(db: Db) {
       WHERE r.closed_at IS NULL AND r.stage_code <> 'draft'
         AND (ru.id IS NULL OR su.id IS NULL)
       ORDER BY r.created_at`);
+}
+
+/* ---------------- исполнители остальных объектов: документ, запрос, записка, допуск ---------------- */
+
+/** Наименее загруженный сотрудник роли; нагрузка считается по своим объектам роли. */
+async function leastLoaded(db: Db, role: Role, branchId: string | null, load: string): Promise<Person | null> {
+  return db.one<Person>(
+    `SELECT u.id, u.full_name AS name, u.email
+       FROM users u JOIN user_roles r ON r.user_id = u.id
+      WHERE u.is_active AND r.role = $1 AND ($1 <> 'branch' OR u.branch_id = $2::uuid)
+      ORDER BY ${PRESENT} DESC, (${load}), u.full_name LIMIT 1`, [role, branchId]);
+}
+
+/** Кто визирует документ: ответственный ОР ПСД заявки, иначе наименее загруженный специалист ОР ПСД. */
+export async function pickApprover(db: Db, requestId: string | null): Promise<Person | null> {
+  if (requestId) {
+    const own = await db.one<Person>(
+      `SELECT u.id, u.full_name AS name, u.email FROM requests q JOIN users u ON u.id = q.assignee_id
+        WHERE q.id = $1 AND u.is_active`, [requestId]);
+    if (own) return own;
+  }
+  return leastLoaded(db, 'orpsd', null,
+    `SELECT count(*) FROM documents d WHERE d.approver_id = u.id AND NOT d.approved`);
+}
+
+/** Исполнитель запроса изменения реестра — специалист технического учёта (п. 12). */
+export function pickAssets(db: Db): Promise<Person | null> {
+  return leastLoaded(db, 'assets', null,
+    `SELECT count(*) FROM registry_change_requests c WHERE c.assignee_id = u.id AND c.resolved_at IS NULL`);
+}
+
+/** Исполнитель заявки на допуск — специалист СУА по допускам. */
+export function pickPermits(db: Db): Promise<Person | null> {
+  return leastLoaded(db, 'permits', null,
+    `SELECT count(*) FROM access_requests a WHERE a.assignee_id = u.id AND a.status = 'pending_review'`);
+}
+
+/**
+ * Адресат служебной записки в филиал (п. 10): главный инженер области — исполнитель
+ * по сбору данных (п. 99.1); нет его — сотрудник филиала с наименьшей нагрузкой;
+ * нет и такого — курирующий заместитель директора по Приложению 7.
+ */
+export async function pickBranchStaff(db: Db, branchId: string): Promise<Person | null> {
+  const engineer = await db.one<Person>(
+    `SELECT u.id, u.full_name AS name, u.email FROM branches b JOIN users u ON u.id = b.chief_engineer_id
+      WHERE b.id = $1 AND u.is_active`, [branchId]);
+  if (engineer) return engineer;
+  const staff = await leastLoaded(db, 'branch', branchId,
+    `SELECT count(*) FROM memos m WHERE m.addressee_id = u.id AND m.answered_at IS NULL`);
+  if (staff) return staff;
+  return db.one<Person>(
+    `SELECT u.id, u.full_name AS name, u.email FROM branches b JOIN users u ON u.id = b.curator_id
+      WHERE b.id = $1 AND u.is_active`, [branchId]);
+}
+
+/**
+ * Ежедневная проверка остальных объектов: незавизированные документы, неисполненные
+ * запросы реестра, заявки на допуск на рассмотрении и неотвеченные записки без
+ * действующего исполнителя получают нового. Возвращает, сколько объектов передано.
+ */
+export async function reassignOrphans(db: Db): Promise<{ documents: number; registry: number; permits: number; memos: number; unfilled: number }> {
+  const out = { documents: 0, registry: 0, permits: 0, memos: 0, unfilled: 0 };
+  const docs = await db.query<{ id: string; request_id: string | null }>(
+    `SELECT d.id, d.request_id FROM documents d
+       LEFT JOIN users u ON u.id = d.approver_id AND u.is_active
+      WHERE NOT d.approved AND d.kind <> 'Приложение' AND u.id IS NULL`);
+  for (const d of docs) {
+    const p = await pickApprover(db, d.request_id);
+    if (!p) { out.unfilled++; continue; }
+    await db.query('UPDATE documents SET approver_id = $2 WHERE id = $1', [d.id, p.id]);
+    out.documents++;
+  }
+  const changes = await db.query<{ id: string }>(
+    `SELECT c.id FROM registry_change_requests c LEFT JOIN users u ON u.id = c.assignee_id AND u.is_active
+      WHERE c.resolved_at IS NULL AND u.id IS NULL`);
+  for (const c of changes) {
+    const p = await pickAssets(db);
+    if (!p) { out.unfilled++; continue; }
+    await db.query('UPDATE registry_change_requests SET assignee_id = $2 WHERE id = $1', [c.id, p.id]);
+    out.registry++;
+  }
+  const permits = await db.query<{ id: string }>(
+    `SELECT a.id FROM access_requests a LEFT JOIN users u ON u.id = a.assignee_id AND u.is_active
+      WHERE a.status = 'pending_review' AND u.id IS NULL`);
+  for (const a of permits) {
+    const p = await pickPermits(db);
+    if (!p) { out.unfilled++; continue; }
+    await db.query('UPDATE access_requests SET assignee_id = $2 WHERE id = $1', [a.id, p.id]);
+    out.permits++;
+  }
+  const memos = await db.query<{ id: string; branch_id: string }>(
+    `SELECT m.id, m.branch_id FROM memos m LEFT JOIN users u ON u.id = m.addressee_id AND u.is_active
+      WHERE m.answered_at IS NULL AND u.id IS NULL`);
+  for (const m of memos) {
+    const p = await pickBranchStaff(db, m.branch_id);
+    if (!p) { out.unfilled++; continue; }
+    await db.query('UPDATE memos SET addressee_id = $2 WHERE id = $1', [m.id, p.id]);
+    out.memos++;
+  }
+  return out;
 }

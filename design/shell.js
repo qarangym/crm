@@ -52,6 +52,19 @@ const fmt = (d) => {
 };
 const fmtFull = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('ru-RU') : '—';
 
+/* ---------------------------------- вход --------------------------------- */
+
+/** Нет сессии — на страницу входа с возвратом туда, где был пользователь. */
+function toLogin() {
+  location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search + location.hash));
+}
+
+/** Выход: сессия закрывается на сервере, cookie стирается. */
+async function logout() {
+  try { await window.QTR_API.call('POST', '/auth/logout'); } catch { /* сессия уже закрыта */ }
+  location.replace('/login.html');
+}
+
 /* -------------------------------- диалог -------------------------------- */
 
 /**
@@ -135,3 +148,169 @@ function toast(text, kind = 'info') {
   toastTimer = setTimeout(() => { box.style.display = 'none'; }, kind === 'bad' ? 7000 : 3500);
 }
 
+
+/* ------------------------------ колокольчик ------------------------------
+   Уведомления в системе: копия каждого письма пользователю. Кнопка в шапке,
+   число непрочитанных, список с переходом в карточку. Опрос раз в минуту. */
+
+let bellTimer = null;
+function mountBell(host) {
+  if (!host) return;
+  const api = window.QTR_API;
+  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
+    <div class="bell-panel" hidden></div>`;
+  const button = host.querySelector('.bell');
+  const badge = host.querySelector('.bell-n');
+  const panel = host.querySelector('.bell-panel');
+  const show = (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); };
+  const refresh = async () => { try { show((await api.call('GET', '/inbox/count')).unread); } catch { /* сеть */ } };
+  const when = (v) => new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  async function open() {
+    panel.hidden = false;
+    panel.innerHTML = '<div class="ref" style="padding:14px">Загрузка…</div>';
+    try {
+      const { items, unread } = await api.call('GET', '/inbox?limit=40');
+      show(unread);
+      panel.innerHTML = `<div class="bell-head"><b>Уведомления</b>
+        ${unread ? '<button class="btn ghost sm" data-all>Прочитать все</button>' : ''}</div>
+        ${items.length ? items.map((i) => `<a class="bell-item ${i.read_at ? '' : 'new'}" data-id="${i.id}" href="${esc(i.link || '#')}">
+          <b>${esc(i.subject)}</b><span>${esc(String(i.body || '').split('\n')[0].slice(0, 160))}</span><time>${when(i.created_at)}</time></a>`).join('')
+          : '<div class="ref" style="padding:14px">Уведомлений нет</div>'}`;
+    } catch (error) {
+      panel.innerHTML = `<div class="ref" style="padding:14px">${esc(describeError(error))}</div>`;
+    }
+  }
+  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : (panel.hidden = true); });
+  panel.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    if (ev.target.closest('[data-all]')) {
+      show((await api.call('POST', '/inbox/read', { all: true })).unread);
+      return open();
+    }
+    const item = ev.target.closest('.bell-item');
+    if (!item) return;
+    if (item.getAttribute('href') === '#') ev.preventDefault();
+    panel.hidden = true;
+    // По ссылке переходит сам браузер; адрес («#ЗК-…», «#ЗД-…») открывает карточку в приложении (popstate).
+    // Отметка «прочитано» — в фоне, чтобы не задерживать переход.
+    api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] }).then((r) => show(r.unread)).catch(() => {});
+  });
+  document.addEventListener('click', () => { panel.hidden = true; });
+  refresh();
+  clearInterval(bellTimer);
+  bellTimer = setInterval(refresh, 60_000);
+}
+
+/* --------------------------- демонстрационный стенд ---------------------------
+   Сервер с DEMO_MODE отвечает в /me признаком demo: полоса вверху страницы, чтобы
+   стенд с вымышленными данными нельзя было спутать с рабочей системой. */
+
+function mountDemoRibbon(me) {
+  if (!me?.demo || document.querySelector('.demo-ribbon')) return;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'demo-ribbon';
+  ribbon.textContent = 'Демонстрационный стенд · данные вымышлены · код входа показывается на экране';
+  document.body.prepend(ribbon);
+}
+
+/* ------------------------------ справка ------------------------------
+   Что делать в системе — коротко, по роли (docs/Руководство_пользователя.md). Кнопка «Справка» в шапке;
+   при первом входе на этом браузере те же шаги показываются приветствием. */
+
+const HELP = {
+  orpsd: {
+    customer: ['Заказчик', [
+      '«Новая заявка»: выберите услуги — ТУ, ПСД, СМР, можно вместе, — объект и параметры оборудования. Форма покажет только нужные поля и ориентировочную стоимость.',
+      'На последнем шаге проверьте заявку и подайте. Номер присваивается сразу, подтверждение придёт на почту.',
+      '«Мои заявки» — статус и что происходит сейчас. Вернули с замечаниями — откройте заявку → «Исправить заявку»: номер и история сохранятся.',
+      'Договоры, счета и акты — в карточке заявки. Замечания к АВР — в течение 10 рабочих дней, иначе акт считается принятым.']],
+    records: ['Канцелярия', [
+      '«Мои задачи» — новые заявки ждут подтверждения регистрации: номер и дата уже присвоены, проверьте и нажмите «Подтвердить регистрацию».',
+      'Заявка пришла на бумаге или почтой — «Внести заявку» от имени Заказчика, со сканом письма.',
+      'Для дела — «Карточка заявки» в карточке: печатная форма.']],
+    orpsd: ['ОР ПСД', [
+      'Начинайте день с «Моих задач»: всё, что на вас, просроченное сверху.',
+      'В карточке заявки вверху — чего не хватает для перехода и пункт Регламента; внизу — «Следующий шаг».',
+      'Оценка ТВ: «Рассчитать по реестру» → результат и решение о поверочном расчёте → «Зафиксировать оценку».',
+      'Нужны данные филиала — «Служебные записки в филиал» в карточке: ответ за 3 рабочих дня.',
+      '«Доска заявок» — все заявки по этапам; отбор «Без исполнителя» должен быть пустым.']],
+    branch: ['Филиал', [
+      '«Мои задачи» — служебные записки ОР ПСД (ответ за 3 рабочих дня) и этапы СМР на ваших объектах.',
+      'Акт приёма-передачи и технический АВР — «Архив актов» → загрузка с реквизитами.',
+      'Допуски сторонних организаций на ваши объекты — «Портал допусков» в меню: согласование и проверка на объекте.']],
+    accounting: ['Расчёты с контрагентами', [
+      '«Мои задачи» — заявки, где нужен счёт, отметка оплаты, АВР или ЭСФ.',
+      'В карточке заявки — договоры по каждой услуге: отметка оплаты с фактической датой, загрузка АВР.']],
+    oko: ['ОКО', [
+      '«Мои задачи» — исполненные поручения, которые осталось закрыть.',
+      '«Поручения» — все поручения с исполнителями и сроками, выгрузка CSV.',
+      '«Отчёты», «Узкие места», «Журнал» — контроль сроков и действий.']],
+    management: ['Руководство', [
+      '«Доска заявок» и «Узкие места» — где заявки стоят дольше норматива.',
+      '«Нагрузка команды» — кто чем занят; «Отчёты» — с выгрузкой в Excel.']],
+    assets: ['Технический учёт', [
+      '«Мои задачи» — запросы на изменение реестра АМС, срок — 1 рабочий день.',
+      '«Реестр АМС и ТВ» — версии мастер-файла, по которым ОР ПСД оценивает техническую возможность.']],
+    permits: ['СУА', ['Основная работа — «Портал допусков» в меню. Здесь — архив актов для просмотра и поиска.']],
+    auditor: ['Аудитор', ['«Журнал» — все действия пользователей с отбором и выгрузкой; записи журнала изменить нельзя.']],
+    admin: ['ДИТ', [
+      '«Пользователи» — заведение, импорт, «Пригласить». Новые регистрации организаций ждут проверки — они же в «Моих задачах».',
+      '«Справочники» — филиалы и ответственные лица, объекты, календарь, прейскурант, тексты писем.',
+      '«Эскалации и уведомления» — доставка писем; «Журнал» — все действия.']],
+  },
+  permits: {
+    contractor: ['Сторонняя организация', [
+      'Сначала «Работники и бригады»: работники по Приложению 1 с удостоверениями и сроками, транспорт. Это делается один раз.',
+      '«Новая заявка»: цель работ → объект → основание (договор аренды или ТУ) → период → бригада.',
+      '«Сформировать запрос» — распечатайте запрос с Приложением 1, подпишите, заверьте печатью и приложите скан.',
+      'Ответ — не позднее 14 рабочих дней. Допуск с кодом — в «Моих заявках»: код предъявляется на объекте.',
+      'Авария — цель «Аварийно-восстановительные работы»: запрос можно приложить позже, в течение 2 дней.']],
+    permits: ['СУА', [
+      '«Очередь на рассмотрение» — срочные и аварийные сверху, срок ответа — 14 рабочих дней.',
+      'В карточке — проверка основания, бригада со сканами, подписанный запрос → «Выдать допуск» или «Отклонить» с причиной.',
+      'Руководство филиала не работает в системе — отметьте согласование, полученное устно или письмом.',
+      '«Договоры аренды» — реестр и загрузка таблицы; «Отчёт» — с выгрузкой в Excel.']],
+    branch: ['Филиал', [
+      '«Согласование филиала» — заявки на ваши объекты, где Инструкция требует согласования руководства.',
+      '«Проверка на объекте» — удобно с телефона: код допуска, ИИН или фамилия; инструктаж, спецодежда, обувь, СИЗ → «Допустить».',
+      'Работы закончены — «Закрыть допуск».']],
+    oko: ['ОКО', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    management: ['Руководство', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    admin: ['ДИТ', ['«Настройки» — режим проверки оснований, сроки и пределы Инструкции, безвизовые сроки СНГ.']],
+  },
+};
+
+function helpSections(me, module) {
+  const book = HELP[module] || {};
+  return Object.keys(book).filter((role) => (me?.roles || []).includes(role)).map((role) => book[role]);
+}
+
+function showHelp(me, module, welcome = false) {
+  const sections = helpSections(me, module);
+  if (!sections.length) return;
+  const box = document.createElement('div');
+  box.className = 'dlg';
+  const name = String(me.fullName || '').split(' ')[1] || me.fullName || '';
+  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true">
+    <header><h3>${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
+      <p>${welcome ? 'Коротко — с чего начать. Эти подсказки всегда под кнопкой «Справка» в шапке.' : 'Что делать в системе — по вашей роли.'}</p></header>
+    <div class="body">${sections.map(([title, steps]) => `<section><h4>${esc(title)}</h4>
+      <ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></section>`).join('')}</div>
+    <footer><button class="btn primary" data-act="ok">Понятно</button></footer></div>`;
+  const close = () => box.remove();
+  box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-act]')) close(); });
+  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  document.body.appendChild(box);
+  box.querySelector('[data-act]').focus();
+}
+
+/** Кнопка «Справка» в шапке и приветствие при первом входе на этом браузере. */
+function mountHelp(host, me, module) {
+  if (!host || !helpSections(me, module).length) return;
+  host.innerHTML = '<button class="btn ghost" type="button">Справка</button>';
+  host.querySelector('button').addEventListener('click', () => showHelp(me, module));
+  const key = `qtr.welcome.${module}.${me.id}`;
+  let seen = true;
+  try { seen = !!localStorage.getItem(key); localStorage.setItem(key, '1'); } catch { /* хранилище недоступно — без приветствия */ }
+  if (!seen) showHelp(me, module, true);
+}

@@ -64,6 +64,8 @@ export function createDb(connectionString: string, options: { max?: number } = {
 }
 
 export function databaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  // Docker Compose: пока роль приложения не создана (нет APP_DB_PASSWORD) — работаем под владельцем.
+  if (env.DATABASE_URL_OWNER?.trim() && !env.APP_DB_PASSWORD?.trim()) return env.DATABASE_URL_OWNER.trim();
   const url = env.DATABASE_URL?.trim();
   if (url) return url;
   const host = env.PGHOST ?? 'localhost';

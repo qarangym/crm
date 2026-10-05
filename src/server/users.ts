@@ -16,15 +16,17 @@ import type { Router } from './http.ts';
 import * as rbac from './rbac.ts';
 import type { Actor } from './rbac.ts';
 import type { RouteDeps } from './context.ts';
+import { revokeSessions } from './login.ts';
+import { notify } from './notify.ts';
 
 export type UserDraft = {
   email?: string; fullName?: string; position?: string; department?: string;
-  branchId?: string | null; counterpartyId?: string | null; roles?: string[]; isActive?: boolean;
+  branchId?: string | null; counterpartyId?: string | null; roles?: string[]; isActive?: boolean; isHead?: boolean;
 };
 
 export type CheckedUser = {
   email: string; fullName: string; position: string; department: string;
-  branchId: string | null; counterpartyId: string | null; roles: Role[]; isActive: boolean;
+  branchId: string | null; counterpartyId: string | null; roles: Role[]; isActive: boolean; isHead: boolean | null;
 };
 
 /** Проверка учётной записи — одна для формы и для импорта. */
@@ -63,6 +65,8 @@ export function checkUser(body: UserDraft, actor: Actor): { user: CheckedUser; f
       branchId: body.branchId || null,
       counterpartyId: body.counterpartyId || null,
       isActive: body.isActive !== false,
+      // Руководителем подразделения может быть только сотрудник Общества.
+      isHead: typeof body.isHead === 'boolean' ? body.isHead && !roles.some((r) => EXTERNAL_ROLES.includes(r)) : null,
       roles,
     },
     fields,
@@ -118,8 +122,8 @@ export function registerUserRoutes(router: Router, deps: RouteDeps): void {
   /** Справочники для формы: филиалы и организации-Заказчики. */
   router.get('/api/v1/branches', async (ctx) => {
     const actor = await deps.actor(ctx);
-    rbac.require(actor, 'request.view');
-    if (rbac.isCustomer(actor)) throw ApiError.forbidden();
+    // Перечень филиалов нужен любому сотруднику (техучёт привязывает объект к филиалу); внешним — нет.
+    if (rbac.isExternal(actor)) throw ApiError.forbidden();
     return { branches: await db.query(`SELECT id, code, name, region FROM branches WHERE is_active ORDER BY name`) };
   });
 
@@ -143,6 +147,8 @@ export function registerUserRoutes(router: Router, deps: RouteDeps): void {
     if (Object.keys(fields).length) throw ApiError.badRequest('Проверьте данные сотрудника', fields);
 
     const saved = await repo.upsertUser(db, user);
+    // Отключённая учётная запись теряет все открытые сеансы сразу.
+    if (!user.isActive) await revokeSessions(db, saved.id);
     await repo.logEvent(db, {
       ...deps.audit(ctx, actor), action: 'Назначены права пользователю', entity: 'user',
       entityId: saved.id, detail: `${user.email}: ${user.roles.map((r) => ROLE_NAME[r]).join(', ')}`,
@@ -158,9 +164,10 @@ export function registerUserRoutes(router: Router, deps: RouteDeps): void {
 
     const ok = await repo.setUserActive(db, ctx.params.id, false);
     if (!ok) throw ApiError.notFound('Пользователь не найден');
+    const closed = await revokeSessions(db, ctx.params.id);
     await repo.logEvent(db, {
       ...deps.audit(ctx, actor), action: 'Учётная запись отключена', entity: 'user',
-      entityId: ctx.params.id, detail: '',
+      entityId: ctx.params.id, detail: `закрыто сеансов: ${closed}`,
     });
     return { ok: true };
   });
@@ -171,9 +178,19 @@ export function registerUserRoutes(router: Router, deps: RouteDeps): void {
     rbac.require(actor, 'admin');
     const ok = await repo.setUserActive(db, ctx.params.id, true);
     if (!ok) throw ApiError.notFound('Пользователь не найден');
+    // Самостоятельная регистрация представителя известной организации подтверждена ДИТ.
+    const approved = await db.one<{ email: string }>(
+      `UPDATE users SET registration_pending = false WHERE id = $1 AND registration_pending RETURNING email`, [ctx.params.id]);
+    if (approved) {
+      await notify(db, [approved.email], {
+        eventKey: 'registration_approved', subject: 'Доступ к системе открыт',
+        body: 'Ваша регистрация в системе заявок АО «Казтелерадио» подтверждена. Войдите с почтой и паролем, указанными при регистрации.',
+        payload: { userId: ctx.params.id },
+      });
+    }
     await repo.logEvent(db, {
-      ...deps.audit(ctx, actor), action: 'Учётная запись включена', entity: 'user',
-      entityId: ctx.params.id, detail: '',
+      ...deps.audit(ctx, actor), action: approved ? 'Регистрация подтверждена, учётная запись включена' : 'Учётная запись включена',
+      entity: 'user', entityId: ctx.params.id, detail: approved?.email ?? '',
     });
     return { ok: true };
   });

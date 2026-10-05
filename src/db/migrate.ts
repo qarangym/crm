@@ -18,6 +18,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export type MigrationResult = { name: string; status: 'applied' | 'skipped' };
 
+/**
+ * Контрольная сумма миграции. Концы строк приводятся к LF: git на Windows выдаёт файлы с CRLF,
+ * на сервере — с LF, и одна и та же миграция не должна считаться изменённой.
+ */
+export function migrationChecksum(sql: string): string {
+  return createHash('sha256').update(sql.replace(/\r\n/g, '\n')).digest('hex');
+}
+
 export async function migrate(db: Db, dir: string = here): Promise<MigrationResult[]> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -35,7 +43,7 @@ export async function migrate(db: Db, dir: string = here): Promise<MigrationResu
 
   for (const name of files) {
     const sql = readFileSync(join(dir, name), 'utf8');
-    const checksum = createHash('sha256').update(sql).digest('hex');
+    const checksum = migrationChecksum(sql);
     const previous = applied.get(name);
 
     if (previous) {

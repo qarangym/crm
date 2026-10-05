@@ -8,6 +8,7 @@
 
 import * as repo from '../db/repo.ts';
 import * as memos from '../db/memos.ts';
+import { pickBranchStaff } from '../db/executors.ts';
 import { addWorkingDays, today } from '../domain/calendar.ts';
 import { stage } from '../process/stages.ts';
 import { ApiError } from './errors.ts';
@@ -75,10 +76,12 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
          LEFT JOIN users en ON en.id = b.chief_engineer_id
         WHERE b.id = $1`, [request.branchId!]);
     const dueAt = addWorkingDays(today(), memos.MEMO_ANSWER_DAYS, await repo.calendar(db));
+    // Адресат — конкретный сотрудник филиала (п. 102): главный инженер области, иначе наименее загруженный.
+    const addressee = await pickBranchStaff(db, request.branchId!);
 
     const id = await db.tx(async (t) => {
       const memoId = await memos.createMemo(t, {
-        requestId: request.uuid, branchId: request.branchId!, addresseeId: branch?.curator_id ?? null,
+        requestId: request.uuid, branchId: request.branchId!, addresseeId: addressee?.id ?? branch?.curator_id ?? null,
         subject: subject.slice(0, 255), body: text, dueAt, createdBy: actor.id,
       });
       const message = {
@@ -90,6 +93,10 @@ export function registerMemoRoutes(router: Router, deps: RouteDeps): void {
       // Куратор — ответственный по Приложению 7; главный инженер области — исполнитель (п. 99.1).
       await enqueue(t, { eventKey: 'memo_sent', recipient: branch?.curator_email ?? '', ...message });
       await enqueue(t, { eventKey: 'memo_sent', recipient: branch?.engineer_email ?? '', ...message });
+      // Исполнитель, если он не куратор и не главный инженер, получает письмо отдельно.
+      if (addressee && ![branch?.curator_email, branch?.engineer_email].includes(addressee.email)) {
+        await enqueue(t, { eventKey: 'memo_sent', recipient: addressee.email, ...message });
+      }
       await repo.logEvent(t, {
         ...deps.audit(ctx, actor), action: 'Направлена служебная записка в филиал', entity: 'request',
         entityId: request.uuid, detail: `${request.branchName}: ${subject}. Срок ответа ${dueAt}`,

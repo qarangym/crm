@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Вход — АО «Казтелерадио»</title>
+<link rel="stylesheet" href="shell.css">
+<style>
+.auth{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px 16px;box-sizing:border-box}
+.auth-card{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 8px 30px rgba(23,36,59,.08);padding:28px 26px}
+.auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.auth-brand img{height:40px}
+.auth-brand b{display:block;font-size:15px}
+.auth-brand small{color:var(--muted);font-size:12px}
+.auth h2{font-size:19px;margin:0 0 6px}
+.auth p.lead{color:var(--muted);margin:0 0 18px;font-size:13.5px}
+.auth .field{margin-bottom:12px}
+.auth .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px}
+.auth .field input{width:100%;box-sizing:border-box}
+.auth .err{color:var(--bad);font-size:12px;margin-top:4px;min-height:0}
+.auth .field.bad input{border-color:var(--bad)}
+.auth .actions{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.auth .actions .btn{justify-content:center;width:100%}
+.auth .links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px;font-size:13px}
+.auth .links a{color:var(--blue);cursor:pointer;text-decoration:none}
+.auth .alert{border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+.auth .alert.bad{background:#FBEAEB;color:var(--bad)}
+.auth .alert.ok{background:#E8F5EE;color:#1E7A4C}
+.auth .code input{font-size:24px;letter-spacing:.35em;text-align:center}
+.auth .consent{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--muted);margin:6px 0 4px}
+.auth .consent input{width:auto;margin-top:3px}
+.auth .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.demo-card{width:100%;max-width:440px;box-sizing:border-box;background:#FFF8E6;border:1px solid #F0D68A;border-radius:16px;padding:16px 18px;font-size:13px}
+.demo-card b.t{display:block;font-size:14px;margin-bottom:4px}
+.demo-card p{margin:0 0 10px;color:#6B5A2B}
+.demo-card code{background:#fff;border:1px solid #F0D68A;border-radius:6px;padding:1px 6px;font-size:13px}
+.demo-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
+.demo-list button{display:flex;justify-content:space-between;gap:10px;align-items:center;text-align:left;background:#fff;border:1px solid #EADBB0;
+  border-radius:10px;padding:8px 10px;cursor:pointer;font:inherit;color:inherit}
+.demo-list button:hover{border-color:#C9A63E}
+.demo-list small{display:block;color:var(--muted);font-size:11.5px}
+.demo-list span.r{font-size:11.5px;color:#7A6320;white-space:nowrap}
+.auth .first-time{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.auth .first-time b{font-size:14px}
+.auth .first-time p{margin:4px 0 12px;color:var(--muted);font-size:13px}
+.auth .first-time .btn{width:100%;justify-content:center}
+@media (max-width:480px){.auth .grid2{grid-template-columns:1fr}.auth-card{padding:22px 18px}.demo-list span.r{display:none}}
+</style>
+</head>
+<body>
+<div class="auth"><div class="auth-card">
+  <div class="auth-brand"><img id="brandMark" alt="QTR"><div><b>АО «Казтелерадио»</b><small>Заявки на услуги и допуски</small></div></div>
+  <div id="view"></div>
+</div><div id="demo"></div></div>
+
+<script src="assets.js"></script>
+<script src="api.js"></script>
+<script src="phone.js"></script>
+<script>
+/*
+ * Вход по почте, паролю и коду из письма; регистрация Заказчика по БИН;
+ * восстановление пароля и первый пароль по приглашению (src/server/login.ts).
+ */
+const api = window.QTR_API;
+const params = new URLSearchParams(location.search);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/** Возврат только на свою страницу: «//чужой-сайт» и полные адреса не принимаются. */
+const next = (() => { const n = params.get('next') || '/'; return /^\/(?!\/)/.test(n) ? n : '/'; })();
+const state = { mode: 'login', challengeId: '', sentTo: '', email: '', message: null, demoCode: '' };
+
+document.getElementById('brandMark').src = window.QTR_ASSETS?.mark || '';
+
+function field(id, label, type = 'text', attrs = '') {
+  return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" ${attrs}><div class="err" id="${id}Err"></div></div>`;
+}
+const alertBox = () => state.message ? `<div class="alert ${state.message.kind}">${esc(state.message.text)}</div>` : '';
+const val = (id) => document.getElementById(id)?.value.trim() ?? '';
+
+function show(mode, message = null) {
+  state.mode = mode; state.message = message;
+  const v = document.getElementById('view');
+  if (mode === 'login') v.innerHTML = `<h2>Вход в систему</h2><p class="lead">Почта и пароль, затем код из письма.</p>${alertBox()}
+    <form onsubmit="event.preventDefault();doLogin(this.querySelector('button'))">
+      ${field('email', 'Почта', 'email', `autocomplete="username" value="${esc(state.email)}" required`)}
+      ${field('password', 'Пароль', 'password', 'autocomplete="current-password" required')}
+      <div class="actions"><button class="btn primary">Войти</button></div></form>
+    <div class="links"><a onclick="show('forgot')">Забыли пароль?</a></div>
+    <div class="first-time"><b>Впервые здесь?</b>
+      <p>Организации регистрируются сами — чтобы подавать заявки на ТУ, ПСД и СМР или получать допуск на объекты
+        Общества. Сотрудникам Общества учётную запись заводит ДИТ: ссылка для пароля придёт на почту.</p>
+      <button type="button" class="btn" onclick="show('register')">Зарегистрировать организацию</button></div>`;
+  if (mode === 'code') v.innerHTML = `<h2>Код из письма</h2><p class="lead">Отправили код на ${esc(state.sentTo)}. Он действует 10 минут.</p>${alertBox()}
+    <form class="code" onsubmit="event.preventDefault();doCode(this.querySelector('button'))">
+      ${field('code', 'Код', 'text', 'inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required')}
+      <div class="actions"><button class="btn primary">Подтвердить</button></div></form>
+    <div class="links"><a onclick="show('login')">Назад</a><span class="ref">Нет письма — проверьте «Спам»</span></div>`;
+  if (mode === 'register') v.innerHTML = `<h2>Регистрация организации</h2>
+    <p class="lead">Сотрудников Общества регистрирует ДИТ.</p>${alertBox()}
+    <form onsubmit="event.preventDefault();doRegister(this.querySelector('button'))">
+      <div class="field"><label>Что нужно</label>
+        <select id="kind"><option value="customer">Подавать заявки на ТУ, ПСД и СМР</option>
+          <option value="contractor">Допуск на объекты Общества (подрядчик)</option></select>
+        <div class="hint" id="kindHint" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
+      ${field('company', 'Наименование организации', 'text', 'placeholder="ТОО «…»" required')}
+      ${field('bin', 'БИН', 'text', 'inputmode="numeric" maxlength="12" required')}
+      <div class="grid2">${field('fullName', 'Фамилия и имя', 'text', 'autocomplete="name" required')}
+        ${field('position', 'Должность', 'text', 'autocomplete="organization-title"')}</div>
+      <div class="grid2">${field('phone', 'Телефон', 'tel', 'required')}
+        ${field('email', 'Почта', 'email', 'autocomplete="email" required')}</div>
+      ${field('password', 'Пароль — не короче 10 символов', 'password', 'autocomplete="new-password" required')}
+      <div class="ref" id="passwordHint" style="margin:-6px 0 10px;font-size:12px"></div>
+      <label class="consent"><input type="checkbox" id="consent"> <span>Даю согласие АО «Казтелерадио» на сбор и обработку
+        моих персональных данных (ФИО, должность, телефон, почта) для рассмотрения заявок, в соответствии с Законом РК
+        «О персональных данных и их защите».</span></label><div class="err" id="consentErr"></div>
+      <div class="actions"><button class="btn primary">Зарегистрироваться</button></div></form>
+    <div class="links"><a onclick="show('login')">У меня уже есть учётная запись</a></div>`;
+  if (mode === 'forgot') v.innerHTML = `<h2>Восстановление пароля</h2><p class="lead">Пришлём ссылку для нового пароля.</p>${alertBox()}
+    <form onsubmit="event.preventDefault();doForgot(this.querySelector('button'))">
+      ${field('email', 'Почта', 'email', `autocomplete="username" value="${esc(state.email)}" required`)}
+      <div class="actions"><button class="btn primary">Отправить ссылку</button></div></form>
+    <div class="links"><a onclick="show('login')">Назад ко входу</a></div>`;
+  if (mode === 'reset') v.innerHTML = `<h2>${params.has('invite') ? 'Задайте пароль' : 'Новый пароль'}</h2>
+    <p class="lead">Не короче 10 символов. Лучше — фраза из нескольких слов.</p>${alertBox()}
+    <form onsubmit="event.preventDefault();doReset(this.querySelector('button'))">
+      ${field('password', 'Пароль', 'password', 'autocomplete="new-password" required')}
+      ${field('password2', 'Ещё раз', 'password', 'autocomplete="new-password" required')}
+      <div class="actions"><button class="btn primary">Сохранить пароль</button></div></form>`;
+  if (mode === 'pending') v.innerHTML = `<h2>Почта подтверждена</h2>${alertBox()}
+    <p class="lead">Доступ открывает ДИТ после проверки организации и полномочий.
+    Мы пришлём письмо, когда учётная запись будет включена.</p>
+    <div class="links"><a onclick="show('login')">На страницу входа</a></div>`;
+  if (mode === 'register') wireRegister();
+  // Демонстрационный стенд: кода на почту нет — он показан здесь (DEMO_MODE на сервере).
+  if (mode === 'code' && state.demoCode) {
+    document.getElementById('code').value = state.demoCode;
+    v.querySelector('.lead').textContent = 'Демонстрационный стенд: код подставлен автоматически. В рабочей системе он приходит на почту.';
+  }
+  v.querySelector('input')?.focus();
+}
+
+/** Демонстрационные учётные записи — только если сервер запущен с DEMO_MODE. */
+async function loadDemo() {
+  let demo;
+  try { demo = await api.call('GET', '/auth/demo'); } catch { return; }
+  if (!demo?.accounts?.length) return;
+  document.getElementById('demo').innerHTML = `<div class="demo-card">
+    <b class="t">Демонстрационный стенд</b>
+    <p>Все организации, люди и заявки вымышлены. ${demo.password ? `Пароль у всех учётных записей: <code>${esc(demo.password)}</code>.` : ''}
+      Выберите, под кем войти:</p>
+    <div class="demo-list">${demo.accounts.map((a) => `<button type="button" data-email="${esc(a.email)}">
+      <span><b>${esc(a.fullName)}</b><small>${esc(a.email)}</small></span><span class="r">${esc(a.title)}</span></button>`).join('')}</div></div>`;
+  document.querySelectorAll('.demo-list button').forEach((b) => b.addEventListener('click', () => {
+    state.email = b.dataset.email;
+    show('login');
+    document.getElementById('email').value = b.dataset.email;
+    const pass = document.getElementById('password');
+    if (demo.password) pass.value = demo.password;
+    pass.focus();
+  }));
+}
+
+/* ------------------------- проверка формы регистрации ------------------------ */
+
+const LETTERS = 'A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі';
+/** БИН РК: 12 цифр с контрольным разрядом — как на сервере (validation.ts). */
+function binProblem(value) {
+  const s = String(value || '').trim();
+  if (!s) return 'Укажите БИН';
+  if (!/^\d{12}$/.test(s)) return `БИН — 12 цифр (сейчас ${s.replace(/\D/g, '').length})`;
+  if (/^(\d)\1{11}$/.test(s)) return 'Проверьте БИН';
+  const d = s.split('').map(Number);
+  const sum = (w) => w.reduce((acc, k, i) => acc + k * d[i], 0);
+  let c = sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) % 11;
+  if (c === 10) c = sum([3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2]) % 11;
+  return c === 10 || c !== d[11] ? 'БИН не проходит проверку контрольного разряда — проверьте цифры' : '';
+}
+function passwordProblem(value, email) {
+  if (value.length < 10) return `Не короче 10 символов (сейчас ${value.length})`;
+  const local = (email || '').split('@')[0].toLowerCase();
+  if (local.length >= 4 && value.toLowerCase().includes(local)) return 'Пароль не должен содержать адрес почты';
+  if (/^(.)\1+$/.test(value)) return 'Слишком простой пароль';
+  return '';
+}
+const CHECKS = {
+  company: (v) => v.length < 3 || !new RegExp(`[${LETTERS}]{2}`).test(v) ? 'Укажите наименование организации' : '',
+  bin: binProblem,
+  fullName: (v) => {
+    const words = v.split(/\s+/).filter(Boolean);
+    return words.length < 2 || !words.every((w) => new RegExp(`^[${LETTERS}][${LETTERS}'’.-]*$`).test(w))
+      ? 'Фамилия и имя — буквами, через пробел' : '';
+  },
+  phone: (v) => window.QTR_PHONE.problem(v),
+  email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? '' : 'Проверьте адрес почты',
+  password: (v) => passwordProblem(v, val('email')),
+};
+function check(id) {
+  const el = document.getElementById(id);
+  const problem = CHECKS[id](id === 'password' ? el.value : el.value.trim());
+  document.getElementById(id + 'Err').textContent = problem;
+  el.closest('.field').classList.toggle('bad', !!problem);
+  return !problem;
+}
+function wireRegister() {
+  window.QTR_PHONE.attach(document.getElementById('phone'));
+  const kind = document.getElementById('kind');
+  const hint = () => { document.getElementById('kindHint').textContent = kind.value === 'contractor'
+    ? 'Допуск на объекты связи проверяет и подтверждает ДИТ вместе с СУА — доступ откроется после проверки.'
+    : 'Для новой организации доступ открывается сразу после подтверждения почты.'; };
+  kind.addEventListener('change', hint); hint();
+  // БИН — только цифры, не больше 12.
+  const bin = document.getElementById('bin');
+  bin.addEventListener('input', () => { bin.value = bin.value.replace(/\D/g, '').slice(0, 12); if (bin.value.length === 12) check('bin'); });
+  // Проверка поля — при уходе с него; исправление снимает ошибку сразу.
+  for (const id of Object.keys(CHECKS)) {
+    const el = document.getElementById(id);
+    el.addEventListener('blur', () => { if (el.value.trim() || el.closest('.field').classList.contains('bad')) check(id); });
+    el.addEventListener('input', () => { if (el.closest('.field').classList.contains('bad')) check(id); });
+  }
+  const pwd = document.getElementById('password');
+  pwd.addEventListener('input', () => {
+    const p = passwordProblem(pwd.value, val('email'));
+    const hint = document.getElementById('passwordHint');
+    hint.textContent = pwd.value ? (p || '✓ Пароль подходит') : 'Лучше — фраза из нескольких слов';
+    hint.style.color = pwd.value && !p ? 'var(--ok, #1E7A4C)' : '';
+  });
+  document.getElementById('consent').addEventListener('change', () => { document.getElementById('consentErr').textContent = ''; });
+}
+function validateRegister() {
+  let ok = true;
+  for (const id of Object.keys(CHECKS)) ok = check(id) && ok;
+  if (!document.getElementById('consent').checked) {
+    document.getElementById('consentErr').textContent = 'Нужно согласие на обработку персональных данных';
+    ok = false;
+  }
+  if (!ok) document.querySelector('.field.bad input')?.focus();
+  return ok;
+}
+
+/** Ошибки сервера: общая — сверху, по полям — под полями. */
+function fail(error) {
+  document.querySelectorAll('.err').forEach((e) => { e.textContent = ''; });
+  if (error?.fields) {
+    let placed = false;
+    for (const [k, text] of Object.entries(error.fields)) {
+      const el = document.getElementById(k + 'Err');
+      if (el) { el.textContent = text; placed = true; }
+    }
+    if (placed) return;
+  }
+  const box = document.querySelector('.alert') || document.createElement('div');
+  box.className = 'alert bad';
+  box.textContent = error?.status === 0 ? 'Сервер недоступен. Проверьте соединение.' : (error?.message || 'Ошибка');
+  if (!box.parentNode) document.querySelector('#view h2').after(box);
+}
+
+async function run(button, fn) {
+  button.disabled = true;
+  try { await fn(); } catch (error) { fail(error); } finally { button.disabled = false; }
+}
+
+const doLogin = (b) => run(b, async () => {
+  state.email = val('email').toLowerCase();
+  const r = await api.call('POST', '/auth/login', { email: state.email, password: document.getElementById('password').value });
+  state.challengeId = r.challengeId; state.sentTo = r.sentTo; state.demoCode = r.demoCode || '';
+  show('code');
+});
+const doCode = (b) => run(b, async () => {
+  const r = await api.call('POST', '/auth/login/code', { challengeId: state.challengeId, code: val('code') });
+  if (r.pending) return show('pending', { kind: 'ok', text: 'Регистрация принята.' });
+  location.replace(next);
+});
+const doRegister = (b) => run(b, async () => {
+  if (!validateRegister()) return;
+  state.email = val('email').toLowerCase();
+  const r = await api.call('POST', '/auth/register', {
+    kind: document.getElementById('kind').value,
+    company: val('company'), bin: val('bin'), fullName: val('fullName'), position: val('position'),
+    phone: val('phone'), email: state.email, password: document.getElementById('password').value,
+    consent: document.getElementById('consent').checked,
+  });
+  state.challengeId = r.challengeId; state.sentTo = r.sentTo; state.demoCode = r.demoCode || '';
+  show('code', { kind: 'ok', text: 'Подтвердите почту кодом из письма.' });
+});
+const doForgot = (b) => run(b, async () => {
+  state.email = val('email').toLowerCase();
+  await api.call('POST', '/auth/password/forgot', { email: state.email });
+  show('login', { kind: 'ok', text: 'Если адрес зарегистрирован, ссылка придёт на почту в течение нескольких минут.' });
+});
+const doReset = (b) => run(b, async () => {
+  const password = document.getElementById('password').value;
+  if (password !== document.getElementById('password2').value) {
+    throw Object.assign(new Error('Пароли не совпадают'), { fields: { password2: 'Пароли не совпадают' } });
+  }
+  await api.call('POST', '/auth/password/reset', { token: params.get('reset') || params.get('invite'), password });
+  history.replaceState(null, '', '/login.html');
+  show('login', { kind: 'ok', text: 'Пароль сохранён. Войдите с новым паролем.' });
+});
+
+show(params.has('reset') || params.has('invite') ? 'reset' : params.get('mode') === 'register' ? 'register' : 'login');
+loadDemo();
+</script>
+</body>
+</html>

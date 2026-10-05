@@ -7,7 +7,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Db } from '../db/client.ts';
 import * as repo from '../db/repo.ts';
 import * as docs from '../db/documents.ts';
@@ -36,8 +36,17 @@ import { registerReportRoutes } from './reports.ts';
 import { registerAttachmentRoutes } from './attachments.ts';
 import { registerControlRoutes } from './controls.ts';
 import { assignMissing, registerExecutorRoutes } from './executors.ts';
+import { registerTaskRoutes } from './tasks.ts';
+import { registerMigrationRoutes } from './migration.ts';
+import * as executors from '../db/executors.ts';
+import { createLoginRoutes, sessionToken, sessionUser } from './login.ts';
+import type { LocalAuthOptions } from './login.ts';
 import { loadStageOverrides, registerDirectoryRoutes } from './directories.ts';
 import { registerPermitRoutes } from '../permits/server/routes.ts';
+import { registerLeaseRoutes } from '../permits/server/leases.ts';
+import { registerPeopleRoutes } from './people.ts';
+import { registerPrintRoutes } from './print.ts';
+import { registerTemplateRoutes } from './templates.ts';
 import { customerContract, customerRequest, customerTimeline } from './customer.ts';
 import * as notices from './events.ts';
 import { notify, roleRecipients } from './notify.ts';
@@ -74,6 +83,8 @@ export type AppOptions = {
   bootstrapAdminEmail?: string;
   /** Ограничение частоты запросов на один адрес. */
   rateLimit?: { windowMs?: number; max?: number };
+  /** Вход по паролю и коду на почту (src/server/login.ts). */
+  localAuth?: Partial<LocalAuthOptions>;
 };
 
 export function createApp(options: AppOptions) {
@@ -102,6 +113,20 @@ export function createApp(options: AppOptions) {
     }
     if (!actor.isActive) throw ApiError.forbidden('Учётная запись отключена');
     return actor;
+  }
+
+  /**
+   * Текущий пользователь: сессия входа по паролю и коду, затем — корпоративный
+   * вход через обратный прокси (если включён) либо учётная запись разработки.
+   */
+  async function currentActor(ctx: Ctx): Promise<Actor> {
+    const token = sessionToken(ctx.req.headers);
+    if (token) {
+      const userId = await sessionUser(db, token);
+      const actor = userId ? await repo.findActorById(db, userId) : null;
+      if (actor?.isActive) return actor;
+    }
+    return actorOf(requireIdentity(ctx.req.headers, auth));
   }
 
   /** Изменяющая операция принимается только со своего сайта. */
@@ -144,7 +169,7 @@ export function createApp(options: AppOptions) {
   }));
 
   router.get('/api/v1/me', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     // Реквизиты организации Заказчика подставляются в форму заявки и не
     // вводятся заново: заявка подаётся только от своей организации (С1).
     const counterparty = actor.counterpartyId
@@ -158,11 +183,12 @@ export function createApp(options: AppOptions) {
       ...(permissions.some((p) => !p.startsWith('permit.')) ? ['orpsd'] : []),
       ...(permissions.some((p) => p.startsWith('permit.')) ? ['permits'] : []),
     ];
+    const head = await db.one<{ is_head: boolean }>(`SELECT is_head FROM users WHERE id = $1`, [actor.id]);
     return {
       id: actor.id, email: actor.email, fullName: actor.fullName, roles: actor.roles,
-      branchId: actor.branchId, counterpartyId: actor.counterpartyId, counterparty,
+      branchId: actor.branchId, counterpartyId: actor.counterpartyId, counterparty, isHead: !!head?.is_head,
       isCustomer: rbac.isCustomer(actor), isExternal: rbac.isExternal(actor),
-      permissions, modules,
+      permissions, modules, demo: options.localAuth?.demoMode ?? false,
     };
   });
 
@@ -172,7 +198,7 @@ export function createApp(options: AppOptions) {
    * подачи заявки достаточно наименования, адреса и филиала (п. 16.1, К1).
    */
   router.get('/api/v1/facilities', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     if (rbac.can(actor, 'registry.view')) return { facilities: await repo.listFacilities(db) };
     rbac.require(actor, 'request.create');
     return {
@@ -185,7 +211,7 @@ export function createApp(options: AppOptions) {
 
   /** Карточка объекта: ярусы и размещённое оборудование — для оценки ТВ (п. 16.2). */
   router.get('/api/v1/facilities/:id', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'registry.view');
     const facility = (await repo.listFacilities(db)).find((f) => f.id === ctx.params.id);
     if (!facility) throw ApiError.notFound('Объект не найден');
@@ -197,12 +223,12 @@ export function createApp(options: AppOptions) {
   });
 
   router.get('/api/v1/tariffs', async (ctx) => {
-    await actorOf(requireIdentity(ctx.req.headers, auth));
+    await currentActor(ctx);
     return { tariffs: await repo.listTariffs(db, today()) };
   });
 
   router.get('/api/v1/requests', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.view');
     const rows = await repo.listRequests(db, {
       scope: rbac.requestScope(actor),
@@ -250,7 +276,7 @@ export function createApp(options: AppOptions) {
   const NEEDS_REASON: StageCode[] = ['closed_rejected', 'closed_cancelled'];
 
   router.get('/api/v1/requests/:id', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     const request = await loadVisible(actor, ctx.params.id);
     const customer = rbac.isCustomer(actor);
     const [services, remarks, history, events, contracts, memos, assignments, escalations] = await Promise.all([
@@ -339,7 +365,7 @@ export function createApp(options: AppOptions) {
   /** Подача заявки. Номер присваивается сразу (п. 6, ТЗ №7). */
   router.post('/api/v1/requests', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.create');
 
     const body = await ctx.body<{
@@ -491,7 +517,7 @@ export function createApp(options: AppOptions) {
    */
   router.post('/api/v1/requests/:id/facility', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     if (!rbac.can(actor, 'request.register') && !rbac.can(actor, 'request.tv')) throw ApiError.forbidden();
     const request = await loadVisible(actor, ctx.params.id);
     if (!['draft', 'registered', 'tv_review'].includes(request.stageCode)) {
@@ -527,7 +553,7 @@ export function createApp(options: AppOptions) {
    */
   router.post('/api/v1/requests/:id/registration', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.register');
 
     const body = await ctx.body<{ incomingNumber?: string; incomingDate?: string; version?: number }>();
@@ -558,7 +584,7 @@ export function createApp(options: AppOptions) {
   /** Переход по этапам. Единственный способ сменить этап заявки. */
   router.post('/api/v1/requests/:id/transition', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.transition');
 
     const body = await ctx.body<{
@@ -702,14 +728,16 @@ export function createApp(options: AppOptions) {
       `${p.quantity ? `, ${p.quantity} шт.` : ''}${p.weight ? `, масса ${p.weight} кг` : ''}${p.height ? `, высота ${p.height} м` : ''}` +
       `${p.power ? `, мощность ${p.power} кВт` : ''}. Внесите изменения в реестр АМС и загрузки.`;
     const dueAt = addWorkingDays(today(), 1, await repo.calendar(db));
+    const assignee = await executors.pickAssets(db);
     const row = await db.one<{ id: string }>(
-      `INSERT INTO registry_change_requests (facility_id, request_id, body, created_by, due_at)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id`, [r.facilityId, r.uuid, body, userId, dueAt]);
+      `INSERT INTO registry_change_requests (facility_id, request_id, body, created_by, due_at, assignee_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [r.facilityId, r.uuid, body, userId, dueAt, assignee?.id ?? null]);
     await repo.logEvent(db, {
       actorName: 'Система', action: 'Поставлена задача технического учёта: внести монтаж в реестр',
       entity: 'request', entityId: r.uuid, detail: `срок ${dueAt}`, regulationRef: 'пп. 13–14',
     });
-    await notifyRoles(['assets'], {
+    // Исполнитель — конкретный специалист техучёта; нет ни одного — весь техучёт.
+    await notify(db, assignee ? [assignee.email] : await roleRecipients(db, ['assets']), {
       eventKey: 'registry_change_requested', ruleId: 19,
       subject: `Монтаж по заявке ${r.number}: изменить реестр АМС`,
       body: `${body}\n\nСрок — не позднее ${dueAt} (пп. 13–14 Регламента).`,
@@ -743,7 +771,7 @@ export function createApp(options: AppOptions) {
   /** Фиксация оценки технической возможности (раздел 4, п. 16.5). */
   router.post('/api/v1/requests/:id/tv', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.tv');
 
     const body = await ctx.body<{
@@ -818,7 +846,7 @@ export function createApp(options: AppOptions) {
   /** Замечания к полям формы — основание возврата на доработку (ТЗ №11). */
   router.post('/api/v1/requests/:id/remarks', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.remark');
 
     const body = await ctx.body<{ remarks?: { field: string; text: string }[] }>();
@@ -874,19 +902,17 @@ export function createApp(options: AppOptions) {
       offset: Number(q.get('offset') ?? 0),
     };
   };
-  const requireAuditor = (actor: Actor) => {
-    if (!actor.roles.includes('admin') && !actor.roles.includes('oko')) throw ApiError.forbidden();
-  };
+  const requireAuditor = (actor: Actor) => rbac.require(actor, 'audit.view');
 
   router.get('/api/v1/audit', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     requireAuditor(actor);
     return { events: await repo.searchEvents(db, auditFilter(ctx.query)) };
   });
 
   /** Выгрузка журнала в CSV с теми же фильтрами — для проверки и хранения. */
   router.get('/api/v1/audit/export', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     requireAuditor(actor);
     const filter = { ...auditFilter(ctx.query), limit: 5000, offset: 0 };
     const rows = await repo.searchEvents(db, filter) as Record<string, any>[];
@@ -919,7 +945,7 @@ export function createApp(options: AppOptions) {
 
   const deps: RouteDeps = {
     db,
-    actor: (ctx) => actorOf(requireIdentity(ctx.req.headers, auth)),
+    actor: (ctx) => currentActor(ctx),
     guardOrigin,
     audit: auditOf,
     loadVisible,
@@ -937,14 +963,34 @@ export function createApp(options: AppOptions) {
   registerAttachmentRoutes(router, deps);
   registerControlRoutes(router, deps);
   registerExecutorRoutes(router, deps);
+  registerTaskRoutes(router, deps);
+  registerMigrationRoutes(router, deps);
+  createLoginRoutes(db, {
+    secret: options.localAuth?.secret || randomBytes(32).toString('hex'),
+    cookieSecure: options.localAuth?.cookieSecure ?? true,
+    sendMail: options.localAuth?.sendMail ?? null,
+    selfRegistration: options.localAuth?.selfRegistration ?? true,
+    appOrigin: options.appOrigin,
+    bootstrapAdminEmail: options.bootstrapAdminEmail,
+    limits: options.localAuth?.limits,
+    demoMode: options.localAuth?.demoMode ?? false,
+    demoPassword: options.localAuth?.demoPassword,
+  }, {
+    guardOrigin, audit: auditOf, actor: currentActor,
+    originOf: (ctx) => originOfRequest(ctx.req.headers, options.trustProxy ?? false) ?? '',
+  }).register(router);
   registerDirectoryRoutes(router, deps);
   registerPermitRoutes(router, deps);
+  registerLeaseRoutes(router, deps);
+  registerPeopleRoutes(router, deps);
+  registerPrintRoutes(router, deps);
+  registerTemplateRoutes(router, deps);
 
   /* ------------------------------ архив актов ----------------------------- */
 
   /** Поиск по архиву: все критерии комбинируются (требование архива №4). */
   router.get('/api/v1/documents', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.view');
     const q = ctx.query;
     const rows = await docs.searchDocuments(db, {
@@ -967,7 +1013,7 @@ export function createApp(options: AppOptions) {
 
   /** Выгрузка найденных документов архива в CSV с теми же фильтрами (С6). */
   router.get('/api/v1/documents/export', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.view');
     const q = ctx.query;
     const rows = await docs.searchDocuments(db, {
@@ -1003,13 +1049,13 @@ export function createApp(options: AppOptions) {
 
   /** Сколько документов ждёт визы — отметка в меню (С14). */
   router.get('/api/v1/documents/pending-count', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.view');
     return { count: await docs.pendingCount(db, onlyBranch(actor) ? actor.branchId ?? undefined : undefined) };
   });
 
   router.get('/api/v1/documents/:id', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     const document = await loadDocument(actor, ctx.params.id);
     await repo.logEvent(db, {
       ...auditOf(ctx, actor), action: 'Просмотр карточки документа', entity: 'document',
@@ -1123,7 +1169,7 @@ export function createApp(options: AppOptions) {
    */
   router.post('/api/v1/documents', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.upload');
     if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
 
@@ -1246,7 +1292,7 @@ export function createApp(options: AppOptions) {
   /** Замена файла: новая версия, визирование снимается. */
   router.post('/api/v1/documents/:id/versions', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.upload');
     if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
 
@@ -1272,7 +1318,7 @@ export function createApp(options: AppOptions) {
   /** Визирование карточки. После него правка и удаление закрыты. */
   router.post('/api/v1/documents/:id/approve', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.approve');
     const document = await loadDocument(actor, ctx.params.id);
     if (document.kind === 'Приложение') throw ApiError.badRequest('Приложение к заявке не визируется');
@@ -1305,7 +1351,7 @@ export function createApp(options: AppOptions) {
   /** Удаление карточки — только до визирования (требование ТЗ по архиву). */
   router.post('/api/v1/documents/:id/delete', async (ctx) => {
     guardOrigin(ctx);
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'documents.upload');
     const document = await loadDocument(actor, ctx.params.id);
     if (document.approved) throw ApiError.forbidden('Завизированный документ удалить нельзя');
@@ -1323,7 +1369,7 @@ export function createApp(options: AppOptions) {
 
   /** Скачивание файла. Каждое обращение фиксируется в журнале с именем файла. */
   router.get('/api/v1/documents/:id/file', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     if (!store) throw new ApiError('Хранилище файлов не настроено', 503, 'storage_unavailable');
     const document = await loadDocument(actor, ctx.params.id);
     const version = Number(ctx.query.get('version')) || document.current_version;
@@ -1363,7 +1409,7 @@ export function createApp(options: AppOptions) {
 
   /** Доска: колонки-этапы со счётчиками и карточками. */
   router.get('/api/v1/board', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'request.view');
     // Доска этапов — рабочий инструмент Общества; Заказчику — «Мои заявки» (В1).
     if (rbac.isCustomer(actor)) throw ApiError.forbidden();
@@ -1386,7 +1432,7 @@ export function createApp(options: AppOptions) {
 
   /** Показатели узких мест: медиана против норматива и разбивка по сторонам. */
   router.get('/api/v1/metrics', async (ctx) => {
-    const actor = await actorOf(requireIdentity(ctx.req.headers, auth));
+    const actor = await currentActor(ctx);
     rbac.require(actor, 'metrics.view');
     const cal = await repo.calendar(db);
     const records = ((await repo.allStageRecords(db, 400)) as Record<string, any>[]).map(toStageRecord);

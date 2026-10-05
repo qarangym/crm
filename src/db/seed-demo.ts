@@ -57,8 +57,8 @@ const TARIFFS: [string, string, string, number, string, string | null, boolean][
 const COUNTERPARTIES: [string, string, string][] = [
   ['501400004114', 'ТОО «Спектр Телеком»', 'info@spektr.kz'],
   ['501400005251', 'АО «Транстелеком-Демо»', 'info@transtelecom.demo'],
-  ['501400006398', 'ТОО «Алатау Медиа»', 'info@alatau.demo'],
-  ['501400007435', 'ТОО «Каспий Сигнал»', 'info@kaspiy.demo'],
+  ['501400006399', 'ТОО «Алатау Медиа»', 'info@alatau.demo'],
+  ['501400007436', 'ТОО «Каспий Сигнал»', 'info@kaspiy.demo'],
 ];
 
 try {

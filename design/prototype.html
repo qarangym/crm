@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CRM ОР ПСД — дизайн-прототип</title>
+<title>Заявки ОР ПСД — АО «Казтелерадио»</title>
 <style>
 /* inline: shell.css */
 /*
@@ -13,9 +13,12 @@
 :root{
   /* Палитра перенесена из действующего прототипа QTR CRM и старого прототипа доски. */
   --blue:#003399; --blue-deep:#00246B; --blue-hover:#0045D9; --yellow:#FFCC00;
-  --ink:#17243B; --muted:#6B7280; --muted-2:#9CA3AF;
+  /* Второстепенный текст — не ниже 4,5:1 на белом и на фонах колонок (WCAG AA). */
+  --ink:#17243B; --muted:#5F6878; --muted-2:#646C7A;
   --line:#E6EAF1; --bg:#F3F5F9; --surface:#FFFFFF;
   --ok:#0E9F6E; --warn:#D98A00; --bad:#D6323C;
+  /* Те же состояния для текста на светлых плашках: --ok/--warn годятся для заливок и значков, не для букв. */
+  --ok-ink:#067A52; --warn-ink:#9A5B00; --bad-ink:#B4232D;
   --tint:#EDF2FB; --tint-2:#EAF0FC;
   --r:14px; --r-sm:9px;
   --shadow:0 1px 2px rgba(23,36,59,.06), 0 8px 24px rgba(23,36,59,.05);
@@ -26,6 +29,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
 a{color:var(--blue);text-decoration:none}
 button{font:inherit;cursor:pointer}
+/* Фокус с клавиатуры виден на любом элементе управления. */
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.nav button.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
 
 /* ------------------------------- каркас ------------------------------- */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -34,7 +40,7 @@ button{font:inherit;cursor:pointer}
 .brand img{width:46px;height:auto;flex:none;border-radius:7px}
 .brand b{display:block;font-size:14px;line-height:1.2}
 .brand small{color:var(--muted);font-size:11.5px}
-.side-label{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
+.side-label{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
 .nav{display:flex;flex-direction:column;gap:2px}
 .nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
   background:transparent;color:var(--ink);text-align:left;font-size:14px}
@@ -46,6 +52,16 @@ button{font:inherit;cursor:pointer}
 .nav button .badge{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--bad);color:#fff;
   border-radius:20px;padding:1px 7px}
 .nav button.on .badge{background:rgba(255,255,255,.22)}
+.nav button .badge.calm{background:#DCE5F6;color:var(--blue)}
+.task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer}
+.task:last-child{border-bottom:0}
+.task:hover{background:#FAFBFE}
+.task .k{flex:none;min-width:118px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.task .t{flex:1;min-width:0}
+.task .t b{display:block;font-size:13.5px;font-weight:600}
+.task .t small{color:var(--muted);font-size:12px}
+.task .d{flex:none;text-align:right;font-size:12px}
+@media (max-width:760px){.task{flex-wrap:wrap}.task .k{min-width:0;width:100%}.task .d{text-align:left}}
 
 /* Иконки наследуют цвет текста и выравниваются по базовой линии подписи. */
 .i{flex:none;vertical-align:-3px}
@@ -55,10 +71,13 @@ button{font:inherit;cursor:pointer}
 .main{min-width:0;display:flex;flex-direction:column}
 .top{background:var(--surface);border-bottom:1px solid var(--line);padding:16px 26px;
   display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
-.top .eyebrow{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700}
+.top .eyebrow{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700}
 .top h1{font-size:23px;margin-top:2px}
 .top p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
 .top .sp{flex:1}
+.whoami{font-size:12px;color:var(--muted);text-align:right;line-height:1.35;max-width:260px}
+.whoami b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+.whoami:empty{display:none}
 .wrap{padding:22px 26px 44px}
 
 /* ------------------------------ элементы ------------------------------ */
@@ -78,20 +97,20 @@ button{font:inherit;cursor:pointer}
 .panel-body{padding:18px}
 
 .chip{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 9px;
-  font-size:11.5px;font-weight:700;background:var(--tint);color:var(--blue);white-space:nowrap}
-.chip.g{background:#E7F6EF;color:var(--ok)}
-.chip.w{background:#FDF3E2;color:var(--warn)}
-.chip.r{background:#FBEAEB;color:var(--bad)}
+  font-size:12px;font-weight:700;background:var(--tint);color:var(--blue);white-space:nowrap}
+.chip.g{background:#E7F6EF;color:var(--ok-ink)}
+.chip.w{background:#FDF3E2;color:var(--warn-ink)}
+.chip.r{background:#FBEAEB;color:var(--bad-ink)}
 .chip.n{background:#F1F3F7;color:var(--muted)}
 .chip.svc-tu{background:#E8EEFB;color:var(--blue)}
 .chip.svc-psd{background:#EFEAFB;color:#5B3FBF}
 .chip.svc-smr{background:#FFF6DA;color:#8A6500}
 
-.ref{font-size:11.5px;color:var(--muted-2)}
+.ref{font-size:12px;color:var(--muted-2)}
 .ref.pin{display:inline-block;border:1px dashed #D6DEEC;border-radius:6px;padding:1px 6px;color:var(--muted)}
 
 table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;font-size:11px;letter-spacing:.05em;color:var(--muted-2);font-weight:700;
+th{text-align:left;font-size:11.5px;letter-spacing:.04em;color:var(--muted-2);font-weight:700;
   padding:10px 12px;border-bottom:1px solid var(--line);text-transform:uppercase}
 td{padding:11px 12px;border-bottom:1px solid #F1F4F9;vertical-align:top}
 tr:last-child td{border-bottom:0}
@@ -104,7 +123,7 @@ tbody tr:hover{background:#FAFBFE}
 
 /* -------------------------------- доска -------------------------------- */
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 10px;
+select,input[type=search],input[type=date],input[type=month]{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 10px;
   font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink);min-width:150px}
 .board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
 .col{flex:0 0 262px;background:#EEF1F7;border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:9px}
@@ -112,8 +131,8 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .col-head .no{width:20px;height:20px;border-radius:6px;background:var(--surface);color:var(--muted);
   display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
 .col-head b{font-size:13px;display:block;line-height:1.3}
-.col-head .sla{display:block;font-size:11px;color:var(--muted);margin-top:2px}
-.col-head .owner{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:700;
+.col-head .sla{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.col-head .owner{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:700;
   background:var(--surface);border-radius:20px;padding:1px 7px;color:var(--blue)}
 .col-head .cnt{margin-left:auto;font-size:12px;font-weight:800;color:var(--muted);
   background:var(--surface);border-radius:20px;padding:1px 8px}
@@ -127,7 +146,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .card .foot{display:flex;align-items:center;gap:5px;margin-top:9px;flex-wrap:wrap}
 .card.late{border-left:3px solid var(--bad)}
 .card .who{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink)}
-.card .who .ref{font-size:11px}
+.card .who .ref{font-size:11.5px}
 .ava{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;flex:none;
   background:#E6EDFA;color:var(--blue);font-size:9.5px;font-weight:800;letter-spacing:.02em}
 .ava.none{background:#FBEAEB;color:var(--bad)}
@@ -141,13 +160,13 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .kpi .big small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
 .kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:5px}
-.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
-@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1100px){.grid2{grid-template-columns:minmax(0,1fr)}}
 
 .bar-row{display:grid;grid-template-columns:200px 1fr 92px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #F1F4F9}
 .bar-row:last-child{border-bottom:0}
 .bar-row .lbl b{font-size:13px;display:block}
-.bar-row .lbl small{font-size:11px;color:var(--muted-2)}
+.bar-row .lbl small{font-size:12px;color:var(--muted-2)}
 .track{position:relative;height:22px;background:#F1F4F9;border-radius:6px;overflow:hidden}
 .track i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--blue);opacity:.85}
 .track .norm{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
@@ -206,7 +225,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
   display:grid;place-items:center;font-size:11px;font-weight:800}
 .steps div.cur{border-color:var(--blue);color:var(--blue);font-weight:700}
 .steps div.cur .n{background:var(--blue);color:#fff}
-.steps div.passed{color:var(--ok);border-color:#CCEADC}
+.steps div.passed{color:var(--ok-ink);border-color:#CCEADC}
 .steps div.passed .n{background:var(--ok);color:#fff}
 
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -221,7 +240,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .field .err{display:none;font-size:11.5px;color:var(--bad);margin-top:4px}
 .field.bad .err{display:block}
 .field .hint{font-size:11.5px;color:var(--muted-2);margin-top:4px}
-.field .ok-mark{float:right;color:var(--ok);font-size:11.5px;font-weight:700}
+.field .ok-mark{float:right;color:var(--ok-ink);font-size:11.5px;font-weight:700}
 
 .svc-pick{display:flex;gap:10px;flex-wrap:wrap}
 .svc-pick label{flex:1;min-width:190px;border:1px solid var(--line);border-radius:11px;padding:13px 15px;
@@ -275,6 +294,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .portal-intro h2{font-size:19px;margin-bottom:5px}
 .portal-intro p{margin:0;color:var(--muted);font-size:13.5px;max-width:560px}
 .portal-steps{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+.wiz-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
 .portal-steps div{display:flex;gap:9px;align-items:flex-start;background:var(--tint);border-radius:11px;
   padding:11px 14px;min-width:172px}
 .portal-steps span{font-size:11px;font-weight:800;color:var(--blue);opacity:.55}
@@ -361,8 +381,58 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
   .portal-intro{padding:16px}
   .portal-intro img{width:72px}
   .filters select,.filters input[type=search]{min-width:0;flex:1 1 140px}
-  #exportBtn span,#newBtn span{display:none}
+  #exportBtn span,#bellBtn span{display:none}
+  .whoami{display:none}
+  /* Палец, а не мышь: элементы управления не ниже 40 px. */
+  .btn,select,input:not([type=checkbox]):not([type=radio]),textarea{min-height:40px}
+  .btn{justify-content:center}
+  .portal-intro{gap:12px}
+  .portal-intro img{width:48px}
+  .portal-intro h2{display:none}
+  .portal-steps{display:none}
+  /* Шаги мастера — одной строкой с прокруткой; текущий шаг прокручивается в видимую часть (index.html). */
+  .steps{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:0 16px}
+  .steps div{flex:none}
+  /* Главное действие мастера — первым и во всю ширину. */
+  .wiz-actions .btn.primary{order:-1;flex:1 1 100%}
+  .wiz-actions .sp-grow{display:none}
+  /* Главные таблицы внешних пользователей на телефоне — карточками: всё видно без прокрутки вбок. */
+  table.stack-sm,table.stack-sm tbody{display:block}
+  section.panel .panel-body table.stack-sm{white-space:normal;overflow:visible}
+  table.stack-sm thead{display:none}
+  table.stack-sm tr{display:block;padding:12px 8px;border-bottom:1px solid var(--line)}
+  table.stack-sm tr:last-child{border-bottom:0}
+  table.stack-sm td{display:block;border:0;padding:3px 0}
+  table.stack-sm td:empty{display:none}
+  table.stack-sm td.num{text-align:left}
 }
+/* Колокольчик уведомлений */
+.bell-host{position:relative}
+.bell{position:relative;padding:7px 9px}
+.bell-n{position:absolute;top:1px;right:1px;min-width:17px;height:17px;border-radius:9px;background:var(--bad);color:#fff;
+  font-size:10.5px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.bell-n[hidden]{display:none}
+.bell-panel{position:absolute;right:0;top:calc(100% + 6px);width:min(380px,92vw);max-height:70vh;overflow:auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(15,23,40,.18);z-index:60}
+.bell-panel[hidden]{display:none}
+.bell-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+.bell-item{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-bottom:1px solid #F1F4F9;color:var(--ink);text-decoration:none;font-size:12.5px}
+.bell-item.new{background:var(--tint)}
+.bell-item b{font-size:13px}
+.bell-item span{color:var(--muted)}
+.bell-item time{font-size:11px;color:var(--muted-2)}
+.chip.b{background:#E8EEFB;color:var(--blue)}
+
+/* Демонстрационный стенд (DEMO_MODE): полоса над страницей. */
+.demo-ribbon{position:sticky;top:0;z-index:30;background:#F6C344;color:#3A2E05;font-size:12px;font-weight:600;text-align:center;
+  padding:4px 12px;letter-spacing:.01em}
+
+/* Справка и приветствие */
+.help-box{max-width:560px}
+.help-box .body{max-height:65vh;overflow:auto}
+.help-box h4{font-size:14px;margin:0 0 6px}
+.help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.45}
+.help-box section + section{border-top:1px solid var(--line);padding-top:12px}
 
 </style>
 </head>
@@ -371,14 +441,16 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
   <aside class="side">
     <div class="brand">
       <img id="brandMark" alt="QTR — АО «Казтелерадио»">
-      <div><b>CRM ОР ПСД</b><small>Отдел разработки ПСД</small></div>
+      <div id="brandText"><b>Заявки ОР ПСД</b><small>ТУ, ПСД и СМР на объектах</small></div>
     </div>
-    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <div class="side-label" id="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div>
     <nav class="nav" id="nav"></nav>
-    <div class="side-label">ПОРТАЛ ЗАКАЗЧИКА</div>
+    <div class="side-label" id="portalLabel">ЗАЯВКИ ЗАКАЗЧИКОВ</div>
     <nav class="nav" id="navPortal"></nav>
-    <div class="side-label">РЕГЛАМЕНТ</div>
+    <div class="side-label" id="nav2Label">СПРАВКА ПО РЕГЛАМЕНТУ</div>
     <nav class="nav" id="nav2"></nav>
+    <div class="side-label" id="nav3Label">АДМИНИСТРИРОВАНИЕ</div>
+    <nav class="nav" id="nav3"></nav>
     <div class="side-label" id="permitsLabel" style="display:none">ДРУГИЕ МОДУЛИ</div>
     <nav class="nav" id="navPermits"></nav>
   </aside>
@@ -388,7 +460,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
       <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
         <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
-        <div class="eyebrow" id="eyebrow">ОТДЕЛ РАЗРАБОТКИ ПСД</div>
+        <div class="eyebrow" id="eyebrow">ЗАЯВКИ НА УСЛУГИ ОР ПСД</div>
         <h1 id="title">Доска заявок</h1>
         <p id="subtitle"></p>
       </div>
@@ -397,6 +469,10 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
         onclick="go('bottlenecks')" id="bellBtn"></button>
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
       <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
+      <div id="helpHost"></div>
+      <div class="bell-host" id="bellHost"></div>
+      <div class="whoami" id="whoami"></div>
+      <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
     </header>
     <div class="wrap" id="view"></div>
   </main>
@@ -1376,6 +1452,18 @@ window.QTR_CONFIG = {
 
     requests: (params) => request('GET', '/requests' + query(params)),
     request: (id) => request('GET', `/requests/${id}`),
+    /** «Мои задачи» сотрудника и нагрузка команды (п. 102). */
+    tasks: (user) => request('GET', '/tasks' + query({ user })),
+    tasksCount: () => request('GET', '/tasks/count'),
+    tasksLoad: () => request('GET', '/tasks/load'),
+    /** Замещение на время отсутствия (src/server/people.ts). */
+    absences: () => request('GET', '/absences'),
+    saveAbsence: (body) => request('POST', '/absences', { body }),
+    deleteAbsence: (id) => request('POST', `/absences/${id}/delete`, { body: {} }),
+    colleagues: () => request('GET', '/colleagues'),
+    /** Тексты писем в справочнике (src/server/templates.ts). */
+    mailTemplates: () => request('GET', '/mail-templates'),
+    saveMailTemplate: (key, body) => request('POST', `/mail-templates/${key}`, { body }),
     /** Ответственный ОР ПСД, исполнитель этапа и кому их можно передать (п. 102). */
     executors: (id) => request('GET', `/requests/${id}/executors`),
     setExecutor: (id, body) => request('POST', `/requests/${id}/executor`, { body }),
@@ -1437,8 +1525,12 @@ window.QTR_CONFIG = {
     saveUser: (body) => request('POST', '/users', { body }),
     disableUser: (id) => request('POST', `/users/${id}/disable`, { body: {} }),
     enableUser: (id) => request('POST', `/users/${id}/enable`, { body: {} }),
+    /** Ссылка на первый пароль по почте (src/server/login.ts). */
+    inviteUser: (id) => request('POST', `/users/${id}/invite`, { body: {} }),
     /** Импорт из кадровой выгрузки: apply=false — предпросмотр без записи. */
     importUsers: (csv, apply) => request('POST', '/users/import', { body: { csv, apply } }),
+    /** Перенос действующих заявок из таблицы ОР ПСД (src/server/migration.ts). */
+    importRequests: (csv, apply) => request('POST', '/admin/import-requests', { body: { csv, apply } }),
     branches: () => request('GET', '/branches'),
     counterparties: (q) => request('GET', '/counterparties' + query({ q })),
     audit: (params) => request('GET', '/audit' + query(params)),
@@ -1514,6 +1606,94 @@ window.QTR_CONFIG = {
 
 </script>
 <script>
+/* inline: phone.js */
+/**
+ * Телефон РК: маска «+7 XXX XXX XX XX» при вводе и проверка номера.
+ *
+ * Поле всегда начинается с «+7 », цифры раскладываются по группам по мере
+ * ввода. Вставка «8 701 …», «+7701…», «87011234567» приводится к тому же виду.
+ * Принимаются только номера Казахстана: после +7 идёт 7 (мобильные 7XX и
+ * городские 7XXX). Та же проверка — на сервере (src/domain/validation.ts).
+ *
+ * Подключение: <script src="phone.js"></script>, затем QTR_PHONE.attach(input)
+ * либо обработчики onInput/onKeydown/onFocus/onBlur прямо в разметке.
+ */
+(function () {
+  const PREFIX = '+7 ';
+
+  /** Десять цифр номера без кода страны. */
+  function digitsOf(value) {
+    let text = String(value ?? '').trim();
+    if (text.startsWith('+7')) text = text.slice(2);
+    let d = text.replace(/\D/g, '');
+    // Вставлен полный номер: «8 701 …» или «7 701 …».
+    if (d.length === 11 && (d[0] === '8' || d[0] === '7')) d = d.slice(1);
+    // Привычная «восьмёрка» в начале: номера РК после +7 с 8 не начинаются.
+    if (d[0] === '8') d = d.slice(1);
+    return d.slice(0, 10);
+  }
+
+  /** «7011234567» → «+7 701 123 45 67»; незаконченный номер — по мере ввода. */
+  function format(value) {
+    const d = digitsOf(value);
+    if (!d) return '';
+    const parts = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 8), d.slice(8, 10)].filter(Boolean);
+    return PREFIX + parts.join(' ');
+  }
+
+  /** Пустая строка — номер верный, иначе — что не так. */
+  function problem(value) {
+    const d = digitsOf(value);
+    if (!d) return 'Укажите телефон';
+    if (d.length < 10) return 'Номер неполный: +7 XXX XXX XX XX';
+    if (d[0] !== '7') return 'Номер Казахстана начинается с +7 7…';
+    if (/(\d)\1{7}/.test('7' + d)) return 'Проверьте номер';
+    return '';
+  }
+
+  function onInput(el) {
+    const next = format(el.value) || PREFIX;
+    if (el.value !== next) el.value = next;
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
+
+  /** Стирание: удаляется цифра, а не пробел-разделитель; «+7 » не стирается. */
+  function onKeydown(event) {
+    const el = event.target;
+    if (event.key !== 'Backspace' || el.selectionStart !== el.selectionEnd || el.selectionEnd !== el.value.length) return;
+    event.preventDefault();
+    const d = digitsOf(el.value).slice(0, -1);
+    el.value = format(d) || PREFIX;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function onFocus(el) {
+    if (!el.value) el.value = PREFIX;
+    requestAnimationFrame(() => el.setSelectionRange(el.value.length, el.value.length));
+  }
+
+  function onBlur(el) {
+    if (!digitsOf(el.value)) el.value = '';
+  }
+
+  function attach(el) {
+    el.type = 'tel';
+    el.inputMode = 'tel';
+    el.autocomplete = 'tel';
+    el.maxLength = 16;
+    el.placeholder = '+7 7XX XXX XX XX';
+    if (el.value) el.value = format(el.value);
+    el.addEventListener('input', () => onInput(el));
+    el.addEventListener('keydown', onKeydown);
+    el.addEventListener('focus', () => onFocus(el));
+    el.addEventListener('blur', () => onBlur(el));
+  }
+
+  window.QTR_PHONE = { attach, format, problem, digitsOf, onInput, onKeydown, onFocus, onBlur };
+})();
+
+</script>
+<script>
 /* inline: shell.js */
 /**
  * Общие помощники интерфейса: иконки, экранирование, даты, диалог и сообщения.
@@ -1568,6 +1748,19 @@ const fmt = (d) => {
   return date.toLocaleDateString('ru-RU', sameYear ? { day: '2-digit', month: 'short' } : { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 const fmtFull = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('ru-RU') : '—';
+
+/* ---------------------------------- вход --------------------------------- */
+
+/** Нет сессии — на страницу входа с возвратом туда, где был пользователь. */
+function toLogin() {
+  location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search + location.hash));
+}
+
+/** Выход: сессия закрывается на сервере, cookie стирается. */
+async function logout() {
+  try { await window.QTR_API.call('POST', '/auth/logout'); } catch { /* сессия уже закрыта */ }
+  location.replace('/login.html');
+}
 
 /* -------------------------------- диалог -------------------------------- */
 
@@ -1653,6 +1846,172 @@ function toast(text, kind = 'info') {
 }
 
 
+/* ------------------------------ колокольчик ------------------------------
+   Уведомления в системе: копия каждого письма пользователю. Кнопка в шапке,
+   число непрочитанных, список с переходом в карточку. Опрос раз в минуту. */
+
+let bellTimer = null;
+function mountBell(host) {
+  if (!host) return;
+  const api = window.QTR_API;
+  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
+    <div class="bell-panel" hidden></div>`;
+  const button = host.querySelector('.bell');
+  const badge = host.querySelector('.bell-n');
+  const panel = host.querySelector('.bell-panel');
+  const show = (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); };
+  const refresh = async () => { try { show((await api.call('GET', '/inbox/count')).unread); } catch { /* сеть */ } };
+  const when = (v) => new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  async function open() {
+    panel.hidden = false;
+    panel.innerHTML = '<div class="ref" style="padding:14px">Загрузка…</div>';
+    try {
+      const { items, unread } = await api.call('GET', '/inbox?limit=40');
+      show(unread);
+      panel.innerHTML = `<div class="bell-head"><b>Уведомления</b>
+        ${unread ? '<button class="btn ghost sm" data-all>Прочитать все</button>' : ''}</div>
+        ${items.length ? items.map((i) => `<a class="bell-item ${i.read_at ? '' : 'new'}" data-id="${i.id}" href="${esc(i.link || '#')}">
+          <b>${esc(i.subject)}</b><span>${esc(String(i.body || '').split('\n')[0].slice(0, 160))}</span><time>${when(i.created_at)}</time></a>`).join('')
+          : '<div class="ref" style="padding:14px">Уведомлений нет</div>'}`;
+    } catch (error) {
+      panel.innerHTML = `<div class="ref" style="padding:14px">${esc(describeError(error))}</div>`;
+    }
+  }
+  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : (panel.hidden = true); });
+  panel.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    if (ev.target.closest('[data-all]')) {
+      show((await api.call('POST', '/inbox/read', { all: true })).unread);
+      return open();
+    }
+    const item = ev.target.closest('.bell-item');
+    if (!item) return;
+    if (item.getAttribute('href') === '#') ev.preventDefault();
+    panel.hidden = true;
+    // По ссылке переходит сам браузер; адрес («#ЗК-…», «#ЗД-…») открывает карточку в приложении (popstate).
+    // Отметка «прочитано» — в фоне, чтобы не задерживать переход.
+    api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] }).then((r) => show(r.unread)).catch(() => {});
+  });
+  document.addEventListener('click', () => { panel.hidden = true; });
+  refresh();
+  clearInterval(bellTimer);
+  bellTimer = setInterval(refresh, 60_000);
+}
+
+/* --------------------------- демонстрационный стенд ---------------------------
+   Сервер с DEMO_MODE отвечает в /me признаком demo: полоса вверху страницы, чтобы
+   стенд с вымышленными данными нельзя было спутать с рабочей системой. */
+
+function mountDemoRibbon(me) {
+  if (!me?.demo || document.querySelector('.demo-ribbon')) return;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'demo-ribbon';
+  ribbon.textContent = 'Демонстрационный стенд · данные вымышлены · код входа показывается на экране';
+  document.body.prepend(ribbon);
+}
+
+/* ------------------------------ справка ------------------------------
+   Что делать в системе — коротко, по роли (docs/Руководство_пользователя.md). Кнопка «Справка» в шапке;
+   при первом входе на этом браузере те же шаги показываются приветствием. */
+
+const HELP = {
+  orpsd: {
+    customer: ['Заказчик', [
+      '«Новая заявка»: выберите услуги — ТУ, ПСД, СМР, можно вместе, — объект и параметры оборудования. Форма покажет только нужные поля и ориентировочную стоимость.',
+      'На последнем шаге проверьте заявку и подайте. Номер присваивается сразу, подтверждение придёт на почту.',
+      '«Мои заявки» — статус и что происходит сейчас. Вернули с замечаниями — откройте заявку → «Исправить заявку»: номер и история сохранятся.',
+      'Договоры, счета и акты — в карточке заявки. Замечания к АВР — в течение 10 рабочих дней, иначе акт считается принятым.']],
+    records: ['Канцелярия', [
+      '«Мои задачи» — новые заявки ждут подтверждения регистрации: номер и дата уже присвоены, проверьте и нажмите «Подтвердить регистрацию».',
+      'Заявка пришла на бумаге или почтой — «Внести заявку» от имени Заказчика, со сканом письма.',
+      'Для дела — «Карточка заявки» в карточке: печатная форма.']],
+    orpsd: ['ОР ПСД', [
+      'Начинайте день с «Моих задач»: всё, что на вас, просроченное сверху.',
+      'В карточке заявки вверху — чего не хватает для перехода и пункт Регламента; внизу — «Следующий шаг».',
+      'Оценка ТВ: «Рассчитать по реестру» → результат и решение о поверочном расчёте → «Зафиксировать оценку».',
+      'Нужны данные филиала — «Служебные записки в филиал» в карточке: ответ за 3 рабочих дня.',
+      '«Доска заявок» — все заявки по этапам; отбор «Без исполнителя» должен быть пустым.']],
+    branch: ['Филиал', [
+      '«Мои задачи» — служебные записки ОР ПСД (ответ за 3 рабочих дня) и этапы СМР на ваших объектах.',
+      'Акт приёма-передачи и технический АВР — «Архив актов» → загрузка с реквизитами.',
+      'Допуски сторонних организаций на ваши объекты — «Портал допусков» в меню: согласование и проверка на объекте.']],
+    accounting: ['Расчёты с контрагентами', [
+      '«Мои задачи» — заявки, где нужен счёт, отметка оплаты, АВР или ЭСФ.',
+      'В карточке заявки — договоры по каждой услуге: отметка оплаты с фактической датой, загрузка АВР.']],
+    oko: ['ОКО', [
+      '«Мои задачи» — исполненные поручения, которые осталось закрыть.',
+      '«Поручения» — все поручения с исполнителями и сроками, выгрузка CSV.',
+      '«Отчёты», «Узкие места», «Журнал» — контроль сроков и действий.']],
+    management: ['Руководство', [
+      '«Доска заявок» и «Узкие места» — где заявки стоят дольше норматива.',
+      '«Нагрузка команды» — кто чем занят; «Отчёты» — с выгрузкой в Excel.']],
+    assets: ['Технический учёт', [
+      '«Мои задачи» — запросы на изменение реестра АМС, срок — 1 рабочий день.',
+      '«Реестр АМС и ТВ» — версии мастер-файла, по которым ОР ПСД оценивает техническую возможность.']],
+    permits: ['СУА', ['Основная работа — «Портал допусков» в меню. Здесь — архив актов для просмотра и поиска.']],
+    auditor: ['Аудитор', ['«Журнал» — все действия пользователей с отбором и выгрузкой; записи журнала изменить нельзя.']],
+    admin: ['ДИТ', [
+      '«Пользователи» — заведение, импорт, «Пригласить». Новые регистрации организаций ждут проверки — они же в «Моих задачах».',
+      '«Справочники» — филиалы и ответственные лица, объекты, календарь, прейскурант, тексты писем.',
+      '«Эскалации и уведомления» — доставка писем; «Журнал» — все действия.']],
+  },
+  permits: {
+    contractor: ['Сторонняя организация', [
+      'Сначала «Работники и бригады»: работники по Приложению 1 с удостоверениями и сроками, транспорт. Это делается один раз.',
+      '«Новая заявка»: цель работ → объект → основание (договор аренды или ТУ) → период → бригада.',
+      '«Сформировать запрос» — распечатайте запрос с Приложением 1, подпишите, заверьте печатью и приложите скан.',
+      'Ответ — не позднее 14 рабочих дней. Допуск с кодом — в «Моих заявках»: код предъявляется на объекте.',
+      'Авария — цель «Аварийно-восстановительные работы»: запрос можно приложить позже, в течение 2 дней.']],
+    permits: ['СУА', [
+      '«Очередь на рассмотрение» — срочные и аварийные сверху, срок ответа — 14 рабочих дней.',
+      'В карточке — проверка основания, бригада со сканами, подписанный запрос → «Выдать допуск» или «Отклонить» с причиной.',
+      'Руководство филиала не работает в системе — отметьте согласование, полученное устно или письмом.',
+      '«Договоры аренды» — реестр и загрузка таблицы; «Отчёт» — с выгрузкой в Excel.']],
+    branch: ['Филиал', [
+      '«Согласование филиала» — заявки на ваши объекты, где Инструкция требует согласования руководства.',
+      '«Проверка на объекте» — удобно с телефона: код допуска, ИИН или фамилия; инструктаж, спецодежда, обувь, СИЗ → «Допустить».',
+      'Работы закончены — «Закрыть допуск».']],
+    oko: ['ОКО', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    management: ['Руководство', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    admin: ['ДИТ', ['«Настройки» — режим проверки оснований, сроки и пределы Инструкции, безвизовые сроки СНГ.']],
+  },
+};
+
+function helpSections(me, module) {
+  const book = HELP[module] || {};
+  return Object.keys(book).filter((role) => (me?.roles || []).includes(role)).map((role) => book[role]);
+}
+
+function showHelp(me, module, welcome = false) {
+  const sections = helpSections(me, module);
+  if (!sections.length) return;
+  const box = document.createElement('div');
+  box.className = 'dlg';
+  const name = String(me.fullName || '').split(' ')[1] || me.fullName || '';
+  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true">
+    <header><h3>${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
+      <p>${welcome ? 'Коротко — с чего начать. Эти подсказки всегда под кнопкой «Справка» в шапке.' : 'Что делать в системе — по вашей роли.'}</p></header>
+    <div class="body">${sections.map(([title, steps]) => `<section><h4>${esc(title)}</h4>
+      <ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></section>`).join('')}</div>
+    <footer><button class="btn primary" data-act="ok">Понятно</button></footer></div>`;
+  const close = () => box.remove();
+  box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-act]')) close(); });
+  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  document.body.appendChild(box);
+  box.querySelector('[data-act]').focus();
+}
+
+/** Кнопка «Справка» в шапке и приветствие при первом входе на этом браузере. */
+function mountHelp(host, me, module) {
+  if (!host || !helpSections(me, module).length) return;
+  host.innerHTML = '<button class="btn ghost" type="button">Справка</button>';
+  host.querySelector('button').addEventListener('click', () => showHelp(me, module));
+  const key = `qtr.welcome.${module}.${me.id}`;
+  let seen = true;
+  try { seen = !!localStorage.getItem(key); localStorage.setItem(key, '1'); } catch { /* хранилище недоступно — без приветствия */ }
+  if (!seen) showHelp(me, module, true);
+}
+
 </script>
 <script>
 const A = window.QTR_ASSETS;
@@ -1723,6 +2082,7 @@ const ROLE_LABEL = {
   admin:'ДИТ', records:'Документооборот', orpsd:'ОР ПСД', branch:'Филиал', oko:'ОКО',
   assets:'Технический учёт активов', accounting:'Расчёты с контрагентами',
   management:'Руководство', customer:'Заказчик', contractor:'Подрядчик (допуски)', permits:'СУА · допуски',
+  auditor:'Аудитор (журнал)',
 };
 
 /* ----------------------- загрузка данных с сервера ----------------------- */
@@ -1837,11 +2197,19 @@ async function boot() {
     C = await api.config();
     state.me = await api.me();
     state.live = true;
+    document.getElementById('logoutBtn').style.display = '';
+    document.getElementById('logoutBtn').title = `Выйти (${state.me.email})`;
+    // Кто вошёл — в шапке, а не полосой над каждым экраном.
+    document.getElementById('whoami').innerHTML = `<b>${esc(state.me.fullName)}</b>${esc(state.me.roles.map((r) => ROLE_LABEL[r] || r).join(', '))}`;
+    mountBell(document.getElementById('bellHost'));
+    mountDemoRibbon(state.me);
     // Подрядчику доступен только портал допусков: сразу туда.
     const modules = state.me.modules || [];
     if (modules.includes('permits') && !modules.includes('orpsd')) { location.replace('/dopusk/'); return; }
+    mountHelp(document.getElementById('helpHost'), state.me, 'orpsd');
   } catch (error) {
     state.loading = false;
+    if (error.status === 401) { toLogin(); return; }
     if (error.status === 0) {
       // Сервер недоступен — например, файл открыт прямо с диска.
       // Это нормальный демонстрационный режим на встроенных примерах.
@@ -1856,11 +2224,16 @@ async function boot() {
     return;
   }
 
+  const initial = routeOf();
   try {
     D = { requests: [], facilities: [], tariffs: [], documents: [], branches: [], metrics: null };
     // Стартовый экран по роли: Заказчику — «Мои заявки» (В1).
     if (isCustomerUser()) view = 'mine';
-    else if (!viewAllowed(view)) view = [...MENU, ...MENU2].map(([k]) => k).find(viewAllowed) || 'board';
+    // Сотрудник начинает с «Моих задач»: то, что лежит именно на нём (п. 102).
+    else if (state.live) { view = 'tasks'; api.tasksCount().then((c) => { D.tasksBadge = c; renderNav(); }).catch(() => {}); }
+    else if (!viewAllowed(view)) view = [...MENU, ...MENU2, ...MENU3].map(([k]) => k).find(viewAllowed) || 'board';
+    // Адрес из закладки, обновления страницы или письма: «#/board», «#ЗК-2026-0001».
+    if (initial.view && viewAllowed(initial.view)) view = initial.view;
     if (can('documents.approve')) {
       D.pendingVisa = (await api.pendingCount().catch(() => ({ count: 0 }))).count;
     }
@@ -1871,6 +2244,45 @@ async function boot() {
     state.loading = false;
     render();
   }
+  if (!state.live) return;
+  history.replaceState(null, '', '#/' + view + (initial.card ? '/' + initial.card : ''));
+  window.addEventListener('popstate', applyRoute);
+  if (initial.card) await withRoute(() => openSheet(initial.card));
+}
+
+/* ------------------------------ адрес в браузере ------------------------------
+   Экран и открытая заявка записываются в адрес: работают «Назад» и «Вперёд» браузера, обновление
+   страницы оставляет на месте, ссылка из письма или колокольчика («/#ЗК-2026-0001») открывает заявку. */
+
+let routing = false;      // переход вызван самим адресом — новую запись в историю не добавлять
+let cardInHistory = false; // карточка открыта изнутри системы — закрытие возвращает на шаг назад
+
+function routeOf() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  return { view: /^\/([a-z]+)/.exec(h)?.[1] || null, card: /ЗК-\d{4}-\d{4}/.exec(h)?.[0] || null };
+}
+
+async function withRoute(fn) {
+  routing = true;
+  try { await fn(); } finally { routing = false; }
+}
+
+function pushRoute(card = null) {
+  if (routing || !state.live) return;
+  const hash = '#/' + view + (card ? '/' + card : '');
+  if (location.hash === hash) return;
+  history.pushState(null, '', hash);
+  cardInHistory = !!card;
+}
+
+async function applyRoute() {
+  const r = routeOf();
+  await withRoute(async () => {
+    if (r.view && r.view !== view && viewAllowed(r.view)) await go(r.view);
+    const open = document.getElementById('sheet').classList.contains('on');
+    if (r.card && (!open || sheetRequest?.number !== r.card)) await openSheet(r.card);
+    if (!r.card && open) closeSheet();
+  });
 }
 
 /** Догрузка данных под конкретный экран. Повторно не запрашиваем. */
@@ -1937,6 +2349,15 @@ async function loadView(target, force = false) {
       D.users = users;
       D.branchList = branches;
     });
+  }
+  if (target === 'tasks') {
+    // Список сотрудника; руководитель может открыть задачи другого (из «Нагрузки команды»).
+    D.tasks = await api.tasks(tasksUser === 'me' ? undefined : tasksUser);
+    D.tasksBadge = tasksUser === 'me' ? D.tasks.counts : D.tasksBadge;
+    D.absences = tasksUser === 'me' ? (await api.absences().catch(() => ({ absences: [] }))).absences : D.absences;
+  }
+  if (target === 'team') {
+    D.team = (await api.tasksLoad()).people;
   }
   if (target === 'audit') {
     await need('audit', async () => {
@@ -2084,16 +2505,20 @@ async function act(button, fn, successText) {
 }
 
 const MENU = [
+  // У каждого пункта своя иконка: одинаковые значки на разных пунктах путают.
+  ['tasks', 'Мои задачи', 'checks'], ['team', 'Нагрузка команды', 'users'],
   ['board', 'Доска заявок', 'board'], ['bottlenecks', 'Узкие места', 'funnel'],
-  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'checks'],
-  ['memos', 'Служебные записки', 'bell'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
+  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'arrow'],
+  ['memos', 'Служебные записки', 'copy'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
   ['archive', 'Архив актов', 'archive'],
 ];
-const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'checks']];
-const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock'],
-  ['directories', 'Справочники', 'archive'],
-  ['monitoring', 'Эскалации и уведомления', 'bell'], ['users', 'Пользователи', 'checks'], ['audit', 'Журнал', 'list']];
+const MENU_PORTAL = [['new', 'Новая заявка', 'filePlus'], ['mine', 'Мои заявки', 'list']];
+const MENU2 = [['stages', 'Этапы и сроки', 'clock'], ['rules', 'Автоматизации', 'sliders']];
+const MENU3 = [['directories', 'Справочники', 'search'], ['monitoring', 'Эскалации и уведомления', 'warn'],
+  ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
 const TITLES = {
+  tasks: ['Мои задачи', 'Всё, что лежит на вас: заявки, поручения, записки, документы на визу — просроченное сверху'],
+  team: ['Нагрузка команды', 'Кто чем занят и у кого просрочено · п. 102'],
   board: ['Доска заявок', 'Этапы, нормативы и ответственная сторона по Регламенту ОРПСД-Р-01'],
   bottlenecks: ['Узкие места', 'Фактическое время на этапе против норматива Регламента'],
   registry: ['Реестр заявок', 'Табличное представление с остатком срока'],
@@ -2128,43 +2553,177 @@ const VIEW_PERMISSION = {
   new: 'request.create', mine: 'request.view', assignments: 'assignment.view',
   users: 'admin', monitoring: 'metrics.view',
 };
+/** Кто видит нагрузку команды: руководитель подразделения и контроль (п. 102). */
+const canSeeTeam = () => can('admin') || !!state.me?.isHead || can('metrics.view') && (hasRole('orpsd', 'oko', 'management'));
 function viewAllowed(key) {
   // Заказчику — только портал: подача и свои заявки; внутренние разделы скрыты (В1).
   if (isCustomerUser()) return ['new', 'mine'].includes(key);
   // Кабинет Заказчика сотрудникам не нужен: у них реестр заявок.
   if (key === 'mine') return !state.live;
-  if (key === 'directories') return can('admin') || can('counterparty.verify') || can('registry.edit') || can('request.tv');
+  // Личный список задач — у каждого сотрудника (в демонстрационном режиме данных нет).
+  if (key === 'tasks') return state.live;
+  if (key === 'team') return state.live && canSeeTeam();
+  if (key === 'directories') return can('admin') || can('counterparty.verify') || can('registry.edit') || can('request.tv') || hasRole('permits');
   // Служебные записки: ОР ПСД направляет, филиал отвечает (п. 10).
   if (key === 'memos') return can('memo.create') || can('memo.answer');
-  // Журнал действий — ДИТ и ОКО (ТЗ №12).
-  if (key === 'audit') return hasRole('admin', 'oko');
+  // Журнал действий — ДИТ, ОКО и аудитор СБ (ТЗ №12, А8).
+  if (key === 'audit') return can('audit.view');
   if (key === 'reports') return can('reports.view') || can('reports.branch');
   const permission = VIEW_PERMISSION[key];
   return !permission || can(permission);
 }
 
+/* --------------------------- «Мои задачи» (п. 102) --------------------------- */
+
+let tasksUser = 'me';
+
+const TASK_OPEN = {
+  request: (t) => `openSheet('${t.ref}')`, registration: (t) => `openSheet('${t.ref}')`,
+  assignment: () => `go('assignments')`, memo: () => `go('memos')`,
+  document: (t) => `openDocument('${t.id}')`, registry: () => `go('ams')`,
+  permit: (t) => `location.href='/dopusk/#${encodeURIComponent(t.ref)}'`,
+  user: () => `go('users')`,
+};
+
+function taskDue(t) {
+  if (!t.dueAt) return '<span class="ref">без срока</span>';
+  const n = daysLeft(t.dueAt);
+  const chip = n < 0 ? `<span class="chip r">просрочено на ${-n} дн.</span>` : n === 0 ? '<span class="chip w">сегодня</span>'
+    : n <= 3 ? `<span class="chip w">${n} дн.</span>` : `<span class="chip g">${n} дн.</span>`;
+  return `${fmt(t.dueAt)}<br>${chip}`;
+}
+
+function renderTasks() {
+  const data = D.tasks;
+  if (!data) return '';
+  const own = tasksUser === 'me';
+  const tasks = data.tasks;
+  return `${own ? '' : `<div class="note" style="margin-bottom:12px">Задачи сотрудника <b>${esc(data.user.name)}</b>.
+      <button class="btn sm ghost" onclick="tasksUser='me';state.loaded.delete('tasks');go('team')">← к нагрузке команды</button></div>`}
+    <div class="kpis">
+      <div class="kpi"><div class="big">${data.counts.total}</div><span>всего задач</span></div>
+      <div class="kpi"><div class="big" style="color:${data.counts.overdue ? 'var(--bad)' : 'var(--ok)'}">${data.counts.overdue}</div><span>просрочено</span></div>
+    </div>
+    <section class="panel"><div class="panel-body" style="padding:0">
+      ${tasks.length ? tasks.map((t) => `<div class="task" onclick="${TASK_OPEN[t.kind](t)}">
+        <div class="k">${esc(t.kindName)}</div>
+        <div class="t"><b>${esc(t.title)}</b><small>${esc(t.ref)} · ${esc(t.detail)}</small></div>
+        <div class="d">${taskDue(t)}</div></div>`).join('')
+        : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Сейчас задач нет. Новые заявки, поручения и записки на вас появятся здесь сами, о каждой придёт письмо.' : 'У сотрудника нет задач.'}</div>`}
+    </div></section>
+    ${own ? absencePanel() : ''}
+    <div class="note" style="margin-top:14px">Здесь всё, что назначено на конкретного человека (п. 102): заявки, где вы ответственный или
+      исполнитель этапа, поручения, служебные записки на ответ, документы на визу, запросы по реестру АМС и заявки на допуск.
+      Передать заявку другому — кнопкой «Передать» в её карточке. На время отпуска оформите замещение: задачи и письма
+      будут видны замещающему, новые заявки на вас не назначаются.</div>`;
+}
+
+/* ------------------------------ замещение (А3) ------------------------------ */
+
+function absencePanel() {
+  const rows = D.absences || [];
+  return `<section class="panel" style="margin-top:16px"><div class="panel-head">${icon('users')}<div><h2>Отсутствие и замещение</h2>
+      <p>Отпуск, командировка, болезнь: на эти дни задачи и письма уходят замещающему</p></div>
+      <button class="btn primary sm" style="margin-left:auto" onclick="openAbsence()">${icon('plus', 15)}Оформить отсутствие</button></div>
+    <div class="panel-body" style="padding:0 6px"><div class="scroll-x"><table><thead><tr><th>Кто отсутствует</th><th>Период</th><th>Замещает</th><th></th></tr></thead><tbody>
+    ${rows.length ? rows.map((a) => `<tr><td><b>${esc(a.user_name)}</b><br><span class="ref">${esc(a.reason)}</span></td>
+      <td>${fmtFull(a.date_from)} — ${fmtFull(a.date_to)} ${a.current ? '<span class="chip w">сейчас</span>' : ''}</td>
+      <td>${esc(a.substitute_name)}</td>
+      <td>${a.user_id === state.me.id || can('admin') || state.me.isHead ? `<button class="btn ghost sm" onclick="removeAbsence(this,'${a.id}')">Отменить</button>` : ''}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--muted-2)">Отсутствий не оформлено</td></tr>'}
+    </tbody></table></div></div></section>`;
+}
+
+async function openAbsence() {
+  const { people } = await api.colleagues().catch(() => ({ people: [] }));
+  const others = people.filter((p) => p.id !== state.me.id);
+  const manage = can('admin') || state.me.isHead;
+  const values = await ask({
+    title: 'Отсутствие и замещение',
+    text: 'На эти дни новые заявки на вас не назначаются, ваши задачи и письма видит замещающий. По окончании всё возвращается само.',
+    fields: [
+      ...(manage ? [{ key: 'userId', label: 'Кто отсутствует', type: 'select', value: state.me.id,
+        options: [{ value: state.me.id, label: state.me.fullName + ' (я)' }, ...others.map((p) => ({ value: p.id, label: `${p.full_name}${p.department ? ' · ' + p.department : ''}` }))] }] : []),
+      { key: 'dateFrom', label: 'С', type: 'date', required: true, value: new Date().toISOString().slice(0, 10) },
+      { key: 'dateTo', label: 'По', type: 'date', required: true },
+      { key: 'substituteId', label: 'Замещает', type: 'select', required: true,
+        options: [{ value: '', label: '— выберите сотрудника —' }, ...others.map((p) => ({ value: p.id, label: `${p.full_name}${p.department ? ' · ' + p.department : ''}${p.absent ? ' (сам отсутствует)' : ''}` }))] },
+      { key: 'reason', label: 'Причина', type: 'select', value: 'отпуск',
+        options: ['отпуск', 'командировка', 'болезнь', 'обучение', 'иное'].map((x) => ({ value: x, label: x })) },
+    ],
+    ok: 'Оформить',
+  });
+  if (!values) return;
+  if (await act(null, () => api.saveAbsence(values), 'Замещение оформлено')) { state.loaded.delete('tasks'); await go('tasks'); }
+}
+
+async function removeAbsence(button, id) {
+  if (!confirm('Отменить замещение?')) return;
+  if (await act(button, () => api.deleteAbsence(id), 'Замещение отменено')) { state.loaded.delete('tasks'); await go('tasks'); }
+}
+
+const KIND_SHORT = { request: 'заявки', registration: 'регистрации', assignment: 'поручения', memo: 'записки',
+  document: 'на визу', registry: 'реестр', permit: 'допуски' };
+
+function renderTeam() {
+  const people = (D.team || []).filter((p) => p.total || true);
+  return `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x"><table><thead><tr>
+      <th>Сотрудник</th><th>Роли</th><th>Из чего состоит</th><th class="num">Задач</th><th class="num">Просрочено</th></tr></thead><tbody>
+    ${people.map((p) => `<tr onclick="openTasksOf('${p.id}')" style="cursor:pointer">
+      <td><b>${esc(p.name)}</b><br><span class="ref">${esc(p.department || '')}</span></td>
+      <td>${p.roles.map((r) => `<span class="chip n">${esc(ROLE_LABEL[r] || r)}</span>`).join(' ')}</td>
+      <td>${Object.entries(p.byKind).map(([k, n]) => `${n} ${KIND_SHORT[k]}`).join(' · ') || '<span class="ref">—</span>'}</td>
+      <td class="num"><b>${p.total}</b></td>
+      <td class="num">${p.overdue ? `<b style="color:var(--bad)">${p.overdue}</b>` : '—'}</td></tr>`).join('')
+      || '<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--muted-2)">Сотрудников нет</td></tr>'}
+    </tbody></table></div></div></section>
+    <div class="note" style="margin-top:14px">Нагрузка помогает перераспределять работу: откройте сотрудника, чтобы увидеть его задачи,
+      затем передайте заявки в их карточках. Новых исполнителей система выбирает по наименьшей нагрузке.</div>`;
+}
+
+async function openTasksOf(id) {
+  tasksUser = id === state.me?.id ? 'me' : id;
+  state.loaded.delete('tasks');
+  await go('tasks', true);
+}
+
 function renderNav() {
   const late = (D.requests || []).filter(r => daysLeft(r.dueAt) < 0).length;
-  const badges = { board: late, archive: D.pendingVisa || 0 };
+  const badges = { board: late, archive: D.pendingVisa || 0, tasks: D.tasksBadge?.total || 0 };
   const item = ([k, l, i]) =>
     `<button class="${view===k?'on':''}" onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
-    (badges[k] ? `<span class="badge" title="${k === 'archive' ? 'Документы ждут визы' : 'Просрочено'}">${badges[k]}</span>` : '') + `</button>`;
-  document.getElementById('nav').innerHTML = MENU.filter(([k]) => viewAllowed(k)).map(item).join('');
-  const portal = MENU_PORTAL.filter(([k]) => viewAllowed(k));
-  document.getElementById('navPortal').innerHTML = portal.map(item).join('');
-  document.querySelectorAll('.side-label')[1].style.display = portal.length ? '' : 'none';
-  document.getElementById('nav2').innerHTML = MENU2.filter(([k]) => viewAllowed(k)).map(item).join('');
+    (badges[k] ? `<span class="badge${k === 'tasks' && !D.tasksBadge?.overdue ? ' calm' : ''}" title="${k === 'archive' ? 'Документы ждут визы' : k === 'tasks' ? `Задач: ${badges[k]}, просрочено: ${D.tasksBadge?.overdue || 0}` : 'Просрочено'}">${badges[k]}</span>` : '') + `</button>`;
+  // Раздел без пунктов не показывается вовсе: пустые заголовки сбивают с толку.
+  const section = (navId, labelId, items) => {
+    const allowed = items.filter(([k]) => viewAllowed(k));
+    document.getElementById(navId).innerHTML = allowed.map(item).join('');
+    document.getElementById(labelId).style.display = allowed.length ? '' : 'none';
+  };
+  section('nav', 'navLabel', MENU);
+  // Сотрудник (канцелярия, ОР ПСД) не «подаёт», а вносит заявку Заказчика — бумажную или из почты (п. 6).
+  section('navPortal', 'portalLabel', MENU_PORTAL.map(([k, l, i]) => [k, k === 'new' && !isCustomerUser() ? 'Внести заявку' : l, i]));
+  section('nav2', 'nav2Label', MENU2);
+  section('nav3', 'nav3Label', MENU3);
+  // Заказчику — его кабинет, а не внутреннее название системы; раздел портала без заголовка.
+  if (isCustomerUser()) {
+    document.getElementById('brandText').innerHTML = '<b>АО «Казтелерадио»</b><small>Кабинет Заказчика</small>';
+    document.getElementById('portalLabel').style.display = 'none';
+  }
   // Портал допусков СУА — отдельная ссылка в той же системе (План модуля допусков, §2).
   const permits = state.live && (state.me?.modules || []).includes('permits');
   document.getElementById('permitsLabel').style.display = permits ? '' : 'none';
   document.getElementById('navPermits').innerHTML = permits
-    ? `<button onclick="location.href='/dopusk/'">${icon('shield')}<span>Портал допусков</span></button>` : '';
+    ? `<button onclick="location.href='/dopusk/'">${icon('truck')}<span>Портал допусков</span></button>` : '';
 }
-async function go(v) {
+async function go(v, keep = false) {
+  // Из меню «Мои задачи» открываются свои; чужие — только из «Нагрузки команды».
+  if (v === 'tasks' && !keep) tasksUser = 'me';
   view = v;
+  pushRoute();
   window.scrollTo(0, 0);
   document.querySelector('.side')?.classList.remove('open');
-  if (state.live && !state.loaded.has(v)) {
+  // Задачи и нагрузка меняются каждую минуту — перечитываются при каждом входе на экран.
+  if (state.live && (!state.loaded.has(v) || v === 'tasks' || v === 'team')) {
     state.loading = true;
     render();
     try { await loadView(v); state.error = null; }
@@ -2416,6 +2975,7 @@ function renderRegistry() {
     <input type="search" placeholder="Номер заявки, вх. номер, Заказчик или БИН" style="min-width:260px"
       value="${esc(registryFilter.q)}" onkeydown="if(event.key==='Enter')setRegistryFilter('q', this.value)">
     <button class="btn sm" onclick="setRegistryFilter('q', this.previousElementSibling.value)">${icon('search', 15)}Найти</button>
+    ${can('admin') ? `<button class="btn sm" style="margin-left:auto" onclick="openRequestImport()">${icon('filePlus', 15)}Перенос заявок из таблицы</button>` : ''}
   </div>` + filterBar() + `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
     <table><thead><tr>
       <th>Номер</th><th>Заказчик и объект</th><th>Услуги</th><th>Этап</th>
@@ -2982,7 +3542,7 @@ async function openSheet(number, keepOpen = false) {
     if (found) { D.requests.push(found); sheetRequest = found; }
   }
   if (!sheetRequest) { toast('Заявка не найдена', 'bad'); return; }
-  if (!keepOpen) draftRemarks = [];
+  if (!keepOpen) { draftRemarks = []; pushRoute(number); }
   document.getElementById('sheet').classList.add('on');
 
   if (state.live) {
@@ -3076,6 +3636,19 @@ function outcomeText(r) {
   return `${s.name}${when ? ' ' + when : ''}`;
 }
 
+/** Печатные формы из карточки (А4): данные заявки подставлены, остальное инженер дописывает на странице. */
+function printBar(r) {
+  const url = (form, extra = '') => `/api/v1/requests/${encodeURIComponent(r.id)}/print/${form}${extra}`;
+  const staff = !isCustomerUser();
+  const tuForms = [[1, 'канал'], [2, 'кабель по территории'], [3, 'кабель в помещении'], [4, 'электроснабжение'], [5, 'размещение']];
+  return `<div class="row-actions" style="justify-content:flex-start">
+    <a class="btn ghost sm" target="_blank" rel="noopener" href="${url('card')}">${icon('download', 14)}Карточка заявки</a>
+    ${staff && r.services.includes('ТУ') && can('request.edit') ? `<select class="btn ghost sm" onchange="if(this.value){window.open(this.value,'_blank','noopener');this.value=''}">
+      <option value="">Проект ТУ…</option>${tuForms.map(([n, t]) => `<option value="${url('tu', '?form=' + n)}">Приложение ${n} — ${t}</option>`).join('')}</select>` : ''}
+    ${staff && r.services.includes('СМР') ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${url('avr')}">Технический АВР</a>` : ''}
+  </div>`;
+}
+
 function renderSheet() {
   const r = sheetRequest;
   const s = stageBy[r.stageCode];
@@ -3135,6 +3708,7 @@ function renderSheet() {
         отвечает ${esc(C.ownerParties[s.ownerParty])} · ${esc(s.regulationRef)}${current?.paused_at || current?.pausedAt ? ' · <b>срок приостановлен</b>' : ''}`}</div>
   </div>
   <div class="sheet-body">
+    ${state.live && r.id ? printBar(r) : ''}
     ${blocked.length && !closed ? `<div class="blocked"><b>Переход невозможен.</b> ${blocked.map((b) =>
       esc(b.text) + ' (' + esc(b.ref) + ')').join('; ')}</div>` : ''}
 
@@ -3397,7 +3971,13 @@ async function runCapacity(button) {
   if (ok) await openSheet(sheetRequest.number, true);
 }
 
-function closeSheet() { document.getElementById('sheet').classList.remove('on'); }
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('on');
+  if (routing || !routeOf().card) return;
+  // Открыли из системы — «Назад» в истории; пришли по ссылке — просто убираем номер из адреса.
+  if (cardInHistory) { cardInHistory = false; history.back(); }
+  else history.replaceState(null, '', '#/' + view);
+}
 
 /* --------------------- договоры и оплата по услугам (A1, В6, В8) --------------------- */
 
@@ -3872,7 +4452,7 @@ function assignmentsBlock(r) {
           <span class="chip ${cls}">${label}</span>
           <span style="flex:1;min-width:200px"><b>${esc(a.department)}</b>${a.assignee_name ? ' · ' + esc(a.assignee_name) : ''}
             — ${esc(a.body || 'ответ о технической возможности')}<br>
-            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
+            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok-ink)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
             ${a.close_note ? ' · ' + esc(a.close_note) : ''}</span></span>
           <span class="row-actions">
             ${a.status === 'open' && can('assignment.accept') ? `<button class="btn sm" onclick="acceptAssignment(this,'${a.id}')">Принять</button>` : ''}
@@ -4029,7 +4609,7 @@ function renderCustomerSheet() {
       ${r.dueAt && ['tv_review', 'awaiting_payment', 'smr_prep', 'closing'].includes(r.stageCode) ? `<br><b>${r.stageCode === 'tv_review' ? 'Ответ — не позднее' : r.stageCode === 'awaiting_payment' ? 'Оплатить до' : r.stageCode === 'smr_prep' ? 'Передать оборудование до' : 'Срок'} ${fmtFull(r.dueAt)}</b>` : ''}</div>
 
     ${openRemarks.length ? `<section class="panel"><div class="panel-head"><div><h2>Нужно исправить</h2>
-      <p>Номер заявки и история сохраняются — ТЗ №11</p></div>
+      <p>Исправьте ту же заявку — номер и история сохраняются</p></div>
       <button class="btn primary sm" style="margin-left:auto" onclick="openAmend('${esc(r.number)}')">Исправить заявку</button></div>
       <div class="panel-body">${openRemarks.map((m) => `<div class="remark"><span class="fld">${esc(remarkLabel(m.field_key))}</span>
         <span style="flex:1">${esc(m.text)}</span></div>`).join('')}</div></section>` : ''}
@@ -4324,7 +4904,7 @@ let userQuery = '';
 let userImport = null;   // { csv, result }
 
 const ROLE_ORDER = ['admin', 'records', 'orpsd', 'branch', 'oko', 'assets', 'accounting', 'management', 'customer',
-  'permits', 'contractor'];
+  'permits', 'contractor', 'auditor'];
 
 function renderUsers() {
   if (!state.live) return '<div class="note">Управление пользователями доступно в рабочем режиме.</div>';
@@ -4342,12 +4922,17 @@ function renderUsers() {
     ${rows.length ? rows.map((u) => `<tr>
       <td><b>${esc(u.full_name)}</b><br><span class="ref">${esc(u.email)}</span></td>
       <td>${esc(u.department || '—')}<br><span class="ref">${esc(u.position || '')}</span></td>
-      <td>${(u.roles || []).map((r) => `<span class="chip n">${esc(ROLE_LABEL[r] || r)}</span>`).join(' ')}</td>
+      <td>${(u.roles || []).map((r) => `<span class="chip n">${esc(ROLE_LABEL[r] || r)}</span>`).join(' ')}${u.is_head ? ' <span class="chip b">руководитель</span>' : ''}</td>
       <td>${esc(u.branch_name || u.counterparty_name || '—')}</td>
-      <td>${u.is_active ? '<span class="chip g">активна</span>' : '<span class="chip r">отключена</span>'}</td>
+      <td>${u.registration_pending ? '<span class="chip w">ждёт подтверждения</span>'
+        : u.is_active ? '<span class="chip g">активна</span>' : '<span class="chip r">отключена</span>'}
+        <br><span class="ref">${u.has_password ? (u.last_login_at ? 'вход ' + fmtFull(u.last_login_at) : 'пароль задан, входа не было') : 'пароль не задан'}</span></td>
       <td><div class="row-actions">
         <button class="btn ghost sm" onclick="openUser('${u.id}')">Изменить</button>
-        ${u.id === state.me?.id ? '' : u.is_active
+        ${u.is_active && !u.has_password ? `<button class="btn sm" onclick="inviteUser(this,'${u.id}')" title="Письмо со ссылкой на первый пароль">Пригласить</button>` : ''}
+        ${u.id === state.me?.id ? '' : u.registration_pending
+          ? `<button class="btn primary sm" onclick="toggleUser(this,'${u.id}',true)" title="Полномочия представителя проверены">Подтвердить</button>`
+          : u.is_active
           ? `<button class="btn ghost sm" onclick="toggleUser(this,'${u.id}',false)">Отключить</button>`
           : `<button class="btn sm" onclick="toggleUser(this,'${u.id}',true)">Включить</button>`}
       </div></td></tr>`).join('')
@@ -4356,10 +4941,17 @@ function renderUsers() {
   <div class="note" style="margin-top:14px">
     Роли назначает только ДИТ; каждое изменение пишется в журнал. Снять с себя роль администратора
     или отключить собственную учётную запись нельзя — иначе вход в систему может закрыться для всех.
+    Новый сотрудник задаёт пароль сам по ссылке из письма — кнопка «Пригласить». Заказчик новой организации
+    регистрируется сам; представителя уже известной организации нужно подтвердить.
   </div>`;
 }
 
 let cpOptions = [];
+async function inviteUser(button, id) {
+  const r = await act(button, () => api.inviteUser(id), 'Приглашение отправлено');
+  if (r?.sentTo) toast(`Ссылка на пароль отправлена на ${r.sentTo}`, 'good');
+}
+
 async function openUser(id) {
   const u = id ? (D.users || []).find((x) => x.id === id) : null;
   if (u?.counterparty_id) cpOptions = [{ id: u.counterparty_id, name_full: u.counterparty_name, bin: '' }];
@@ -4376,6 +4968,9 @@ async function openUser(id) {
       <div class="field"><label>Фамилия и инициалы</label><input id="usName" value="${esc(u?.full_name || '')}"></div>
       <div class="field"><label>Должность</label><input id="usPosition" value="${esc(u?.position || '')}"></div>
       <div class="field"><label>Подразделение</label><input id="usDepartment" value="${esc(u?.department || '')}"></div>
+      <label class="field span2" style="display:flex;gap:8px;align-items:center;flex-direction:row"><input type="checkbox" id="usHead" style="width:auto" ${u?.is_head ? 'checked' : ''}>
+        <span><b>Руководитель подразделения</b> <span class="ref">видит нагрузку и задачи сотрудников, оформляет их замещение,
+        получает письма о просрочках и о том, что исполнителя назначить некого</span></span></label>
       <div class="field span2"><label>Роли <span class="ref">«Заказчик» и «Подрядчик» назначаются отдельно, без других ролей:
         кабинет ОР ПСД и портал допусков не пересекаются</span></label>
         <div style="display:flex;flex-wrap:wrap;gap:8px 16px">${ROLE_ORDER.map((r) => `<label style="display:flex;gap:6px;align-items:center">
@@ -4416,6 +5011,7 @@ async function saveUserForm(button, existing) {
     roles: [...document.querySelectorAll('input[name=usRole]:checked')].map((x) => x.value),
     branchId: document.getElementById('usBranch').value || null,
     counterpartyId: document.getElementById('usCp').value || null,
+    isHead: document.getElementById('usHead').checked,
   };
   if (existing) body.isActive = (D.users || []).find((u) => u.email === body.email)?.is_active !== false;
   const ok = await act(button, () => api.saveUser(body), 'Учётная запись сохранена');
@@ -4427,6 +5023,58 @@ async function toggleUser(button, id, on) {
   const ok = await act(button, () => (on ? api.enableUser(id) : api.disableUser(id)),
     on ? 'Учётная запись включена' : 'Учётная запись отключена');
   if (ok) { state.loaded.delete('users'); await reloadCurrent(); }
+}
+
+/* ----------------- перенос действующих заявок из таблицы ОР ПСД ----------------- */
+
+let requestImport = null;
+function openRequestImport() {
+  requestImport = null;
+  document.getElementById('sheet').classList.add('on');
+  renderRequestImport();
+}
+function renderRequestImport() {
+  const res = requestImport?.result;
+  document.getElementById('sheetPanel').innerHTML = `
+  <div class="sheet-head"><div class="row">
+    <div><div class="ref">Реестр заявок</div><h2>Перенос действующих заявок</h2></div>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+  </div></div>
+  <div class="sheet-body">
+    <section class="panel"><div class="panel-body">
+      <div class="note" style="margin-bottom:12px">
+        CSV из Excel (разделитель «;»), одна строка — одна заявка на своём этапе. Обязательные колонки: <b>Номер</b> (номер ОР ПСД или входящий),
+        <b>Дата</b>, <b>БИН</b>, <b>Заказчик</b>, <b>Услуги</b> (ТУ, ПСД, СМР), <b>Этап</b> (Регистрация, Оценка ТВ, КП и договор, Оплата, ТУ, ПСД,
+        Подготовка СМР, СМР, АВР и ЭСФ, Приёмка). Далее: <b>Объект</b> (инв. № из справочника) или <b>Адрес</b>, <b>Дата этапа</b> (с какого числа заявка на этапе),
+        <b>Договор</b> («ДП-1/26» или «ТУ:ДП-1 | ПСД:ДП-2»), <b>Сумма</b>, <b>Дата оплаты</b>, <b>Ответственный</b> (почта сотрудника ОР ПСД).
+        Сначала — предпросмотр; записываются только строки без ошибок. Повторная загрузка тех же номеров заявки не дублирует.
+      </div>
+      <input type="file" accept=".csv,text/csv" onchange="readRequestImport(this)">
+    </div></section>
+    ${res ? `<section class="panel">
+      <div class="panel-head"><div><h2>${res.preview ? 'Предпросмотр' : 'Перенос выполнен'}</h2>
+        <p>Строк: ${res.summary.total} · будет создано: ${res.summary.create} · с ошибками: ${res.summary.skip}</p></div></div>
+      <div class="panel-body" style="padding:0 6px"><table><thead><tr><th>Строка</th><th>Заявка</th><th>Результат</th></tr></thead><tbody>
+      ${res.rows.map((r) => `<tr><td>${r.line}</td>
+        <td>${r.request ? `<b>${esc(r.request.number)}</b><br><span class="ref">${esc(r.request.company)} · ${esc(r.request.services.join(', '))} · ${esc(r.request.stage)}</span>` : '—'}</td>
+        <td>${r.action === 'create' ? `<span class="chip g">${res.preview ? 'будет создана' : 'создана'}</span>` : '<span class="chip r">пропущена</span>'}
+          ${Object.values(r.errors).map((m) => `<br><span class="ref" style="color:var(--bad)">${esc(m)}</span>`).join('')}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${res.preview && res.summary.create ? `<div class="panel-body">
+        <button class="btn primary" onclick="applyRequestImport(this)">Перенести заявки: ${res.summary.create}</button></div>` : ''}
+    </section>` : ''}
+  </div>`;
+}
+async function readRequestImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const csv = await file.text();
+  const result = await act(null, () => api.importRequests(csv, false));
+  if (result) { requestImport = { csv, result }; renderRequestImport(); }
+}
+async function applyRequestImport(button) {
+  const result = await act(button, () => api.importRequests(requestImport.csv, true), 'Заявки перенесены');
+  if (result) { requestImport.result = result; renderRequestImport(); state.loaded.delete('requests'); }
 }
 
 function openUserImport() {
@@ -4897,7 +5545,7 @@ function validateStep(step) {
     if (!checkBin(a.bin)) e['applicant.bin'] = 'БИН: 12 цифр, проверьте контрольный разряд';
     if (!okText(a.contact)) e['applicant.contact'] = 'Укажите Ф.И.О. ответственного лица';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(a.email)) e['applicant.email'] = 'Укажите корректный адрес почты';
-    if (!/^7\d{10}$/.test(String(a.phone).replace(/\D/g, ''))) e['applicant.phone'] = 'Номер в формате +7 7XX XXX XX XX';
+    { const p = QTR_PHONE.problem(a.phone); if (p) e['applicant.phone'] = p; }
   }
   if (step === 2) {
     if (wiz.noFacility) {
@@ -5083,6 +5731,11 @@ function fieldHtml(path, label, value, opts = {}) {
   const ro = opts.readonly ? 'readonly' : '';
   const tag = opts.textarea
     ? `<textarea ${ro} oninput="setW('${path}',this.value)" placeholder="${esc(opts.ph||'')}">${esc(value||'')}</textarea>`
+    : opts.phone
+    // Маска телефона РК: «+7 XXX XXX XX XX» при вводе (design/phone.js).
+    ? `<input ${ro} type="tel" inputmode="tel" autocomplete="tel" maxlength="16" value="${esc(QTR_PHONE.format(value))}"
+        placeholder="+7 7XX XXX XX XX" onfocus="QTR_PHONE.onFocus(this)" onblur="QTR_PHONE.onBlur(this)"
+        onkeydown="QTR_PHONE.onKeydown(event)" oninput="QTR_PHONE.onInput(this);setW('${path}',this.value)">`
     : `<input ${ro} type="${type}" value="${esc(value ?? '')}" placeholder="${esc(opts.ph||'')}"
         oninput="setW('${path}',this.value)">`;
   return `<div class="field ${err?'bad':''} ${opts.span?'span2':''}">
@@ -5146,7 +5799,7 @@ function renderWizard() {
           hint: customer ? '' : 'Проверяется контрольный разряд по алгоритму РК' })}
         ${fieldHtml('applicant.contact', 'Ф.И.О. ответственного лица', a.contact, {})}
         ${fieldHtml('applicant.email', 'Электронная почта', a.email, { type: 'email', hint: 'На неё придёт подтверждение с номером заявки (ТЗ №9)' })}
-        ${fieldHtml('applicant.phone', 'Телефон', a.phone, { ph: '+7 7XX XXX XX XX' })}
+        ${fieldHtml('applicant.phone', 'Телефон', a.phone, { phone: true })}
       </div></div></section>`;
   }
 
@@ -5256,10 +5909,10 @@ function renderWizard() {
         <span class="n">${i < wiz.step ? '✓' : i + 1}</span>${s}</div>`).join('')}</div>
     <div class="wizard">
       <div>${body}
-        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+        <div class="wiz-actions">
           <button class="btn" onclick="${wiz.step ? 'wizBack()' : `wiz=null;go('${isCustomerUser() ? 'mine' : 'registry'}')`}">
             ${wiz.step ? '← Назад' : 'Отмена'}</button>
-          <div style="flex:1"></div>
+          <div class="sp-grow" style="flex:1"></div>
           ${state.live ? '<button class="btn" onclick="wizSaveDraft(this)">Сохранить черновик</button>' : ''}
           ${wiz.step < last
             ? `<button class="btn primary" onclick="wizNext()">Продолжить →</button>`
@@ -5288,7 +5941,7 @@ function renderSubmitted() {
   const s = wiz.submitted;
   return `<section class="panel" style="max-width:720px">
     <div class="panel-body" style="text-align:center;padding:38px">
-      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok);
+      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok-ink);
         display:grid;place-items:center;font-size:26px;margin:0 auto 16px">✓</div>
       <h2 style="font-size:20px">Заявка подана</h2>
       <p style="color:var(--muted);margin:8px 0 18px">Внутренний номер <b>${esc(s.number)}</b>
@@ -5355,23 +6008,23 @@ function renderMine() {
     </div></section>`;
   }
   return `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
-    <table><thead><tr><th>Номер</th><th>Объект</th><th>Услуги</th>
-      <th>Статус</th><th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
+    <table class="stack-sm"><thead><tr><th>Номер</th><th>Статус</th><th>Объект</th><th>Услуги</th>
+      <th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
     ${mine.map(r => { const s = stageBy[r.stageCode];
       const status = r.openRemarks ? 'Требуются уточнения' : s.customerStatusName;
       const open = !state.live ? '' : `onclick="openSheet('${esc(r.number)}')" style="cursor:pointer"`;
       return `<tr ${open}>
-        <td><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
+        <td style="white-space:nowrap"><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
           ${r.openRemarks && state.live ? '<br><span class="chip w">исправить</span>' : ''}</td>
-        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td><span class="chip ${r.openRemarks?'w':s.customerStatus==='done'?'g':s.customerStatus==='rejected'?'r':'n'}">${status}</span></td>
+        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td style="color:var(--muted);min-width:220px">${esc(CUSTOMER_STAGE_TEXT[r.stageCode] || s.hint)}</td>
         <td class="num">${money(r.amount)}</td></tr>`;
     }).join('')}
     </tbody></table></div></div></section>
     <div class="note" style="margin-top:14px">
       Нажмите на заявку, чтобы увидеть историю, договоры, документы и приложить файлы.
-      Заказчик видит статусы заявки (ТЗ №10); уведомления о каждом шаге приходят на почту.
+      Уведомления о каждом шаге приходят на почту.
     </div>`;
 }
 
@@ -5605,6 +6258,7 @@ const DIRECTORY_TABS = [
   ['calendar', 'Календарь', () => can('admin')],
   ['facilities', 'Объекты', () => can('admin') || can('registry.edit')],
   ['counterparties', 'Контрагенты', () => can('counterparty.verify')],
+  ['mail', 'Тексты писем', () => hasRole('admin', 'orpsd', 'permits')],
 ];
 let directoryTab = null;
 let calendarYear = new Date().getFullYear();
@@ -5612,6 +6266,7 @@ let counterpartyQuery = { q: '', status: 'pending' };
 const CONTACT_LABEL = {
   director: 'Директор филиала', curator: 'Курирующий заместитель директора',
   engineer: 'Главный инженер области', board: 'Курирующий член Правления',
+  site: 'Ответственное лицо по допускам (п. 20 Инструкции)',
 };
 const FACILITY_KINDS = { ams: 'АМС', rts: 'РТС', mast: 'Мачта', tower: 'Башня', room: 'Помещение', other: 'Иное' };
 
@@ -5629,6 +6284,7 @@ async function loadDirectory(force) {
     if (!(D.branchList || []).length) D.branchList = (await api.branches()).branches;
   }
   if (directoryTab === 'counterparties') D.dirCounterparties = (await api.adminCounterparties(counterpartyQuery)).counterparties;
+  if (directoryTab === 'mail') D.dirMail = (await api.mailTemplates()).events;
   state.loaded.add(key);
 }
 function switchDirectory(tab) { directoryTab = tab; state.loaded.delete('directories'); reloadCurrent(); }
@@ -5644,8 +6300,48 @@ function renderDirectories() {
   const head = `<div class="tabs">${tabs.map(([k, l]) =>
     `<button class="btn ${directoryTab === k ? 'primary' : 'ghost'} sm" onclick="switchDirectory('${k}')">${l}</button>`).join('')}</div>`;
   const body = { branches: renderDirBranches, tariffs: renderDirTariffs, calendar: renderDirCalendar,
-    facilities: renderDirFacilities, counterparties: renderDirCounterparties }[directoryTab];
+    facilities: renderDirFacilities, counterparties: renderDirCounterparties, mail: renderDirMail }[directoryTab];
   return head + (body ? body() : '');
+}
+
+/* ------------------------------- тексты писем (А5) ------------------------------- */
+let mailQuery = '';
+function renderDirMail() {
+  const q = mailQuery.toLowerCase();
+  const rows = (D.dirMail || []).filter((e) => !q || e.name.toLowerCase().includes(q) || e.key.includes(q));
+  return `<div class="filters">
+    <input type="search" placeholder="Вид письма" value="${esc(mailQuery)}" oninput="mailQuery=this.value;render()" style="min-width:260px">
+    <span class="ref">Изменённых: ${(D.dirMail || []).filter((e) => e.template).length} из ${(D.dirMail || []).length}</span></div>
+  <section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x"><table>
+    <thead><tr><th>Вид письма</th><th>Текст</th><th></th></tr></thead><tbody>
+    ${rows.map((e) => `<tr><td><b>${esc(e.name)}</b><br><span class="ref">${esc(e.key)}</span></td>
+      <td>${e.template ? `<span class="chip ${e.template.enabled ? 'b' : 'n'}">${e.template.enabled ? 'свой текст' : 'свой текст выключен'}</span>
+        <span class="ref">${esc(e.template.updated_by || '')} · ${fmtFull(e.template.updated_at)}</span>` : '<span class="ref">стандартный</span>'}</td>
+      <td><button class="btn ghost sm" onclick="editMail('${e.key}')">Изменить</button></td></tr>`).join('')}
+    </tbody></table></div></div></section>
+  <div class="note" style="margin-top:14px">Шаблон оборачивает стандартный текст системы: <b>{{тема}}</b> — стандартная тема,
+    <b>{{текст}}</b> — стандартный текст со сведениями заявки, сроками и пунктами Регламента, <b>{{номер}}</b> — номер заявки.
+    Например, текст «Уважаемый партнёр!&#10;{{текст}}&#10;С уважением, ОР ПСД» добавит обращение и подпись. Изменения — в журнале.</div>`;
+}
+
+async function editMail(key) {
+  const e = (D.dirMail || []).find((x) => x.key === key);
+  const v = await ask({
+    title: e.name,
+    text: e.sample ? `Последнее письмо этого вида: «${esc(e.sample.subject)}»` : 'Писем этого вида ещё не было.',
+    fields: [
+      { key: 'subject', label: 'Тема', required: true, value: e.template?.subject || '{{тема}}' },
+      { key: 'body', label: 'Текст', type: 'textarea', rows: 9, required: true, value: e.template?.body || '{{текст}}' },
+      { key: 'enabled', label: 'Использовать свой текст', type: 'select', value: e.template && !e.template.enabled ? '0' : '1',
+        options: [{ value: '1', label: 'да' }, { value: '0', label: 'нет — стандартный текст' }] },
+    ],
+    ok: 'Сохранить',
+  });
+  if (!v) return;
+  const reset = v.subject.trim() === '{{тема}}' && v.body.trim() === '{{текст}}';
+  if (await act(null, () => api.saveMailTemplate(key, reset ? { reset: true } : { subject: v.subject, body: v.body, enabled: v.enabled === '1' }), 'Текст письма сохранён')) {
+    reloadDirectory();
+  }
 }
 
 /* ---------------------------------- филиалы ---------------------------------- */
@@ -5661,11 +6357,11 @@ function renderDirBranches() {
   </div>
   <section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
     <table><thead><tr><th>Филиал</th><th>Директор</th><th>Курирующий заместитель</th><th>Главный инженер</th>
-      <th>Член Правления</th><th class="num">Объекты / заявки</th><th></th></tr></thead><tbody>
+      <th>Член Правления</th><th>Допуски на объекты</th><th class="num">Объекты / заявки</th><th></th></tr></thead><tbody>
     ${rows.map((b) => `<tr${b.is_active ? '' : ' style="color:var(--muted)"'}>
       <td><b>${esc(b.name)}</b><br><span class="ref">${esc(b.code)} · ${esc(b.region || '')}</span>
         ${b.service_area ? `<br><span class="ref">зона: ${esc(b.service_area)}</span>` : ''}</td>
-      <td>${person(b.director)}</td><td>${person(b.curator)}</td><td>${person(b.engineer)}</td><td>${person(b.board)}</td>
+      <td>${person(b.director)}</td><td>${person(b.curator)}</td><td>${person(b.engineer)}</td><td>${person(b.board)}</td><td>${person(b.site)}</td>
       <td class="num">${b.facilities} / ${b.open_requests}</td>
       <td><button class="btn ghost sm" onclick="editBranch('${b.id}')">Изменить</button></td></tr>`).join('')}
     </tbody></table></div></div></section>
@@ -5944,13 +6640,9 @@ async function verifyCounterparty(id) {
 
 /* Полоса режима: видно, рабочие это данные или примеры. */
 function modeBar() {
-  if (state.live) {
-    const who = state.me ? `${esc(state.me.fullName)} · ${state.me.roles.map((r) => esc(ROLE_LABEL[r] || r)).join(', ')}` : '';
-    return `<div class="mode-bar live">${icon('check', 17)}
-      <div><b>Рабочие данные</b><span> · заявки и файлы сохраняются в системе</span></div>
-      <div class="tail">${who}</div>
-    </div>`;
-  }
+  // В рабочем режиме полоса не нужна: кто вошёл — в шапке (#whoami). Остаётся только предупреждение
+  // автономного прототипа, где изменения не сохраняются.
+  if (state.live) return '';
   return `<div class="mode-bar">${icon('warn', 17)}
     <div><b>Демонстрационный режим</b>
       <span> · примеры заявок и документов; сервер недоступен, изменения не сохраняются</span></div>
@@ -6001,13 +6693,18 @@ function exportCurrent() {
 function render() {
   renderNav();
   document.getElementById('brandMark').src = A.mark;
-  document.getElementById('bellBtn').innerHTML =
-    icon('bell', 17) + (D.requests.filter(r => daysLeft(r.dueAt) < 0).length
-      ? `<b style="color:var(--bad);margin-left:5px">${D.requests.filter(r => daysLeft(r.dueAt) < 0).length}</b>` : '');
+  // Просроченные заявки — значок «внимание»; колокольчик рядом — уведомления (shell.js).
+  const late = D.requests.filter(r => daysLeft(r.dueAt) < 0).length;
+  const lateBtn = document.getElementById('bellBtn');
+  lateBtn.innerHTML = icon('warn', 17) + `<span>Просрочено: ${late}</span>`;
+  lateBtn.setAttribute('aria-label', `Просроченные заявки: ${late}`);
   const exportBtn = document.getElementById('exportBtn');
   exportBtn.innerHTML = icon('download', 16) + '<span>Выгрузить</span>';
+  exportBtn.setAttribute('aria-label', 'Выгрузить');
   exportBtn.style.display = exportTarget() ? '' : 'none';
-  document.getElementById('bellBtn').style.display = isCustomerUser() || !can('metrics.view') ? 'none' : '';
+  // Кнопка появляется, только когда есть что показать.
+  lateBtn.style.display = isCustomerUser() || !can('metrics.view') || !late ? 'none' : '';
+  lateBtn.style.color = 'var(--bad-ink)';
   const newBtn = document.getElementById('newBtn');
   newBtn.innerHTML = icon('plus', 16) + '<span>Новая заявка</span>';
   newBtn.style.display = can('request.create') && view !== 'new' ? '' : 'none';
@@ -6018,10 +6715,11 @@ function render() {
     ['rules', 'stages'].includes(view) ? 'ОРПСД-Р-01 · РЕДАКЦИЯ 2'
     : ['users', 'audit', 'monitoring', 'directories'].includes(view) ? 'АДМИНИСТРИРОВАНИЕ'
     : ['new', 'mine'].includes(view) ? 'АО «КАЗТЕЛЕРАДИО» · ПОРТАЛ ЗАКАЗЧИКА'
-    : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
+    : 'ЗАЯВКИ НА УСЛУГИ ОР ПСД';
   const portal = ['new', 'mine'].includes(view);
   const withoutBar = ['rules', 'stages'];
-  const head = portal ? portalIntro() : withoutBar.includes(view) ? '' : modeBar();
+  // Вводный блок портала — для новой заявки и для Заказчика без заявок; список своих заявок — сразу.
+  const head = portal ? (view === 'mine' && state.live && D.requests.length ? '' : portalIntro()) : withoutBar.includes(view) ? '' : modeBar();
 
   if (state.loading) {
     document.getElementById('view').innerHTML = head + skeleton();
@@ -6034,13 +6732,16 @@ function render() {
       new: renderWizard, mine: renderMine, ams: renderAms,
       assignments: renderAssignments, memos: renderMemos,
       users: renderUsers, audit: renderAudit, monitoring: renderMonitoring, reports: renderReports,
-      directories: renderDirectories,
+      directories: renderDirectories, tasks: renderTasks, team: renderTeam,
     })[view]();
   } catch (error) {
     body = `<div class="blocked"><b>Не удалось отобразить раздел.</b> ${esc(error.message)}</div>`;
   }
   document.getElementById('view').innerHTML =
     head + (state.error ? errorBanner(state.error) : '') + body;
+  // На телефоне шаги мастера — одна прокручиваемая строка: текущий шаг держим в видимой части.
+  const step = document.querySelector('.steps .cur');
+  if (step) step.parentElement.scrollLeft = step.offsetLeft - 16;
 }
 
 /** Заглушка на время загрузки: экран не должен мигать пустотой. */
@@ -6058,6 +6759,7 @@ function errorBanner(text) {
 }
 
 async function reloadCurrent() {
+  if (state.live && !isCustomerUser()) api.tasksCount().then((c) => { D.tasksBadge = c; renderNav(); }).catch(() => {});
   state.loaded.delete(view);
   state.error = null;
   state.loading = true;

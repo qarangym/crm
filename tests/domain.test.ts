@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { addCalendarDays, addWorkingDays, daysLeft, dueDate, isWorkingDay, workingDaysBetween } from '../src/domain/calendar.ts';
-import { validBin, validPhone, validText, validateRequest } from '../src/domain/validation.ts';
+import { validBin, validPhone, formatPhone, validText, validateRequest } from '../src/domain/validation.ts';
 import { estimate, formatMoney, isFreeOfCharge } from '../src/domain/pricing.ts';
 import type { RequestService, Tariff, WorkCalendar } from '../src/domain/types.ts';
 
@@ -72,7 +72,17 @@ test('БИН проверяется по контрольному разряду
 test('телефон: формат РК, без однообразных последовательностей', () => {
   assert.equal(validPhone('+7 701 000-11-22'), true);
   assert.equal(validPhone('+7 700 000-00-00'), false);
-  assert.equal(validPhone('8 701 000 11 22'), false);
+  // «8» в начале — привычная запись; приводится к +7, как в маске ввода.
+  assert.equal(validPhone('8 701 000 11 22'), true);
+  assert.equal(validPhone('+7 912 345 67 89'), false, 'номер другой страны с кодом +7');
+  assert.equal(validPhone('+7 701 000'), false, 'неполный');
+});
+
+test('телефон: единый вид «+7 XXX XXX XX XX»', () => {
+  for (const input of ['87015551234', '+7 (701) 555-12-34', '7015551234', '+77015551234', '8 701 555 12 34']) {
+    assert.equal(formatPhone(input), '+7 701 555 12 34', input);
+  }
+  assert.equal(formatPhone('12345'), '12345', 'нераспознанный номер не искажается');
 });
 
 const validForm = {
