@@ -42,6 +42,10 @@
 .demo-list button:hover{border-color:#C9A63E}
 .demo-list small{display:block;color:var(--muted);font-size:11.5px}
 .demo-list span.r{font-size:11.5px;color:#7A6320;white-space:nowrap}
+.auth .first-time{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.auth .first-time b{font-size:14px}
+.auth .first-time p{margin:4px 0 12px;color:var(--muted);font-size:13px}
+.auth .first-time .btn{width:100%;justify-content:center}
 @media (max-width:480px){.auth .grid2{grid-template-columns:1fr}.auth-card{padding:22px 18px}.demo-list span.r{display:none}}
 </style>
 </head>
@@ -82,7 +86,11 @@ function show(mode, message = null) {
       ${field('email', 'Почта', 'email', `autocomplete="username" value="${esc(state.email)}" required`)}
       ${field('password', 'Пароль', 'password', 'autocomplete="current-password" required')}
       <div class="actions"><button class="btn primary">Войти</button></div></form>
-    <div class="links"><a onclick="show('forgot')">Забыли пароль?</a><a onclick="show('register')">Регистрация организации</a></div>`;
+    <div class="links"><a onclick="show('forgot')">Забыли пароль?</a></div>
+    <div class="first-time"><b>Впервые здесь?</b>
+      <p>Организации регистрируются сами — чтобы подавать заявки на ТУ, ПСД и СМР или получать допуск на объекты
+        Общества. Сотрудникам Общества учётную запись заводит ДИТ: ссылка для пароля придёт на почту.</p>
+      <button type="button" class="btn" onclick="show('register')">Зарегистрировать организацию</button></div>`;
   if (mode === 'code') v.innerHTML = `<h2>Код из письма</h2><p class="lead">Отправили код на ${esc(state.sentTo)}. Он действует 10 минут.</p>${alertBox()}
     <form class="code" onsubmit="event.preventDefault();doCode(this.querySelector('button'))">
       ${field('code', 'Код', 'text', 'inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required')}

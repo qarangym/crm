@@ -427,6 +427,13 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .demo-ribbon{position:sticky;top:0;z-index:30;background:#F6C344;color:#3A2E05;font-size:12px;font-weight:600;text-align:center;
   padding:4px 12px;letter-spacing:.01em}
 
+/* Справка и приветствие */
+.help-box{max-width:560px}
+.help-box .body{max-height:65vh;overflow:auto}
+.help-box h4{font-size:14px;margin:0 0 6px}
+.help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.45}
+.help-box section + section{border-top:1px solid var(--line);padding-top:12px}
+
 </style>
 </head>
 <body>
@@ -434,14 +441,16 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
   <aside class="side">
     <div class="brand">
       <img id="brandMark" alt="QTR — АО «Казтелерадио»">
-      <div><b>CRM ОР ПСД</b><small>Отдел разработки ПСД</small></div>
+      <div id="brandText"><b>Заявки ОР ПСД</b><small>ТУ, ПСД и СМР на объектах</small></div>
     </div>
-    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <div class="side-label" id="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div>
     <nav class="nav" id="nav"></nav>
-    <div class="side-label">ПОРТАЛ ЗАКАЗЧИКА</div>
+    <div class="side-label" id="portalLabel">ЗАЯВКИ ЗАКАЗЧИКОВ</div>
     <nav class="nav" id="navPortal"></nav>
-    <div class="side-label">РЕГЛАМЕНТ</div>
+    <div class="side-label" id="nav2Label">СПРАВКА ПО РЕГЛАМЕНТУ</div>
     <nav class="nav" id="nav2"></nav>
+    <div class="side-label" id="nav3Label">АДМИНИСТРИРОВАНИЕ</div>
+    <nav class="nav" id="nav3"></nav>
     <div class="side-label" id="permitsLabel" style="display:none">ДРУГИЕ МОДУЛИ</div>
     <nav class="nav" id="navPermits"></nav>
   </aside>
@@ -451,7 +460,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
       <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
         <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
-        <div class="eyebrow" id="eyebrow">ОТДЕЛ РАЗРАБОТКИ ПСД</div>
+        <div class="eyebrow" id="eyebrow">ЗАЯВКИ НА УСЛУГИ ОР ПСД</div>
         <h1 id="title">Доска заявок</h1>
         <p id="subtitle"></p>
       </div>
@@ -460,6 +469,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
         onclick="go('bottlenecks')" id="bellBtn"></button>
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
       <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
+      <div id="helpHost"></div>
       <div class="bell-host" id="bellHost"></div>
       <div class="whoami" id="whoami"></div>
       <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
@@ -1876,16 +1886,11 @@ function mountBell(host) {
     }
     const item = ev.target.closest('.bell-item');
     if (!item) return;
-    const href = item.getAttribute('href');
-    if (href === '#') ev.preventDefault();
-    try { show((await api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] })).unread); } catch { /* сеть */ }
-    // Ссылка на текущую страницу с другим якорем — перейти и открыть карточку без перезагрузки.
-    if (href !== '#' && href.split('#')[0] === location.pathname) {
-      ev.preventDefault();
-      panel.hidden = true;
-      location.hash = href.split('#')[1] || '';
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-    }
+    if (item.getAttribute('href') === '#') ev.preventDefault();
+    panel.hidden = true;
+    // По ссылке переходит сам браузер; адрес («#ЗК-…», «#ЗД-…») открывает карточку в приложении (popstate).
+    // Отметка «прочитано» — в фоне, чтобы не задерживать переход.
+    api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] }).then((r) => show(r.unread)).catch(() => {});
   });
   document.addEventListener('click', () => { panel.hidden = true; });
   refresh();
@@ -1903,6 +1908,108 @@ function mountDemoRibbon(me) {
   ribbon.className = 'demo-ribbon';
   ribbon.textContent = 'Демонстрационный стенд · данные вымышлены · код входа показывается на экране';
   document.body.prepend(ribbon);
+}
+
+/* ------------------------------ справка ------------------------------
+   Что делать в системе — коротко, по роли (docs/Руководство_пользователя.md). Кнопка «Справка» в шапке;
+   при первом входе на этом браузере те же шаги показываются приветствием. */
+
+const HELP = {
+  orpsd: {
+    customer: ['Заказчик', [
+      '«Новая заявка»: выберите услуги — ТУ, ПСД, СМР, можно вместе, — объект и параметры оборудования. Форма покажет только нужные поля и ориентировочную стоимость.',
+      'На последнем шаге проверьте заявку и подайте. Номер присваивается сразу, подтверждение придёт на почту.',
+      '«Мои заявки» — статус и что происходит сейчас. Вернули с замечаниями — откройте заявку → «Исправить заявку»: номер и история сохранятся.',
+      'Договоры, счета и акты — в карточке заявки. Замечания к АВР — в течение 10 рабочих дней, иначе акт считается принятым.']],
+    records: ['Канцелярия', [
+      '«Мои задачи» — новые заявки ждут подтверждения регистрации: номер и дата уже присвоены, проверьте и нажмите «Подтвердить регистрацию».',
+      'Заявка пришла на бумаге или почтой — «Внести заявку» от имени Заказчика, со сканом письма.',
+      'Для дела — «Карточка заявки» в карточке: печатная форма.']],
+    orpsd: ['ОР ПСД', [
+      'Начинайте день с «Моих задач»: всё, что на вас, просроченное сверху.',
+      'В карточке заявки вверху — чего не хватает для перехода и пункт Регламента; внизу — «Следующий шаг».',
+      'Оценка ТВ: «Рассчитать по реестру» → результат и решение о поверочном расчёте → «Зафиксировать оценку».',
+      'Нужны данные филиала — «Служебные записки в филиал» в карточке: ответ за 3 рабочих дня.',
+      '«Доска заявок» — все заявки по этапам; отбор «Без исполнителя» должен быть пустым.']],
+    branch: ['Филиал', [
+      '«Мои задачи» — служебные записки ОР ПСД (ответ за 3 рабочих дня) и этапы СМР на ваших объектах.',
+      'Акт приёма-передачи и технический АВР — «Архив актов» → загрузка с реквизитами.',
+      'Допуски сторонних организаций на ваши объекты — «Портал допусков» в меню: согласование и проверка на объекте.']],
+    accounting: ['Расчёты с контрагентами', [
+      '«Мои задачи» — заявки, где нужен счёт, отметка оплаты, АВР или ЭСФ.',
+      'В карточке заявки — договоры по каждой услуге: отметка оплаты с фактической датой, загрузка АВР.']],
+    oko: ['ОКО', [
+      '«Мои задачи» — исполненные поручения, которые осталось закрыть.',
+      '«Поручения» — все поручения с исполнителями и сроками, выгрузка CSV.',
+      '«Отчёты», «Узкие места», «Журнал» — контроль сроков и действий.']],
+    management: ['Руководство', [
+      '«Доска заявок» и «Узкие места» — где заявки стоят дольше норматива.',
+      '«Нагрузка команды» — кто чем занят; «Отчёты» — с выгрузкой в Excel.']],
+    assets: ['Технический учёт', [
+      '«Мои задачи» — запросы на изменение реестра АМС, срок — 1 рабочий день.',
+      '«Реестр АМС и ТВ» — версии мастер-файла, по которым ОР ПСД оценивает техническую возможность.']],
+    permits: ['СУА', ['Основная работа — «Портал допусков» в меню. Здесь — архив актов для просмотра и поиска.']],
+    auditor: ['Аудитор', ['«Журнал» — все действия пользователей с отбором и выгрузкой; записи журнала изменить нельзя.']],
+    admin: ['ДИТ', [
+      '«Пользователи» — заведение, импорт, «Пригласить». Новые регистрации организаций ждут проверки — они же в «Моих задачах».',
+      '«Справочники» — филиалы и ответственные лица, объекты, календарь, прейскурант, тексты писем.',
+      '«Эскалации и уведомления» — доставка писем; «Журнал» — все действия.']],
+  },
+  permits: {
+    contractor: ['Сторонняя организация', [
+      'Сначала «Работники и бригады»: работники по Приложению 1 с удостоверениями и сроками, транспорт. Это делается один раз.',
+      '«Новая заявка»: цель работ → объект → основание (договор аренды или ТУ) → период → бригада.',
+      '«Сформировать запрос» — распечатайте запрос с Приложением 1, подпишите, заверьте печатью и приложите скан.',
+      'Ответ — не позднее 14 рабочих дней. Допуск с кодом — в «Моих заявках»: код предъявляется на объекте.',
+      'Авария — цель «Аварийно-восстановительные работы»: запрос можно приложить позже, в течение 2 дней.']],
+    permits: ['СУА', [
+      '«Очередь на рассмотрение» — срочные и аварийные сверху, срок ответа — 14 рабочих дней.',
+      'В карточке — проверка основания, бригада со сканами, подписанный запрос → «Выдать допуск» или «Отклонить» с причиной.',
+      'Руководство филиала не работает в системе — отметьте согласование, полученное устно или письмом.',
+      '«Договоры аренды» — реестр и загрузка таблицы; «Отчёт» — с выгрузкой в Excel.']],
+    branch: ['Филиал', [
+      '«Согласование филиала» — заявки на ваши объекты, где Инструкция требует согласования руководства.',
+      '«Проверка на объекте» — удобно с телефона: код допуска, ИИН или фамилия; инструктаж, спецодежда, обувь, СИЗ → «Допустить».',
+      'Работы закончены — «Закрыть допуск».']],
+    oko: ['ОКО', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    management: ['Руководство', ['«Действующие допуски», «Все заявки» и «Отчёт» — только просмотр.']],
+    admin: ['ДИТ', ['«Настройки» — режим проверки оснований, сроки и пределы Инструкции, безвизовые сроки СНГ.']],
+  },
+};
+
+function helpSections(me, module) {
+  const book = HELP[module] || {};
+  return Object.keys(book).filter((role) => (me?.roles || []).includes(role)).map((role) => book[role]);
+}
+
+function showHelp(me, module, welcome = false) {
+  const sections = helpSections(me, module);
+  if (!sections.length) return;
+  const box = document.createElement('div');
+  box.className = 'dlg';
+  const name = String(me.fullName || '').split(' ')[1] || me.fullName || '';
+  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true">
+    <header><h3>${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
+      <p>${welcome ? 'Коротко — с чего начать. Эти подсказки всегда под кнопкой «Справка» в шапке.' : 'Что делать в системе — по вашей роли.'}</p></header>
+    <div class="body">${sections.map(([title, steps]) => `<section><h4>${esc(title)}</h4>
+      <ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></section>`).join('')}</div>
+    <footer><button class="btn primary" data-act="ok">Понятно</button></footer></div>`;
+  const close = () => box.remove();
+  box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-act]')) close(); });
+  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  document.body.appendChild(box);
+  box.querySelector('[data-act]').focus();
+}
+
+/** Кнопка «Справка» в шапке и приветствие при первом входе на этом браузере. */
+function mountHelp(host, me, module) {
+  if (!host || !helpSections(me, module).length) return;
+  host.innerHTML = '<button class="btn ghost" type="button">Справка</button>';
+  host.querySelector('button').addEventListener('click', () => showHelp(me, module));
+  const key = `qtr.welcome.${module}.${me.id}`;
+  let seen = true;
+  try { seen = !!localStorage.getItem(key); localStorage.setItem(key, '1'); } catch { /* хранилище недоступно — без приветствия */ }
+  if (!seen) showHelp(me, module, true);
 }
 
 </script>
@@ -2099,6 +2206,7 @@ async function boot() {
     // Подрядчику доступен только портал допусков: сразу туда.
     const modules = state.me.modules || [];
     if (modules.includes('permits') && !modules.includes('orpsd')) { location.replace('/dopusk/'); return; }
+    mountHelp(document.getElementById('helpHost'), state.me, 'orpsd');
   } catch (error) {
     state.loading = false;
     if (error.status === 401) { toLogin(); return; }
@@ -2116,13 +2224,16 @@ async function boot() {
     return;
   }
 
+  const initial = routeOf();
   try {
     D = { requests: [], facilities: [], tariffs: [], documents: [], branches: [], metrics: null };
     // Стартовый экран по роли: Заказчику — «Мои заявки» (В1).
     if (isCustomerUser()) view = 'mine';
     // Сотрудник начинает с «Моих задач»: то, что лежит именно на нём (п. 102).
     else if (state.live) { view = 'tasks'; api.tasksCount().then((c) => { D.tasksBadge = c; renderNav(); }).catch(() => {}); }
-    else if (!viewAllowed(view)) view = [...MENU, ...MENU2].map(([k]) => k).find(viewAllowed) || 'board';
+    else if (!viewAllowed(view)) view = [...MENU, ...MENU2, ...MENU3].map(([k]) => k).find(viewAllowed) || 'board';
+    // Адрес из закладки, обновления страницы или письма: «#/board», «#ЗК-2026-0001».
+    if (initial.view && viewAllowed(initial.view)) view = initial.view;
     if (can('documents.approve')) {
       D.pendingVisa = (await api.pendingCount().catch(() => ({ count: 0 }))).count;
     }
@@ -2133,6 +2244,45 @@ async function boot() {
     state.loading = false;
     render();
   }
+  if (!state.live) return;
+  history.replaceState(null, '', '#/' + view + (initial.card ? '/' + initial.card : ''));
+  window.addEventListener('popstate', applyRoute);
+  if (initial.card) await withRoute(() => openSheet(initial.card));
+}
+
+/* ------------------------------ адрес в браузере ------------------------------
+   Экран и открытая заявка записываются в адрес: работают «Назад» и «Вперёд» браузера, обновление
+   страницы оставляет на месте, ссылка из письма или колокольчика («/#ЗК-2026-0001») открывает заявку. */
+
+let routing = false;      // переход вызван самим адресом — новую запись в историю не добавлять
+let cardInHistory = false; // карточка открыта изнутри системы — закрытие возвращает на шаг назад
+
+function routeOf() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  return { view: /^\/([a-z]+)/.exec(h)?.[1] || null, card: /ЗК-\d{4}-\d{4}/.exec(h)?.[0] || null };
+}
+
+async function withRoute(fn) {
+  routing = true;
+  try { await fn(); } finally { routing = false; }
+}
+
+function pushRoute(card = null) {
+  if (routing || !state.live) return;
+  const hash = '#/' + view + (card ? '/' + card : '');
+  if (location.hash === hash) return;
+  history.pushState(null, '', hash);
+  cardInHistory = !!card;
+}
+
+async function applyRoute() {
+  const r = routeOf();
+  await withRoute(async () => {
+    if (r.view && r.view !== view && viewAllowed(r.view)) await go(r.view);
+    const open = document.getElementById('sheet').classList.contains('on');
+    if (r.card && (!open || sheetRequest?.number !== r.card)) await openSheet(r.card);
+    if (!r.card && open) closeSheet();
+  });
 }
 
 /** Догрузка данных под конкретный экран. Повторно не запрашиваем. */
@@ -2362,10 +2512,10 @@ const MENU = [
   ['memos', 'Служебные записки', 'copy'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
   ['archive', 'Архив актов', 'archive'],
 ];
-const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'list']];
-const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock'],
-  ['directories', 'Справочники', 'search'],
-  ['monitoring', 'Эскалации и уведомления', 'warn'], ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
+const MENU_PORTAL = [['new', 'Новая заявка', 'filePlus'], ['mine', 'Мои заявки', 'list']];
+const MENU2 = [['stages', 'Этапы и сроки', 'clock'], ['rules', 'Автоматизации', 'sliders']];
+const MENU3 = [['directories', 'Справочники', 'search'], ['monitoring', 'Эскалации и уведомления', 'warn'],
+  ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
 const TITLES = {
   tasks: ['Мои задачи', 'Всё, что лежит на вас: заявки, поручения, записки, документы на визу — просроченное сверху'],
   team: ['Нагрузка команды', 'Кто чем занят и у кого просрочено · п. 102'],
@@ -2432,6 +2582,7 @@ const TASK_OPEN = {
   assignment: () => `go('assignments')`, memo: () => `go('memos')`,
   document: (t) => `openDocument('${t.id}')`, registry: () => `go('ams')`,
   permit: (t) => `location.href='/dopusk/#${encodeURIComponent(t.ref)}'`,
+  user: () => `go('users')`,
 };
 
 function taskDue(t) {
@@ -2458,7 +2609,7 @@ function renderTasks() {
         <div class="k">${esc(t.kindName)}</div>
         <div class="t"><b>${esc(t.title)}</b><small>${esc(t.ref)} · ${esc(t.detail)}</small></div>
         <div class="d">${taskDue(t)}</div></div>`).join('')
-        : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Задач нет — всё, что было на вас, выполнено.' : 'У сотрудника нет задач.'}</div>`}
+        : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Сейчас задач нет. Новые заявки, поручения и записки на вас появятся здесь сами, о каждой придёт письмо.' : 'У сотрудника нет задач.'}</div>`}
     </div></section>
     ${own ? absencePanel() : ''}
     <div class="note" style="margin-top:14px">Здесь всё, что назначено на конкретного человека (п. 102): заявки, где вы ответственный или
@@ -2542,21 +2693,33 @@ function renderNav() {
   const item = ([k, l, i]) =>
     `<button class="${view===k?'on':''}" onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
     (badges[k] ? `<span class="badge${k === 'tasks' && !D.tasksBadge?.overdue ? ' calm' : ''}" title="${k === 'archive' ? 'Документы ждут визы' : k === 'tasks' ? `Задач: ${badges[k]}, просрочено: ${D.tasksBadge?.overdue || 0}` : 'Просрочено'}">${badges[k]}</span>` : '') + `</button>`;
-  document.getElementById('nav').innerHTML = MENU.filter(([k]) => viewAllowed(k)).map(item).join('');
-  const portal = MENU_PORTAL.filter(([k]) => viewAllowed(k));
-  document.getElementById('navPortal').innerHTML = portal.map(item).join('');
-  document.querySelectorAll('.side-label')[1].style.display = portal.length ? '' : 'none';
-  document.getElementById('nav2').innerHTML = MENU2.filter(([k]) => viewAllowed(k)).map(item).join('');
+  // Раздел без пунктов не показывается вовсе: пустые заголовки сбивают с толку.
+  const section = (navId, labelId, items) => {
+    const allowed = items.filter(([k]) => viewAllowed(k));
+    document.getElementById(navId).innerHTML = allowed.map(item).join('');
+    document.getElementById(labelId).style.display = allowed.length ? '' : 'none';
+  };
+  section('nav', 'navLabel', MENU);
+  // Сотрудник (канцелярия, ОР ПСД) не «подаёт», а вносит заявку Заказчика — бумажную или из почты (п. 6).
+  section('navPortal', 'portalLabel', MENU_PORTAL.map(([k, l, i]) => [k, k === 'new' && !isCustomerUser() ? 'Внести заявку' : l, i]));
+  section('nav2', 'nav2Label', MENU2);
+  section('nav3', 'nav3Label', MENU3);
+  // Заказчику — его кабинет, а не внутреннее название системы; раздел портала без заголовка.
+  if (isCustomerUser()) {
+    document.getElementById('brandText').innerHTML = '<b>АО «Казтелерадио»</b><small>Кабинет Заказчика</small>';
+    document.getElementById('portalLabel').style.display = 'none';
+  }
   // Портал допусков СУА — отдельная ссылка в той же системе (План модуля допусков, §2).
   const permits = state.live && (state.me?.modules || []).includes('permits');
   document.getElementById('permitsLabel').style.display = permits ? '' : 'none';
   document.getElementById('navPermits').innerHTML = permits
-    ? `<button onclick="location.href='/dopusk/'">${icon('shield')}<span>Портал допусков</span></button>` : '';
+    ? `<button onclick="location.href='/dopusk/'">${icon('truck')}<span>Портал допусков</span></button>` : '';
 }
 async function go(v, keep = false) {
   // Из меню «Мои задачи» открываются свои; чужие — только из «Нагрузки команды».
   if (v === 'tasks' && !keep) tasksUser = 'me';
   view = v;
+  pushRoute();
   window.scrollTo(0, 0);
   document.querySelector('.side')?.classList.remove('open');
   // Задачи и нагрузка меняются каждую минуту — перечитываются при каждом входе на экран.
@@ -3379,7 +3542,7 @@ async function openSheet(number, keepOpen = false) {
     if (found) { D.requests.push(found); sheetRequest = found; }
   }
   if (!sheetRequest) { toast('Заявка не найдена', 'bad'); return; }
-  if (!keepOpen) draftRemarks = [];
+  if (!keepOpen) { draftRemarks = []; pushRoute(number); }
   document.getElementById('sheet').classList.add('on');
 
   if (state.live) {
@@ -3808,7 +3971,13 @@ async function runCapacity(button) {
   if (ok) await openSheet(sheetRequest.number, true);
 }
 
-function closeSheet() { document.getElementById('sheet').classList.remove('on'); }
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('on');
+  if (routing || !routeOf().card) return;
+  // Открыли из системы — «Назад» в истории; пришли по ссылке — просто убираем номер из адреса.
+  if (cardInHistory) { cardInHistory = false; history.back(); }
+  else history.replaceState(null, '', '#/' + view);
+}
 
 /* --------------------- договоры и оплата по услугам (A1, В6, В8) --------------------- */
 
@@ -6546,7 +6715,7 @@ function render() {
     ['rules', 'stages'].includes(view) ? 'ОРПСД-Р-01 · РЕДАКЦИЯ 2'
     : ['users', 'audit', 'monitoring', 'directories'].includes(view) ? 'АДМИНИСТРИРОВАНИЕ'
     : ['new', 'mine'].includes(view) ? 'АО «КАЗТЕЛЕРАДИО» · ПОРТАЛ ЗАКАЗЧИКА'
-    : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
+    : 'ЗАЯВКИ НА УСЛУГИ ОР ПСД';
   const portal = ['new', 'mine'].includes(view);
   const withoutBar = ['rules', 'stages'];
   // Вводный блок портала — для новой заявки и для Заказчика без заявок; список своих заявок — сразу.

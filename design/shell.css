@@ -418,3 +418,10 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 /* Демонстрационный стенд (DEMO_MODE): полоса над страницей. */
 .demo-ribbon{position:sticky;top:0;z-index:30;background:#F6C344;color:#3A2E05;font-size:12px;font-weight:600;text-align:center;
   padding:4px 12px;letter-spacing:.01em}
+
+/* Справка и приветствие */
+.help-box{max-width:560px}
+.help-box .body{max-height:65vh;overflow:auto}
+.help-box h4{font-size:14px;margin:0 0 6px}
+.help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.45}
+.help-box section + section{border-top:1px solid var(--line);padding-top:12px}

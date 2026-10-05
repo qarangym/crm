@@ -11,14 +11,16 @@
   <aside class="side">
     <div class="brand">
       <img id="brandMark" alt="QTR — АО «Казтелерадио»">
-      <div><b>CRM ОР ПСД</b><small>Отдел разработки ПСД</small></div>
+      <div id="brandText"><b>Заявки ОР ПСД</b><small>ТУ, ПСД и СМР на объектах</small></div>
     </div>
-    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <div class="side-label" id="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div>
     <nav class="nav" id="nav"></nav>
-    <div class="side-label">ПОРТАЛ ЗАКАЗЧИКА</div>
+    <div class="side-label" id="portalLabel">ЗАЯВКИ ЗАКАЗЧИКОВ</div>
     <nav class="nav" id="navPortal"></nav>
-    <div class="side-label">РЕГЛАМЕНТ</div>
+    <div class="side-label" id="nav2Label">СПРАВКА ПО РЕГЛАМЕНТУ</div>
     <nav class="nav" id="nav2"></nav>
+    <div class="side-label" id="nav3Label">АДМИНИСТРИРОВАНИЕ</div>
+    <nav class="nav" id="nav3"></nav>
     <div class="side-label" id="permitsLabel" style="display:none">ДРУГИЕ МОДУЛИ</div>
     <nav class="nav" id="navPermits"></nav>
   </aside>
@@ -28,7 +30,7 @@
       <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
         <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
-        <div class="eyebrow" id="eyebrow">ОТДЕЛ РАЗРАБОТКИ ПСД</div>
+        <div class="eyebrow" id="eyebrow">ЗАЯВКИ НА УСЛУГИ ОР ПСД</div>
         <h1 id="title">Доска заявок</h1>
         <p id="subtitle"></p>
       </div>
@@ -37,6 +39,7 @@
         onclick="go('bottlenecks')" id="bellBtn"></button>
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
       <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
+      <div id="helpHost"></div>
       <div class="bell-host" id="bellHost"></div>
       <div class="whoami" id="whoami"></div>
       <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
@@ -248,6 +251,7 @@ async function boot() {
     // Подрядчику доступен только портал допусков: сразу туда.
     const modules = state.me.modules || [];
     if (modules.includes('permits') && !modules.includes('orpsd')) { location.replace('/dopusk/'); return; }
+    mountHelp(document.getElementById('helpHost'), state.me, 'orpsd');
   } catch (error) {
     state.loading = false;
     if (error.status === 401) { toLogin(); return; }
@@ -265,13 +269,16 @@ async function boot() {
     return;
   }
 
+  const initial = routeOf();
   try {
     D = { requests: [], facilities: [], tariffs: [], documents: [], branches: [], metrics: null };
     // Стартовый экран по роли: Заказчику — «Мои заявки» (В1).
     if (isCustomerUser()) view = 'mine';
     // Сотрудник начинает с «Моих задач»: то, что лежит именно на нём (п. 102).
     else if (state.live) { view = 'tasks'; api.tasksCount().then((c) => { D.tasksBadge = c; renderNav(); }).catch(() => {}); }
-    else if (!viewAllowed(view)) view = [...MENU, ...MENU2].map(([k]) => k).find(viewAllowed) || 'board';
+    else if (!viewAllowed(view)) view = [...MENU, ...MENU2, ...MENU3].map(([k]) => k).find(viewAllowed) || 'board';
+    // Адрес из закладки, обновления страницы или письма: «#/board», «#ЗК-2026-0001».
+    if (initial.view && viewAllowed(initial.view)) view = initial.view;
     if (can('documents.approve')) {
       D.pendingVisa = (await api.pendingCount().catch(() => ({ count: 0 }))).count;
     }
@@ -282,6 +289,45 @@ async function boot() {
     state.loading = false;
     render();
   }
+  if (!state.live) return;
+  history.replaceState(null, '', '#/' + view + (initial.card ? '/' + initial.card : ''));
+  window.addEventListener('popstate', applyRoute);
+  if (initial.card) await withRoute(() => openSheet(initial.card));
+}
+
+/* ------------------------------ адрес в браузере ------------------------------
+   Экран и открытая заявка записываются в адрес: работают «Назад» и «Вперёд» браузера, обновление
+   страницы оставляет на месте, ссылка из письма или колокольчика («/#ЗК-2026-0001») открывает заявку. */
+
+let routing = false;      // переход вызван самим адресом — новую запись в историю не добавлять
+let cardInHistory = false; // карточка открыта изнутри системы — закрытие возвращает на шаг назад
+
+function routeOf() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  return { view: /^\/([a-z]+)/.exec(h)?.[1] || null, card: /ЗК-\d{4}-\d{4}/.exec(h)?.[0] || null };
+}
+
+async function withRoute(fn) {
+  routing = true;
+  try { await fn(); } finally { routing = false; }
+}
+
+function pushRoute(card = null) {
+  if (routing || !state.live) return;
+  const hash = '#/' + view + (card ? '/' + card : '');
+  if (location.hash === hash) return;
+  history.pushState(null, '', hash);
+  cardInHistory = !!card;
+}
+
+async function applyRoute() {
+  const r = routeOf();
+  await withRoute(async () => {
+    if (r.view && r.view !== view && viewAllowed(r.view)) await go(r.view);
+    const open = document.getElementById('sheet').classList.contains('on');
+    if (r.card && (!open || sheetRequest?.number !== r.card)) await openSheet(r.card);
+    if (!r.card && open) closeSheet();
+  });
 }
 
 /** Догрузка данных под конкретный экран. Повторно не запрашиваем. */
@@ -511,10 +557,10 @@ const MENU = [
   ['memos', 'Служебные записки', 'copy'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
   ['archive', 'Архив актов', 'archive'],
 ];
-const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'list']];
-const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock'],
-  ['directories', 'Справочники', 'search'],
-  ['monitoring', 'Эскалации и уведомления', 'warn'], ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
+const MENU_PORTAL = [['new', 'Новая заявка', 'filePlus'], ['mine', 'Мои заявки', 'list']];
+const MENU2 = [['stages', 'Этапы и сроки', 'clock'], ['rules', 'Автоматизации', 'sliders']];
+const MENU3 = [['directories', 'Справочники', 'search'], ['monitoring', 'Эскалации и уведомления', 'warn'],
+  ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
 const TITLES = {
   tasks: ['Мои задачи', 'Всё, что лежит на вас: заявки, поручения, записки, документы на визу — просроченное сверху'],
   team: ['Нагрузка команды', 'Кто чем занят и у кого просрочено · п. 102'],
@@ -581,6 +627,7 @@ const TASK_OPEN = {
   assignment: () => `go('assignments')`, memo: () => `go('memos')`,
   document: (t) => `openDocument('${t.id}')`, registry: () => `go('ams')`,
   permit: (t) => `location.href='/dopusk/#${encodeURIComponent(t.ref)}'`,
+  user: () => `go('users')`,
 };
 
 function taskDue(t) {
@@ -607,7 +654,7 @@ function renderTasks() {
         <div class="k">${esc(t.kindName)}</div>
         <div class="t"><b>${esc(t.title)}</b><small>${esc(t.ref)} · ${esc(t.detail)}</small></div>
         <div class="d">${taskDue(t)}</div></div>`).join('')
-        : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Задач нет — всё, что было на вас, выполнено.' : 'У сотрудника нет задач.'}</div>`}
+        : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Сейчас задач нет. Новые заявки, поручения и записки на вас появятся здесь сами, о каждой придёт письмо.' : 'У сотрудника нет задач.'}</div>`}
     </div></section>
     ${own ? absencePanel() : ''}
     <div class="note" style="margin-top:14px">Здесь всё, что назначено на конкретного человека (п. 102): заявки, где вы ответственный или
@@ -691,21 +738,33 @@ function renderNav() {
   const item = ([k, l, i]) =>
     `<button class="${view===k?'on':''}" onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
     (badges[k] ? `<span class="badge${k === 'tasks' && !D.tasksBadge?.overdue ? ' calm' : ''}" title="${k === 'archive' ? 'Документы ждут визы' : k === 'tasks' ? `Задач: ${badges[k]}, просрочено: ${D.tasksBadge?.overdue || 0}` : 'Просрочено'}">${badges[k]}</span>` : '') + `</button>`;
-  document.getElementById('nav').innerHTML = MENU.filter(([k]) => viewAllowed(k)).map(item).join('');
-  const portal = MENU_PORTAL.filter(([k]) => viewAllowed(k));
-  document.getElementById('navPortal').innerHTML = portal.map(item).join('');
-  document.querySelectorAll('.side-label')[1].style.display = portal.length ? '' : 'none';
-  document.getElementById('nav2').innerHTML = MENU2.filter(([k]) => viewAllowed(k)).map(item).join('');
+  // Раздел без пунктов не показывается вовсе: пустые заголовки сбивают с толку.
+  const section = (navId, labelId, items) => {
+    const allowed = items.filter(([k]) => viewAllowed(k));
+    document.getElementById(navId).innerHTML = allowed.map(item).join('');
+    document.getElementById(labelId).style.display = allowed.length ? '' : 'none';
+  };
+  section('nav', 'navLabel', MENU);
+  // Сотрудник (канцелярия, ОР ПСД) не «подаёт», а вносит заявку Заказчика — бумажную или из почты (п. 6).
+  section('navPortal', 'portalLabel', MENU_PORTAL.map(([k, l, i]) => [k, k === 'new' && !isCustomerUser() ? 'Внести заявку' : l, i]));
+  section('nav2', 'nav2Label', MENU2);
+  section('nav3', 'nav3Label', MENU3);
+  // Заказчику — его кабинет, а не внутреннее название системы; раздел портала без заголовка.
+  if (isCustomerUser()) {
+    document.getElementById('brandText').innerHTML = '<b>АО «Казтелерадио»</b><small>Кабинет Заказчика</small>';
+    document.getElementById('portalLabel').style.display = 'none';
+  }
   // Портал допусков СУА — отдельная ссылка в той же системе (План модуля допусков, §2).
   const permits = state.live && (state.me?.modules || []).includes('permits');
   document.getElementById('permitsLabel').style.display = permits ? '' : 'none';
   document.getElementById('navPermits').innerHTML = permits
-    ? `<button onclick="location.href='/dopusk/'">${icon('shield')}<span>Портал допусков</span></button>` : '';
+    ? `<button onclick="location.href='/dopusk/'">${icon('truck')}<span>Портал допусков</span></button>` : '';
 }
 async function go(v, keep = false) {
   // Из меню «Мои задачи» открываются свои; чужие — только из «Нагрузки команды».
   if (v === 'tasks' && !keep) tasksUser = 'me';
   view = v;
+  pushRoute();
   window.scrollTo(0, 0);
   document.querySelector('.side')?.classList.remove('open');
   // Задачи и нагрузка меняются каждую минуту — перечитываются при каждом входе на экран.
@@ -1528,7 +1587,7 @@ async function openSheet(number, keepOpen = false) {
     if (found) { D.requests.push(found); sheetRequest = found; }
   }
   if (!sheetRequest) { toast('Заявка не найдена', 'bad'); return; }
-  if (!keepOpen) draftRemarks = [];
+  if (!keepOpen) { draftRemarks = []; pushRoute(number); }
   document.getElementById('sheet').classList.add('on');
 
   if (state.live) {
@@ -1957,7 +2016,13 @@ async function runCapacity(button) {
   if (ok) await openSheet(sheetRequest.number, true);
 }
 
-function closeSheet() { document.getElementById('sheet').classList.remove('on'); }
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('on');
+  if (routing || !routeOf().card) return;
+  // Открыли из системы — «Назад» в истории; пришли по ссылке — просто убираем номер из адреса.
+  if (cardInHistory) { cardInHistory = false; history.back(); }
+  else history.replaceState(null, '', '#/' + view);
+}
 
 /* --------------------- договоры и оплата по услугам (A1, В6, В8) --------------------- */
 
@@ -4695,7 +4760,7 @@ function render() {
     ['rules', 'stages'].includes(view) ? 'ОРПСД-Р-01 · РЕДАКЦИЯ 2'
     : ['users', 'audit', 'monitoring', 'directories'].includes(view) ? 'АДМИНИСТРИРОВАНИЕ'
     : ['new', 'mine'].includes(view) ? 'АО «КАЗТЕЛЕРАДИО» · ПОРТАЛ ЗАКАЗЧИКА'
-    : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
+    : 'ЗАЯВКИ НА УСЛУГИ ОР ПСД';
   const portal = ['new', 'mine'].includes(view);
   const withoutBar = ['rules', 'stages'];
   // Вводный блок портала — для новой заявки и для Заказчика без заявок; список своих заявок — сразу.

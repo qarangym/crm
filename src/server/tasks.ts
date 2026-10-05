@@ -18,7 +18,7 @@ import type { Router } from './http.ts';
 import * as rbac from './rbac.ts';
 import type { RouteDeps } from './context.ts';
 
-export type TaskKind = 'request' | 'registration' | 'assignment' | 'memo' | 'document' | 'registry' | 'permit';
+export type TaskKind = 'request' | 'registration' | 'assignment' | 'memo' | 'document' | 'registry' | 'permit' | 'user';
 
 export type Task = {
   kind: TaskKind;
@@ -36,7 +36,7 @@ export type Task = {
 
 const KIND_NAME: Record<TaskKind, string> = {
   request: 'Заявка', registration: 'Регистрация', assignment: 'Поручение', memo: 'Служебная записка',
-  document: 'Документ на визу', registry: 'Изменение реестра', permit: 'Допуск',
+  document: 'Документ на визу', registry: 'Изменение реестра', permit: 'Допуск', user: 'Доступ',
 };
 
 const day = (v: unknown) => toIsoDate(v) ?? null;
@@ -140,6 +140,24 @@ async function collectFor(db: Db, userId: string | null): Promise<Task[]> {
       WHERE c.resolved_at IS NULL AND c.assignee_id IS NOT NULL AND ${who('c.assignee_id')}`, [userId])) {
     add({ kind: 'registry', userId: c.assignee_id, id: c.id, ref: c.facility, dueAt: c.due_at,
       title: c.body.length > 90 ? c.body.slice(0, 90) + '…' : c.body, detail: `Реестр АМС · ${c.facility} (пп. 13–14)` });
+  }
+
+  // Самостоятельная регистрация, ждущая проверки (представитель известной организации, подрядчик): включает ДИТ.
+  const admins = await db.query<{ id: string }>(
+    `SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id = u.id
+      WHERE ur.role = 'admin' AND u.is_active AND ${who('u.id')}`, [userId]);
+  if (admins.length) {
+    for (const p of await db.query<Record<string, any>>(
+      `SELECT u.id, u.full_name, u.created_at, c.name_full AS company, c.bin,
+              EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = 'contractor') AS contractor
+         FROM users u LEFT JOIN counterparties c ON c.id = u.counterparty_id
+        WHERE u.registration_pending AND u.email_verified_at IS NOT NULL ORDER BY u.created_at`)) {
+      for (const a of admins) {
+        add({ kind: 'user', userId: a.id, id: p.id, ref: p.company || p.full_name, dueAt: null,
+          title: `Проверить и включить: ${p.full_name} (${p.contractor ? 'подрядчик, допуски' : 'представитель Заказчика'})`,
+          detail: `${p.company || '—'}${p.bin ? ', БИН ' + p.bin : ''} · регистрация ${day(p.created_at)?.split('-').reverse().join('.')}` });
+      }
+    }
   }
 
   // Допуски (Инструкция о допуске): рассмотрение СУА — 14 рабочих дней (п. 14), согласование руководства

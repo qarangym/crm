@@ -177,6 +177,11 @@ test('нарушение Регламента собирается в одно �
   assert.equal(e.failures?.length, 2);
 });
 
+test('даты в письмах — как пишут люди; номера заявок не затрагиваются', async () => {
+  const { humanDates } = await import('../src/server/notifications.ts');
+  assert.equal(humanDates('Этап: ТУ, срок — 2026-10-05. Заявка ЗК-2026-0001'), 'Этап: ТУ, срок — 05.10.2026. Заявка ЗК-2026-0001');
+});
+
 test('контрольная сумма миграции не зависит от концов строк (CRLF на Windows, LF на сервере)', async () => {
   const { migrationChecksum } = await import('../src/db/migrate.ts');
   const lf = 'CREATE TABLE t (id int);\nINSERT INTO t VALUES (1);\n';

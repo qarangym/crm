@@ -185,12 +185,20 @@ describe('вход и регистрация с PostgreSQL', { skip: URL_ENV ? f
     assert.match(denied.body.message ?? denied.body.error ?? JSON.stringify(denied.body), /подтверждения ДИТ/);
 
     const user = await db.one<{ id: string }>('SELECT id FROM users WHERE email = $1', [email]);
+    // ДИТ узнаёт о регистрации не только из письма: она в «Моих задачах», ссылка ведёт на «Пользователей».
+    const tasks = await call('GET', '/api/v1/tasks', { cookie: adminCookie });
+    assert.ok(tasks.body.tasks.some((t: any) => t.kind === 'user' && t.id === user!.id && /Проверить и включить/.test(t.title)),
+      JSON.stringify(tasks.body.tasks));
+    const bell = await call('GET', '/api/v1/inbox', { cookie: adminCookie });
+    assert.ok(bell.body.items.some((i: any) => i.event_key === 'registration_pending' && i.link === '/#/users'));
     const enabled = await call('POST', `/api/v1/users/${user!.id}/enable`, { cookie: adminCookie });
     assert.equal(enabled.status, 200, JSON.stringify(enabled.body));
     const pending = await db.one<{ registration_pending: boolean }>('SELECT registration_pending FROM users WHERE id = $1', [user!.id]);
     assert.equal(pending!.registration_pending, false);
     const cookie = await login(email);
     assert.equal((await call('GET', '/api/v1/me', { cookie })).status, 200);
+    const after = await call('GET', '/api/v1/tasks', { cookie: adminCookie });
+    assert.ok(!after.body.tasks.some((t: any) => t.kind === 'user' && t.id === user!.id), 'включённая учётная запись уходит из задач');
   });
 
   test('подрядчик регистрируется сам, но допуск открывает ДИТ; кабинеты не пересекаются', async () => {

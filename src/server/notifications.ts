@@ -38,13 +38,17 @@ export async function enqueue(db: Db, original: NewNotification): Promise<void> 
   const recipient = original.recipient.trim();
   // Текст письма из справочника (А5), если ОР ПСД или СУА его настроили.
   const text = await applyTemplate(db, original.eventKey, original.subject, original.body, original.payload);
-  const message = { ...original, subject: text.subject, body: text.body };
+  // Ссылка в карточку: из письма и «колокольчика» человек попадает сразу в свою задачу.
+  const link = await linkFor(db, original, text.subject);
+  const message = {
+    ...original, subject: humanDates(text.subject), body: humanDates(text.body),
+    payload: link ? { ...(original.payload ?? {}), link } : original.payload,
+  };
   await insert(db, message, recipient, message.subject);
   if ((message.channel ?? 'email') !== 'email') return;
   const user = await db.one<{ id: string; full_name: string }>(
     `SELECT id, full_name FROM users WHERE lower(email) = lower($1) AND is_active`, [recipient]);
   if (!user) return;
-  const link = typeof message.payload?.link === 'string' ? message.payload.link : null;
   await toInbox(db, user.id, message, message.subject, link);
   const substitutes = await db.query<{ id: string; email: string }>(
     `SELECT u.id, u.email FROM user_absences a JOIN users u ON u.id = a.substitute_id
@@ -55,6 +59,28 @@ export async function enqueue(db: Db, original: NewNotification): Promise<void> 
     await insert(db, { ...message, payload: { ...(message.payload ?? {}), onBehalfOf: user.id } }, s.email, subject);
     await toInbox(db, s.id, message, subject, link);
   }
+}
+
+/**
+ * Куда ведёт уведомление. Явная ссылка (допуски) — как есть; заявка ОР ПСД — по requestId или по номеру
+ * в теме; регистрация организации — экран «Пользователи».
+ */
+async function linkFor(db: Db, m: NewNotification, subject: string): Promise<string | null> {
+  const p = m.payload ?? {};
+  if (typeof p.link === 'string') return p.link;
+  if (typeof p.requestId === 'string' && /^[0-9a-f-]{36}$/i.test(p.requestId)) {
+    const r = await db.one<{ number: string }>('SELECT number FROM requests WHERE id = $1', [p.requestId]);
+    if (r) return `/#${r.number}`;
+  }
+  const number = /ЗК-\d{4}-\d{4}/.exec(`${subject} ${m.body}`)?.[0];
+  if (number) return `/#${number}`;
+  if (m.eventKey === 'registration_pending') return '/#/users';
+  return null;
+}
+
+/** Даты в письмах — как пишут люди: 05.10.2026, а не 2026-10-05. */
+export function humanDates(text: string): string {
+  return text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3.$2.$1');
 }
 
 async function insert(db: Db, message: NewNotification, recipient: string, subject: string): Promise<void> {
@@ -129,8 +155,10 @@ const MAX_ATTEMPTS = 5;
  * в журнал и проследить, что почта действительно уходит.
  */
 export async function processQueue(
-  db: Db, mailer: Mailer | null, limit = 50,
+  db: Db, mailer: Mailer | null, limit = 50, appOrigin: string = process.env.APP_ORIGIN ?? '',
 ): Promise<{ sent: number; failed: number; skipped: number }> {
+  // Адрес системы для ссылки в конце письма: «Открыть в системе: https://…/#ЗК-2026-0001».
+  const origin = appOrigin.replace(/\/+$/, '');
   const rows = await db.query<{ id: string; recipient: string; subject: string; payload: any; attempts: number }>(
     `SELECT id, recipient, subject, payload, attempts FROM notifications
       WHERE status = 'queued' AND channel = 'email' AND attempts < $2
@@ -143,7 +171,9 @@ export async function processQueue(
       return { sent: 0, failed: 0, skipped: rows.length };
     }
     try {
-      await mailer.send(row.recipient, row.subject, String(row.payload?.body ?? ''));
+      const link = typeof row.payload?.link === 'string' ? row.payload.link : '';
+      const body = String(row.payload?.body ?? '') + (origin && link ? `\n\nОткрыть в системе: ${origin}${link}` : '');
+      await mailer.send(row.recipient, row.subject, body);
       await db.query(
         `UPDATE notifications SET status = 'sent', sent_at = now(), attempts = attempts + 1, error = NULL
           WHERE id = $1`, [row.id]);

@@ -2019,6 +2019,9 @@ describe('сквозной тест с PostgreSQL', { skip: URL_ENV ? false : '�
       `SELECT fulfilled_at, fulfilled_on_time FROM assignments WHERE request_id = $1 AND kind = 'control'`, [id]);
     assert.ok(a!.fulfilled_at);
     assert.equal(a!.fulfilled_on_time, true);
+    // Уведомление ведёт в карточку: из колокольчика и письма — сразу в заявку.
+    const linked = await db.one(`SELECT 1 FROM inbox WHERE link = $1`, [`/#${number}`]);
+    assert.ok(linked, 'у уведомлений по заявке — ссылка в её карточку');
     // Исполненное поручение у исполнителя больше не висит — закрыть его остаётся ОКО.
     const mine = await call('GET', '/api/v1/tasks', { as: users.orpsd });
     assert.ok(!mine.body.tasks.some((t: any) => t.kind === 'assignment' && t.ref === number), 'у ОР ПСД задачи по поручению нет');

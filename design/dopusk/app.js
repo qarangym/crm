@@ -306,18 +306,52 @@ async function boot() {
     return renderDenied(describeError(error));
   }
   mountBell(document.getElementById('bellHost'));
+  mountHelp(document.getElementById('helpHost'), state.me, 'permits');
   const first = [...MENU_CONTRACTOR, ...MENU_STAFF].map(([k]) => k).find(viewAllowed);
+  const initial = routeOf();
   // Филиал без заявок на согласование начинает с проверки на объекте — это его ежедневная работа (пп. 20–23).
-  const start = isContractor() ? 'mine' : state.meta.me.pendingApprovals ? 'approvals'
+  const start = initial.view && viewAllowed(initial.view) ? initial.view
+    : isContractor() ? 'mine' : state.meta.me.pendingApprovals ? 'approvals'
     : isBranch() && viewAllowed('site') ? 'site' : first;
-  await go(start);
-  openFromHash();
-  window.addEventListener('hashchange', openFromHash);
+  await withRoute(() => go(start));
+  history.replaceState(null, '', '#/' + state.view + (initial.card ? '/' + initial.card : ''));
+  window.addEventListener('popstate', applyRoute);
+  if (initial.card) await withRoute(() => openCard(initial.card));
 }
 
-function openFromHash() {
-  const fromHash = decodeURIComponent(location.hash.slice(1));
-  if (/^ЗД-\d{4}-\d{4}$/.test(fromHash)) openCard(fromHash);
+/* ------------------------------ адрес в браузере ------------------------------
+   Экран и открытая заявка — в адресе: «Назад» и «Вперёд» браузера, обновление страницы и ссылка из
+   письма или колокольчика («/dopusk/#ЗД-2026-0001») ведут туда же. */
+
+let routing = false;
+let cardInHistory = false;
+
+function routeOf() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  return { view: /^\/([a-z]+)/.exec(h)?.[1] || null, card: /ЗД-\d{4}-\d{4}/.exec(h)?.[0] || null };
+}
+
+async function withRoute(fn) {
+  routing = true;
+  try { await fn(); } finally { routing = false; }
+}
+
+function pushRoute(card = null) {
+  if (routing) return;
+  const hash = '#/' + state.view + (card ? '/' + card : '');
+  if (location.hash === hash) return;
+  history.pushState(null, '', hash);
+  cardInHistory = !!card;
+}
+
+async function applyRoute() {
+  const r = routeOf();
+  await withRoute(async () => {
+    if (r.view && r.view !== state.view && viewAllowed(r.view)) await go(r.view);
+    const open = document.getElementById('sheet').classList.contains('on');
+    if (r.card && (!open || sheetCard?.request?.number !== r.card)) await openCard(r.card);
+    if (!r.card && open) closeSheet();
+  });
 }
 
 function renderDenied(message) {
@@ -360,6 +394,7 @@ const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !=
 async function go(view) {
   if (!viewAllowed(view)) return;
   state.view = view;
+  pushRoute();
   window.scrollTo(0, 0);
   document.querySelector('.side')?.classList.remove('open');
   if (view === 'new' && !wiz) wiz = newWizard();
@@ -1270,12 +1305,17 @@ async function openCard(id) {
 function closeSheet() {
   document.getElementById('sheet').classList.remove('on');
   sheetCard = null;
-  if (location.hash) history.replaceState(null, '', location.pathname);
+  if (routing || !routeOf().card) return;
+  // Открыли из системы — шаг назад в истории; пришли по ссылке — убираем номер из адреса.
+  if (cardInHistory) { cardInHistory = false; history.back(); }
+  else history.replaceState(null, '', '#/' + state.view);
 }
 
 function showCard(card) {
+  const reopened = sheetCard?.request?.id === card.request?.id && document.getElementById('sheet').classList.contains('on');
   sheetCard = card;
   document.getElementById('sheet').classList.add('on');
+  if (!reopened) pushRoute(card.request?.number);
   renderSheet();
 }
 
