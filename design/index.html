@@ -38,6 +38,7 @@
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
       <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
       <div class="bell-host" id="bellHost"></div>
+      <div class="whoami" id="whoami"></div>
       <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
     </header>
     <div class="wrap" id="view"></div>
@@ -240,6 +241,8 @@ async function boot() {
     state.live = true;
     document.getElementById('logoutBtn').style.display = '';
     document.getElementById('logoutBtn').title = `Выйти (${state.me.email})`;
+    // Кто вошёл — в шапке, а не полосой над каждым экраном.
+    document.getElementById('whoami').innerHTML = `<b>${esc(state.me.fullName)}</b>${esc(state.me.roles.map((r) => ROLE_LABEL[r] || r).join(', '))}`;
     mountBell(document.getElementById('bellHost'));
     mountDemoRibbon(state.me);
     // Подрядчику доступен только портал допусков: сразу туда.
@@ -501,16 +504,17 @@ async function act(button, fn, successText) {
 }
 
 const MENU = [
-  ['tasks', 'Мои задачи', 'checks'], ['team', 'Нагрузка команды', 'funnel'],
+  // У каждого пункта своя иконка: одинаковые значки на разных пунктах путают.
+  ['tasks', 'Мои задачи', 'checks'], ['team', 'Нагрузка команды', 'users'],
   ['board', 'Доска заявок', 'board'], ['bottlenecks', 'Узкие места', 'funnel'],
-  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'checks'],
-  ['memos', 'Служебные записки', 'bell'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
+  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'arrow'],
+  ['memos', 'Служебные записки', 'copy'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
   ['archive', 'Архив актов', 'archive'],
 ];
-const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'checks']];
+const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'list']];
 const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock'],
-  ['directories', 'Справочники', 'archive'],
-  ['monitoring', 'Эскалации и уведомления', 'bell'], ['users', 'Пользователи', 'checks'], ['audit', 'Журнал', 'list']];
+  ['directories', 'Справочники', 'search'],
+  ['monitoring', 'Эскалации и уведомления', 'warn'], ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
 const TITLES = {
   tasks: ['Мои задачи', 'Всё, что лежит на вас: заявки, поручения, записки, документы на визу — просроченное сверху'],
   team: ['Нагрузка команды', 'Кто чем занят и у кого просрочено · п. 102'],
@@ -2428,7 +2432,7 @@ function assignmentsBlock(r) {
           <span class="chip ${cls}">${label}</span>
           <span style="flex:1;min-width:200px"><b>${esc(a.department)}</b>${a.assignee_name ? ' · ' + esc(a.assignee_name) : ''}
             — ${esc(a.body || 'ответ о технической возможности')}<br>
-            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
+            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok-ink)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
             ${a.close_note ? ' · ' + esc(a.close_note) : ''}</span></span>
           <span class="row-actions">
             ${a.status === 'open' && can('assignment.accept') ? `<button class="btn sm" onclick="acceptAssignment(this,'${a.id}')">Принять</button>` : ''}
@@ -2585,7 +2589,7 @@ function renderCustomerSheet() {
       ${r.dueAt && ['tv_review', 'awaiting_payment', 'smr_prep', 'closing'].includes(r.stageCode) ? `<br><b>${r.stageCode === 'tv_review' ? 'Ответ — не позднее' : r.stageCode === 'awaiting_payment' ? 'Оплатить до' : r.stageCode === 'smr_prep' ? 'Передать оборудование до' : 'Срок'} ${fmtFull(r.dueAt)}</b>` : ''}</div>
 
     ${openRemarks.length ? `<section class="panel"><div class="panel-head"><div><h2>Нужно исправить</h2>
-      <p>Номер заявки и история сохраняются — ТЗ №11</p></div>
+      <p>Исправьте ту же заявку — номер и история сохраняются</p></div>
       <button class="btn primary sm" style="margin-left:auto" onclick="openAmend('${esc(r.number)}')">Исправить заявку</button></div>
       <div class="panel-body">${openRemarks.map((m) => `<div class="remark"><span class="fld">${esc(remarkLabel(m.field_key))}</span>
         <span style="flex:1">${esc(m.text)}</span></div>`).join('')}</div></section>` : ''}
@@ -3885,10 +3889,10 @@ function renderWizard() {
         <span class="n">${i < wiz.step ? '✓' : i + 1}</span>${s}</div>`).join('')}</div>
     <div class="wizard">
       <div>${body}
-        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+        <div class="wiz-actions">
           <button class="btn" onclick="${wiz.step ? 'wizBack()' : `wiz=null;go('${isCustomerUser() ? 'mine' : 'registry'}')`}">
             ${wiz.step ? '← Назад' : 'Отмена'}</button>
-          <div style="flex:1"></div>
+          <div class="sp-grow" style="flex:1"></div>
           ${state.live ? '<button class="btn" onclick="wizSaveDraft(this)">Сохранить черновик</button>' : ''}
           ${wiz.step < last
             ? `<button class="btn primary" onclick="wizNext()">Продолжить →</button>`
@@ -3917,7 +3921,7 @@ function renderSubmitted() {
   const s = wiz.submitted;
   return `<section class="panel" style="max-width:720px">
     <div class="panel-body" style="text-align:center;padding:38px">
-      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok);
+      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok-ink);
         display:grid;place-items:center;font-size:26px;margin:0 auto 16px">✓</div>
       <h2 style="font-size:20px">Заявка подана</h2>
       <p style="color:var(--muted);margin:8px 0 18px">Внутренний номер <b>${esc(s.number)}</b>
@@ -3984,23 +3988,23 @@ function renderMine() {
     </div></section>`;
   }
   return `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
-    <table><thead><tr><th>Номер</th><th>Объект</th><th>Услуги</th>
-      <th>Статус</th><th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
+    <table class="stack-sm"><thead><tr><th>Номер</th><th>Статус</th><th>Объект</th><th>Услуги</th>
+      <th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
     ${mine.map(r => { const s = stageBy[r.stageCode];
       const status = r.openRemarks ? 'Требуются уточнения' : s.customerStatusName;
       const open = !state.live ? '' : `onclick="openSheet('${esc(r.number)}')" style="cursor:pointer"`;
       return `<tr ${open}>
-        <td><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
+        <td style="white-space:nowrap"><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
           ${r.openRemarks && state.live ? '<br><span class="chip w">исправить</span>' : ''}</td>
-        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td><span class="chip ${r.openRemarks?'w':s.customerStatus==='done'?'g':s.customerStatus==='rejected'?'r':'n'}">${status}</span></td>
+        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td style="color:var(--muted);min-width:220px">${esc(CUSTOMER_STAGE_TEXT[r.stageCode] || s.hint)}</td>
         <td class="num">${money(r.amount)}</td></tr>`;
     }).join('')}
     </tbody></table></div></div></section>
     <div class="note" style="margin-top:14px">
       Нажмите на заявку, чтобы увидеть историю, договоры, документы и приложить файлы.
-      Заказчик видит статусы заявки (ТЗ №10); уведомления о каждом шаге приходят на почту.
+      Уведомления о каждом шаге приходят на почту.
     </div>`;
 }
 
@@ -4616,13 +4620,9 @@ async function verifyCounterparty(id) {
 
 /* Полоса режима: видно, рабочие это данные или примеры. */
 function modeBar() {
-  if (state.live) {
-    const who = state.me ? `${esc(state.me.fullName)} · ${state.me.roles.map((r) => esc(ROLE_LABEL[r] || r)).join(', ')}` : '';
-    return `<div class="mode-bar live">${icon('check', 17)}
-      <div><b>Рабочие данные</b><span> · заявки и файлы сохраняются в системе</span></div>
-      <div class="tail">${who}</div>
-    </div>`;
-  }
+  // В рабочем режиме полоса не нужна: кто вошёл — в шапке (#whoami). Остаётся только предупреждение
+  // автономного прототипа, где изменения не сохраняются.
+  if (state.live) return '';
   return `<div class="mode-bar">${icon('warn', 17)}
     <div><b>Демонстрационный режим</b>
       <span> · примеры заявок и документов; сервер недоступен, изменения не сохраняются</span></div>
@@ -4675,11 +4675,16 @@ function render() {
   document.getElementById('brandMark').src = A.mark;
   // Просроченные заявки — значок «внимание»; колокольчик рядом — уведомления (shell.js).
   const late = D.requests.filter(r => daysLeft(r.dueAt) < 0).length;
-  document.getElementById('bellBtn').innerHTML = icon('warn', 17) + (late ? `<b style="color:var(--bad);margin-left:5px">${late}</b>` : '');
+  const lateBtn = document.getElementById('bellBtn');
+  lateBtn.innerHTML = icon('warn', 17) + `<span>Просрочено: ${late}</span>`;
+  lateBtn.setAttribute('aria-label', `Просроченные заявки: ${late}`);
   const exportBtn = document.getElementById('exportBtn');
   exportBtn.innerHTML = icon('download', 16) + '<span>Выгрузить</span>';
+  exportBtn.setAttribute('aria-label', 'Выгрузить');
   exportBtn.style.display = exportTarget() ? '' : 'none';
-  document.getElementById('bellBtn').style.display = isCustomerUser() || !can('metrics.view') ? 'none' : '';
+  // Кнопка появляется, только когда есть что показать.
+  lateBtn.style.display = isCustomerUser() || !can('metrics.view') || !late ? 'none' : '';
+  lateBtn.style.color = 'var(--bad-ink)';
   const newBtn = document.getElementById('newBtn');
   newBtn.innerHTML = icon('plus', 16) + '<span>Новая заявка</span>';
   newBtn.style.display = can('request.create') && view !== 'new' ? '' : 'none';
@@ -4693,7 +4698,8 @@ function render() {
     : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
   const portal = ['new', 'mine'].includes(view);
   const withoutBar = ['rules', 'stages'];
-  const head = portal ? portalIntro() : withoutBar.includes(view) ? '' : modeBar();
+  // Вводный блок портала — для новой заявки и для Заказчика без заявок; список своих заявок — сразу.
+  const head = portal ? (view === 'mine' && state.live && D.requests.length ? '' : portalIntro()) : withoutBar.includes(view) ? '' : modeBar();
 
   if (state.loading) {
     document.getElementById('view').innerHTML = head + skeleton();
@@ -4713,6 +4719,9 @@ function render() {
   }
   document.getElementById('view').innerHTML =
     head + (state.error ? errorBanner(state.error) : '') + body;
+  // На телефоне шаги мастера — одна прокручиваемая строка: текущий шаг держим в видимой части.
+  const step = document.querySelector('.steps .cur');
+  if (step) step.parentElement.scrollLeft = step.offsetLeft - 16;
 }
 
 /** Заглушка на время загрузки: экран не должен мигать пустотой. */

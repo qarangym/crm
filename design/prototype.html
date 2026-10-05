@@ -13,9 +13,12 @@
 :root{
   /* Палитра перенесена из действующего прототипа QTR CRM и старого прототипа доски. */
   --blue:#003399; --blue-deep:#00246B; --blue-hover:#0045D9; --yellow:#FFCC00;
-  --ink:#17243B; --muted:#6B7280; --muted-2:#9CA3AF;
+  /* Второстепенный текст — не ниже 4,5:1 на белом и на фонах колонок (WCAG AA). */
+  --ink:#17243B; --muted:#5F6878; --muted-2:#646C7A;
   --line:#E6EAF1; --bg:#F3F5F9; --surface:#FFFFFF;
   --ok:#0E9F6E; --warn:#D98A00; --bad:#D6323C;
+  /* Те же состояния для текста на светлых плашках: --ok/--warn годятся для заливок и значков, не для букв. */
+  --ok-ink:#067A52; --warn-ink:#9A5B00; --bad-ink:#B4232D;
   --tint:#EDF2FB; --tint-2:#EAF0FC;
   --r:14px; --r-sm:9px;
   --shadow:0 1px 2px rgba(23,36,59,.06), 0 8px 24px rgba(23,36,59,.05);
@@ -26,6 +29,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
 a{color:var(--blue);text-decoration:none}
 button{font:inherit;cursor:pointer}
+/* Фокус с клавиатуры виден на любом элементе управления. */
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.nav button.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
 
 /* ------------------------------- каркас ------------------------------- */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -34,7 +40,7 @@ button{font:inherit;cursor:pointer}
 .brand img{width:46px;height:auto;flex:none;border-radius:7px}
 .brand b{display:block;font-size:14px;line-height:1.2}
 .brand small{color:var(--muted);font-size:11.5px}
-.side-label{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
+.side-label{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
 .nav{display:flex;flex-direction:column;gap:2px}
 .nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
   background:transparent;color:var(--ink);text-align:left;font-size:14px}
@@ -50,7 +56,7 @@ button{font:inherit;cursor:pointer}
 .task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer}
 .task:last-child{border-bottom:0}
 .task:hover{background:#FAFBFE}
-.task .k{flex:none;min-width:118px;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.task .k{flex:none;min-width:118px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
 .task .t{flex:1;min-width:0}
 .task .t b{display:block;font-size:13.5px;font-weight:600}
 .task .t small{color:var(--muted);font-size:12px}
@@ -65,10 +71,13 @@ button{font:inherit;cursor:pointer}
 .main{min-width:0;display:flex;flex-direction:column}
 .top{background:var(--surface);border-bottom:1px solid var(--line);padding:16px 26px;
   display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
-.top .eyebrow{font-size:10.5px;letter-spacing:.09em;color:var(--muted-2);font-weight:700}
+.top .eyebrow{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700}
 .top h1{font-size:23px;margin-top:2px}
 .top p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
 .top .sp{flex:1}
+.whoami{font-size:12px;color:var(--muted);text-align:right;line-height:1.35;max-width:260px}
+.whoami b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+.whoami:empty{display:none}
 .wrap{padding:22px 26px 44px}
 
 /* ------------------------------ элементы ------------------------------ */
@@ -88,20 +97,20 @@ button{font:inherit;cursor:pointer}
 .panel-body{padding:18px}
 
 .chip{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 9px;
-  font-size:11.5px;font-weight:700;background:var(--tint);color:var(--blue);white-space:nowrap}
-.chip.g{background:#E7F6EF;color:var(--ok)}
-.chip.w{background:#FDF3E2;color:var(--warn)}
-.chip.r{background:#FBEAEB;color:var(--bad)}
+  font-size:12px;font-weight:700;background:var(--tint);color:var(--blue);white-space:nowrap}
+.chip.g{background:#E7F6EF;color:var(--ok-ink)}
+.chip.w{background:#FDF3E2;color:var(--warn-ink)}
+.chip.r{background:#FBEAEB;color:var(--bad-ink)}
 .chip.n{background:#F1F3F7;color:var(--muted)}
 .chip.svc-tu{background:#E8EEFB;color:var(--blue)}
 .chip.svc-psd{background:#EFEAFB;color:#5B3FBF}
 .chip.svc-smr{background:#FFF6DA;color:#8A6500}
 
-.ref{font-size:11.5px;color:var(--muted-2)}
+.ref{font-size:12px;color:var(--muted-2)}
 .ref.pin{display:inline-block;border:1px dashed #D6DEEC;border-radius:6px;padding:1px 6px;color:var(--muted)}
 
 table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;font-size:11px;letter-spacing:.05em;color:var(--muted-2);font-weight:700;
+th{text-align:left;font-size:11.5px;letter-spacing:.04em;color:var(--muted-2);font-weight:700;
   padding:10px 12px;border-bottom:1px solid var(--line);text-transform:uppercase}
 td{padding:11px 12px;border-bottom:1px solid #F1F4F9;vertical-align:top}
 tr:last-child td{border-bottom:0}
@@ -114,7 +123,7 @@ tbody tr:hover{background:#FAFBFE}
 
 /* -------------------------------- доска -------------------------------- */
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 10px;
+select,input[type=search],input[type=date],input[type=month]{border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 10px;
   font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink);min-width:150px}
 .board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
 .col{flex:0 0 262px;background:#EEF1F7;border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:9px}
@@ -122,8 +131,8 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .col-head .no{width:20px;height:20px;border-radius:6px;background:var(--surface);color:var(--muted);
   display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
 .col-head b{font-size:13px;display:block;line-height:1.3}
-.col-head .sla{display:block;font-size:11px;color:var(--muted);margin-top:2px}
-.col-head .owner{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:700;
+.col-head .sla{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.col-head .owner{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:700;
   background:var(--surface);border-radius:20px;padding:1px 7px;color:var(--blue)}
 .col-head .cnt{margin-left:auto;font-size:12px;font-weight:800;color:var(--muted);
   background:var(--surface);border-radius:20px;padding:1px 8px}
@@ -137,7 +146,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .card .foot{display:flex;align-items:center;gap:5px;margin-top:9px;flex-wrap:wrap}
 .card.late{border-left:3px solid var(--bad)}
 .card .who{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink)}
-.card .who .ref{font-size:11px}
+.card .who .ref{font-size:11.5px}
 .ava{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;flex:none;
   background:#E6EDFA;color:var(--blue);font-size:9.5px;font-weight:800;letter-spacing:.02em}
 .ava.none{background:#FBEAEB;color:var(--bad)}
@@ -151,13 +160,13 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .kpi .big small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
 .kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:5px}
-.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
-@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1100px){.grid2{grid-template-columns:minmax(0,1fr)}}
 
 .bar-row{display:grid;grid-template-columns:200px 1fr 92px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #F1F4F9}
 .bar-row:last-child{border-bottom:0}
 .bar-row .lbl b{font-size:13px;display:block}
-.bar-row .lbl small{font-size:11px;color:var(--muted-2)}
+.bar-row .lbl small{font-size:12px;color:var(--muted-2)}
 .track{position:relative;height:22px;background:#F1F4F9;border-radius:6px;overflow:hidden}
 .track i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--blue);opacity:.85}
 .track .norm{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
@@ -216,7 +225,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
   display:grid;place-items:center;font-size:11px;font-weight:800}
 .steps div.cur{border-color:var(--blue);color:var(--blue);font-weight:700}
 .steps div.cur .n{background:var(--blue);color:#fff}
-.steps div.passed{color:var(--ok);border-color:#CCEADC}
+.steps div.passed{color:var(--ok-ink);border-color:#CCEADC}
 .steps div.passed .n{background:var(--ok);color:#fff}
 
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -231,7 +240,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .field .err{display:none;font-size:11.5px;color:var(--bad);margin-top:4px}
 .field.bad .err{display:block}
 .field .hint{font-size:11.5px;color:var(--muted-2);margin-top:4px}
-.field .ok-mark{float:right;color:var(--ok);font-size:11.5px;font-weight:700}
+.field .ok-mark{float:right;color:var(--ok-ink);font-size:11.5px;font-weight:700}
 
 .svc-pick{display:flex;gap:10px;flex-wrap:wrap}
 .svc-pick label{flex:1;min-width:190px;border:1px solid var(--line);border-radius:11px;padding:13px 15px;
@@ -285,6 +294,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
 .portal-intro h2{font-size:19px;margin-bottom:5px}
 .portal-intro p{margin:0;color:var(--muted);font-size:13.5px;max-width:560px}
 .portal-steps{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+.wiz-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
 .portal-steps div{display:flex;gap:9px;align-items:flex-start;background:var(--tint);border-radius:11px;
   padding:11px 14px;min-width:172px}
 .portal-steps span{font-size:11px;font-weight:800;color:var(--blue);opacity:.55}
@@ -371,7 +381,30 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
   .portal-intro{padding:16px}
   .portal-intro img{width:72px}
   .filters select,.filters input[type=search]{min-width:0;flex:1 1 140px}
-  #exportBtn span,#newBtn span{display:none}
+  #exportBtn span,#bellBtn span{display:none}
+  .whoami{display:none}
+  /* Палец, а не мышь: элементы управления не ниже 40 px. */
+  .btn,select,input:not([type=checkbox]):not([type=radio]),textarea{min-height:40px}
+  .btn{justify-content:center}
+  .portal-intro{gap:12px}
+  .portal-intro img{width:48px}
+  .portal-intro h2{display:none}
+  .portal-steps{display:none}
+  /* Шаги мастера — одной строкой с прокруткой; текущий шаг прокручивается в видимую часть (index.html). */
+  .steps{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-16px;margin-right:-16px;padding:0 16px}
+  .steps div{flex:none}
+  /* Главное действие мастера — первым и во всю ширину. */
+  .wiz-actions .btn.primary{order:-1;flex:1 1 100%}
+  .wiz-actions .sp-grow{display:none}
+  /* Главные таблицы внешних пользователей на телефоне — карточками: всё видно без прокрутки вбок. */
+  table.stack-sm,table.stack-sm tbody{display:block}
+  section.panel .panel-body table.stack-sm{white-space:normal;overflow:visible}
+  table.stack-sm thead{display:none}
+  table.stack-sm tr{display:block;padding:12px 8px;border-bottom:1px solid var(--line)}
+  table.stack-sm tr:last-child{border-bottom:0}
+  table.stack-sm td{display:block;border:0;padding:3px 0}
+  table.stack-sm td:empty{display:none}
+  table.stack-sm td.num{text-align:left}
 }
 /* Колокольчик уведомлений */
 .bell-host{position:relative}
@@ -428,6 +461,7 @@ select,input[type=search]{border:1px solid var(--line);border-radius:var(--r-sm)
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
       <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
       <div class="bell-host" id="bellHost"></div>
+      <div class="whoami" id="whoami"></div>
       <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
     </header>
     <div class="wrap" id="view"></div>
@@ -2058,6 +2092,8 @@ async function boot() {
     state.live = true;
     document.getElementById('logoutBtn').style.display = '';
     document.getElementById('logoutBtn').title = `Выйти (${state.me.email})`;
+    // Кто вошёл — в шапке, а не полосой над каждым экраном.
+    document.getElementById('whoami').innerHTML = `<b>${esc(state.me.fullName)}</b>${esc(state.me.roles.map((r) => ROLE_LABEL[r] || r).join(', '))}`;
     mountBell(document.getElementById('bellHost'));
     mountDemoRibbon(state.me);
     // Подрядчику доступен только портал допусков: сразу туда.
@@ -2319,16 +2355,17 @@ async function act(button, fn, successText) {
 }
 
 const MENU = [
-  ['tasks', 'Мои задачи', 'checks'], ['team', 'Нагрузка команды', 'funnel'],
+  // У каждого пункта своя иконка: одинаковые значки на разных пунктах путают.
+  ['tasks', 'Мои задачи', 'checks'], ['team', 'Нагрузка команды', 'users'],
   ['board', 'Доска заявок', 'board'], ['bottlenecks', 'Узкие места', 'funnel'],
-  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'checks'],
-  ['memos', 'Служебные записки', 'bell'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
+  ['registry', 'Реестр заявок', 'list'], ['assignments', 'Поручения', 'arrow'],
+  ['memos', 'Служебные записки', 'copy'], ['reports', 'Отчёты', 'download'], ['ams', 'Реестр АМС и ТВ', 'tower'],
   ['archive', 'Архив актов', 'archive'],
 ];
-const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'checks']];
+const MENU_PORTAL = [['new', 'Подать заявку', 'filePlus'], ['mine', 'Мои заявки', 'list']];
 const MENU2 = [['rules', 'Автоматизации', 'sliders'], ['stages', 'Этапы и сроки', 'clock'],
-  ['directories', 'Справочники', 'archive'],
-  ['monitoring', 'Эскалации и уведомления', 'bell'], ['users', 'Пользователи', 'checks'], ['audit', 'Журнал', 'list']];
+  ['directories', 'Справочники', 'search'],
+  ['monitoring', 'Эскалации и уведомления', 'warn'], ['users', 'Пользователи', 'shield'], ['audit', 'Журнал', 'eye']];
 const TITLES = {
   tasks: ['Мои задачи', 'Всё, что лежит на вас: заявки, поручения, записки, документы на визу — просроченное сверху'],
   team: ['Нагрузка команды', 'Кто чем занят и у кого просрочено · п. 102'],
@@ -4246,7 +4283,7 @@ function assignmentsBlock(r) {
           <span class="chip ${cls}">${label}</span>
           <span style="flex:1;min-width:200px"><b>${esc(a.department)}</b>${a.assignee_name ? ' · ' + esc(a.assignee_name) : ''}
             — ${esc(a.body || 'ответ о технической возможности')}<br>
-            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
+            <span class="ref">срок ${fmt(a.due_at)}${a.fulfilled_at ? ` · исполнено ${fmt(String(a.fulfilled_at).slice(0, 10))} ${a.fulfilled_on_time ? '<b style="color:var(--ok-ink)">в срок</b>' : '<b style="color:var(--bad)">с нарушением срока</b>'}` : ''}
             ${a.close_note ? ' · ' + esc(a.close_note) : ''}</span></span>
           <span class="row-actions">
             ${a.status === 'open' && can('assignment.accept') ? `<button class="btn sm" onclick="acceptAssignment(this,'${a.id}')">Принять</button>` : ''}
@@ -4403,7 +4440,7 @@ function renderCustomerSheet() {
       ${r.dueAt && ['tv_review', 'awaiting_payment', 'smr_prep', 'closing'].includes(r.stageCode) ? `<br><b>${r.stageCode === 'tv_review' ? 'Ответ — не позднее' : r.stageCode === 'awaiting_payment' ? 'Оплатить до' : r.stageCode === 'smr_prep' ? 'Передать оборудование до' : 'Срок'} ${fmtFull(r.dueAt)}</b>` : ''}</div>
 
     ${openRemarks.length ? `<section class="panel"><div class="panel-head"><div><h2>Нужно исправить</h2>
-      <p>Номер заявки и история сохраняются — ТЗ №11</p></div>
+      <p>Исправьте ту же заявку — номер и история сохраняются</p></div>
       <button class="btn primary sm" style="margin-left:auto" onclick="openAmend('${esc(r.number)}')">Исправить заявку</button></div>
       <div class="panel-body">${openRemarks.map((m) => `<div class="remark"><span class="fld">${esc(remarkLabel(m.field_key))}</span>
         <span style="flex:1">${esc(m.text)}</span></div>`).join('')}</div></section>` : ''}
@@ -5703,10 +5740,10 @@ function renderWizard() {
         <span class="n">${i < wiz.step ? '✓' : i + 1}</span>${s}</div>`).join('')}</div>
     <div class="wizard">
       <div>${body}
-        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+        <div class="wiz-actions">
           <button class="btn" onclick="${wiz.step ? 'wizBack()' : `wiz=null;go('${isCustomerUser() ? 'mine' : 'registry'}')`}">
             ${wiz.step ? '← Назад' : 'Отмена'}</button>
-          <div style="flex:1"></div>
+          <div class="sp-grow" style="flex:1"></div>
           ${state.live ? '<button class="btn" onclick="wizSaveDraft(this)">Сохранить черновик</button>' : ''}
           ${wiz.step < last
             ? `<button class="btn primary" onclick="wizNext()">Продолжить →</button>`
@@ -5735,7 +5772,7 @@ function renderSubmitted() {
   const s = wiz.submitted;
   return `<section class="panel" style="max-width:720px">
     <div class="panel-body" style="text-align:center;padding:38px">
-      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok);
+      <div style="width:52px;height:52px;border-radius:50%;background:#E7F6EF;color:var(--ok-ink);
         display:grid;place-items:center;font-size:26px;margin:0 auto 16px">✓</div>
       <h2 style="font-size:20px">Заявка подана</h2>
       <p style="color:var(--muted);margin:8px 0 18px">Внутренний номер <b>${esc(s.number)}</b>
@@ -5802,23 +5839,23 @@ function renderMine() {
     </div></section>`;
   }
   return `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
-    <table><thead><tr><th>Номер</th><th>Объект</th><th>Услуги</th>
-      <th>Статус</th><th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
+    <table class="stack-sm"><thead><tr><th>Номер</th><th>Статус</th><th>Объект</th><th>Услуги</th>
+      <th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
     ${mine.map(r => { const s = stageBy[r.stageCode];
       const status = r.openRemarks ? 'Требуются уточнения' : s.customerStatusName;
       const open = !state.live ? '' : `onclick="openSheet('${esc(r.number)}')" style="cursor:pointer"`;
       return `<tr ${open}>
-        <td><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
+        <td style="white-space:nowrap"><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
           ${r.openRemarks && state.live ? '<br><span class="chip w">исправить</span>' : ''}</td>
-        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td><span class="chip ${r.openRemarks?'w':s.customerStatus==='done'?'g':s.customerStatus==='rejected'?'r':'n'}">${status}</span></td>
+        <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
         <td style="color:var(--muted);min-width:220px">${esc(CUSTOMER_STAGE_TEXT[r.stageCode] || s.hint)}</td>
         <td class="num">${money(r.amount)}</td></tr>`;
     }).join('')}
     </tbody></table></div></div></section>
     <div class="note" style="margin-top:14px">
       Нажмите на заявку, чтобы увидеть историю, договоры, документы и приложить файлы.
-      Заказчик видит статусы заявки (ТЗ №10); уведомления о каждом шаге приходят на почту.
+      Уведомления о каждом шаге приходят на почту.
     </div>`;
 }
 
@@ -6434,13 +6471,9 @@ async function verifyCounterparty(id) {
 
 /* Полоса режима: видно, рабочие это данные или примеры. */
 function modeBar() {
-  if (state.live) {
-    const who = state.me ? `${esc(state.me.fullName)} · ${state.me.roles.map((r) => esc(ROLE_LABEL[r] || r)).join(', ')}` : '';
-    return `<div class="mode-bar live">${icon('check', 17)}
-      <div><b>Рабочие данные</b><span> · заявки и файлы сохраняются в системе</span></div>
-      <div class="tail">${who}</div>
-    </div>`;
-  }
+  // В рабочем режиме полоса не нужна: кто вошёл — в шапке (#whoami). Остаётся только предупреждение
+  // автономного прототипа, где изменения не сохраняются.
+  if (state.live) return '';
   return `<div class="mode-bar">${icon('warn', 17)}
     <div><b>Демонстрационный режим</b>
       <span> · примеры заявок и документов; сервер недоступен, изменения не сохраняются</span></div>
@@ -6493,11 +6526,16 @@ function render() {
   document.getElementById('brandMark').src = A.mark;
   // Просроченные заявки — значок «внимание»; колокольчик рядом — уведомления (shell.js).
   const late = D.requests.filter(r => daysLeft(r.dueAt) < 0).length;
-  document.getElementById('bellBtn').innerHTML = icon('warn', 17) + (late ? `<b style="color:var(--bad);margin-left:5px">${late}</b>` : '');
+  const lateBtn = document.getElementById('bellBtn');
+  lateBtn.innerHTML = icon('warn', 17) + `<span>Просрочено: ${late}</span>`;
+  lateBtn.setAttribute('aria-label', `Просроченные заявки: ${late}`);
   const exportBtn = document.getElementById('exportBtn');
   exportBtn.innerHTML = icon('download', 16) + '<span>Выгрузить</span>';
+  exportBtn.setAttribute('aria-label', 'Выгрузить');
   exportBtn.style.display = exportTarget() ? '' : 'none';
-  document.getElementById('bellBtn').style.display = isCustomerUser() || !can('metrics.view') ? 'none' : '';
+  // Кнопка появляется, только когда есть что показать.
+  lateBtn.style.display = isCustomerUser() || !can('metrics.view') || !late ? 'none' : '';
+  lateBtn.style.color = 'var(--bad-ink)';
   const newBtn = document.getElementById('newBtn');
   newBtn.innerHTML = icon('plus', 16) + '<span>Новая заявка</span>';
   newBtn.style.display = can('request.create') && view !== 'new' ? '' : 'none';
@@ -6511,7 +6549,8 @@ function render() {
     : 'ОТДЕЛ РАЗРАБОТКИ ПСД';
   const portal = ['new', 'mine'].includes(view);
   const withoutBar = ['rules', 'stages'];
-  const head = portal ? portalIntro() : withoutBar.includes(view) ? '' : modeBar();
+  // Вводный блок портала — для новой заявки и для Заказчика без заявок; список своих заявок — сразу.
+  const head = portal ? (view === 'mine' && state.live && D.requests.length ? '' : portalIntro()) : withoutBar.includes(view) ? '' : modeBar();
 
   if (state.loading) {
     document.getElementById('view').innerHTML = head + skeleton();
@@ -6531,6 +6570,9 @@ function render() {
   }
   document.getElementById('view').innerHTML =
     head + (state.error ? errorBanner(state.error) : '') + body;
+  // На телефоне шаги мастера — одна прокручиваемая строка: текущий шаг держим в видимой части.
+  const step = document.querySelector('.steps .cur');
+  if (step) step.parentElement.scrollLeft = step.offsetLeft - 16;
 }
 
 /** Заглушка на время загрузки: экран не должен мигать пустотой. */

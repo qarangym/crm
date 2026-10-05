@@ -437,7 +437,7 @@ function renderMine() {
     </div>
   </section>
   <section class="panel"><div class="panel-body scroll-x" style="padding:0 6px">
-    <table><thead><tr><th>Заявка</th><th>Цель и объект</th><th>Период работ</th><th>Бригада</th><th>Статус</th><th></th></tr></thead><tbody>
+    <table class="stack-sm"><thead><tr><th>Заявка</th><th>Цель и объект</th><th>Период работ</th><th>Бригада</th><th>Статус</th><th></th></tr></thead><tbody>
     ${state.list.length ? state.list.map((r) => `<tr style="cursor:pointer" onclick="openCard('${r.id}')">
       <td><b>${esc(r.number)}</b> ${urgentChip(r)}<br><span class="ref">${r.submittedAt ? 'отправлена ' + ts(r.submittedAt) : 'черновик от ' + ts(r.createdAt)}</span>
         ${r.extendsNumber ? `<br><span class="ref">продление ${esc(r.extendsNumber)}</span>` : ''}</td>
@@ -472,7 +472,7 @@ function renderCrews() {
     <div class="panel-head">${icon('users')}<div><h2>Работники</h2>
       <p>Сведения по Приложению 1 Инструкции и квалификационные документы; иностранцам — копии паспорта и визы (п. 16)</p></div>
       <button class="btn primary sm" style="margin-left:auto" onclick="editWorker(null)">${icon('plus', 15)}Работник</button></div>
-    <div class="panel-body scroll-x" style="padding:0 6px"><table>
+    <div class="panel-body scroll-x" style="padding:0 6px"><table class="stack-sm">
       <thead><tr><th>Работник</th><th>Приложение 1</th><th>Документы</th><th></th></tr></thead><tbody>
       ${workers.length ? workers.map((w) => {
         const gaps = appendixGaps(w);
@@ -499,14 +499,14 @@ function renderCrews() {
       <div class="panel-head">${icon('users')}<div><h2>Сохранённые бригады</h2>
         <p>В заявке бригада подставляется одним нажатием</p></div>
         <button class="btn primary sm" style="margin-left:auto" onclick="editCrew(null)">${icon('plus', 15)}Бригада</button></div>
-      <div class="panel-body scroll-x" style="padding:0 6px"><table>
+      <div class="panel-body scroll-x" style="padding:0 6px"><table class="stack-sm">
         <thead><tr><th>Бригада</th><th>Работники</th><th>Транспорт</th><th></th></tr></thead>
         <tbody>${crewRows || emptyRow(4, 'Сохранённых бригад нет')}</tbody></table></div>
     </section>
     <section class="panel">
       <div class="panel-head">${icon('truck')}<div><h2>Транспорт</h2><p>Если нужен заезд на объект</p></div>
         <button class="btn primary sm" style="margin-left:auto" onclick="editVehicle(null)">${icon('plus', 15)}Транспорт</button></div>
-      <div class="panel-body scroll-x" style="padding:0 6px"><table>
+      <div class="panel-body scroll-x" style="padding:0 6px"><table class="stack-sm">
         <thead><tr><th>Госномер</th><th>Марка</th><th>Водитель</th><th></th></tr></thead><tbody>
         ${state.vehicles.length ? state.vehicles.map((v) => `<tr><td><b>${esc(v.plate)}</b></td><td>${esc(v.model || '—')}</td>
           <td>${esc(v.driver_name || '—')}</td><td><div class="row-actions">
