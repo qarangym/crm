@@ -83,7 +83,7 @@ function show(mode, message = null) {
   const v = document.getElementById('view');
   if (mode === 'login') v.innerHTML = `<h2>Вход в систему</h2><p class="lead">Почта и пароль, затем код из письма.</p>${alertBox()}
     <form onsubmit="event.preventDefault();doLogin(this.querySelector('button'))">
-      ${field('email', 'Почта', 'email', `autocomplete="username" value="${esc(state.email)}" required`)}
+      ${field('email', 'Почта', 'email', `autocomplete="username" spellcheck="false" value="${esc(state.email)}" required`)}
       ${field('password', 'Пароль', 'password', 'autocomplete="current-password" required')}
       <div class="actions"><button class="btn primary">Войти</button></div></form>
     <div class="links"><a onclick="show('forgot')">Забыли пароль?</a></div>
@@ -99,7 +99,7 @@ function show(mode, message = null) {
   if (mode === 'register') v.innerHTML = `<h2>Регистрация организации</h2>
     <p class="lead">Сотрудников Общества регистрирует ДИТ.</p>${alertBox()}
     <form onsubmit="event.preventDefault();doRegister(this.querySelector('button'))">
-      <div class="field"><label>Что нужно</label>
+      <div class="field"><label for="kind">Что нужно</label>
         <select id="kind"><option value="customer">Подавать заявки на ТУ, ПСД и СМР</option>
           <option value="contractor">Допуск на объекты Общества (подрядчик)</option></select>
         <div class="hint" id="kindHint" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
@@ -108,7 +108,7 @@ function show(mode, message = null) {
       <div class="grid2">${field('fullName', 'Фамилия и имя', 'text', 'autocomplete="name" required')}
         ${field('position', 'Должность', 'text', 'autocomplete="organization-title"')}</div>
       <div class="grid2">${field('phone', 'Телефон', 'tel', 'required')}
-        ${field('email', 'Почта', 'email', 'autocomplete="email" required')}</div>
+        ${field('email', 'Почта', 'email', 'autocomplete="email" spellcheck="false" required')}</div>
       ${field('password', 'Пароль — не короче 10 символов', 'password', 'autocomplete="new-password" required')}
       <div class="ref" id="passwordHint" style="margin:-6px 0 10px;font-size:12px"></div>
       <label class="consent"><input type="checkbox" id="consent"> <span>Даю согласие АО «Казтелерадио» на сбор и обработку
@@ -118,7 +118,7 @@ function show(mode, message = null) {
     <div class="links"><a onclick="show('login')">У меня уже есть учётная запись</a></div>`;
   if (mode === 'forgot') v.innerHTML = `<h2>Восстановление пароля</h2><p class="lead">Пришлём ссылку для нового пароля.</p>${alertBox()}
     <form onsubmit="event.preventDefault();doForgot(this.querySelector('button'))">
-      ${field('email', 'Почта', 'email', `autocomplete="username" value="${esc(state.email)}" required`)}
+      ${field('email', 'Почта', 'email', `autocomplete="username" spellcheck="false" value="${esc(state.email)}" required`)}
       <div class="actions"><button class="btn primary">Отправить ссылку</button></div></form>
     <div class="links"><a onclick="show('login')">Назад ко входу</a></div>`;
   if (mode === 'reset') v.innerHTML = `<h2>${params.has('invite') ? 'Задайте пароль' : 'Новый пароль'}</h2>

@@ -29,9 +29,25 @@ body{margin:0;background:var(--bg);color:var(--ink);
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
 a{color:var(--blue);text-decoration:none}
 button{font:inherit;cursor:pointer}
+/* Касание без задержки двойного нажатия и с фирменной подсветкой вместо серой. */
+a,button,input,select,textarea,label,summary{touch-action:manipulation;-webkit-tap-highlight-color:rgba(0,51,153,.12)}
 /* Фокус с клавиатуры виден на любом элементе управления. */
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.nav button.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
+.nav button.on:focus-visible,.nav a.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
+/* Переход к содержимому — первым по Tab, виден только при фокусе. */
+.skip-link{position:fixed;left:12px;top:-60px;z-index:90;background:var(--blue);color:#fff;font-weight:600;
+  padding:9px 14px;border-radius:var(--r-sm)}
+.skip-link:focus{top:12px}
+#view:focus{outline:0}
+/* Действие строки таблицы: ссылка или кнопка в первой ячейке, щелчок по строке — то же самое (shell.js). */
+.row-link{cursor:pointer}
+.row-main{color:inherit}
+.row-main:hover b,.row-main:focus-visible b{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+.link-btn{border:0;background:none;padding:0;color:inherit;text-align:left}
+/* Выбор файла под кнопкой-подписью: поле скрыто визуально, но доступно с клавиатуры. */
+label.btn{position:relative;cursor:pointer}
+.file-pick{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+label.btn:focus-within{outline:2px solid var(--blue);outline-offset:2px}
 
 /* ------------------------------- каркас ------------------------------- */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -42,18 +58,18 @@ button{font:inherit;cursor:pointer}
 .brand small{color:var(--muted);font-size:11.5px}
 .side-label{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
 .nav{display:flex;flex-direction:column;gap:2px}
-.nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
+.nav button,.nav a{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
   background:transparent;color:var(--ink);text-align:left;font-size:14px}
-.nav button:hover{background:var(--tint)}
+.nav button:hover,.nav a:hover{background:var(--tint)}
 .nav button.on{background:var(--blue);color:#fff}
-.nav button .i{flex:none;color:var(--muted)}
-.nav button:hover .i{color:var(--blue)}
+.nav button .i,.nav a .i{flex:none;color:var(--muted)}
+.nav button:hover .i,.nav a:hover .i{color:var(--blue)}
 .nav button.on .i{color:var(--yellow)}
 .nav button .badge{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--bad);color:#fff;
   border-radius:20px;padding:1px 7px}
 .nav button.on .badge{background:rgba(255,255,255,.22)}
 .nav button .badge.calm{background:#DCE5F6;color:var(--blue)}
-.task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer}
+.task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer;color:inherit}
 .task:last-child{border-bottom:0}
 .task:hover{background:#FAFBFE}
 .task .k{flex:none;min-width:118px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
@@ -88,7 +104,6 @@ button{font:inherit;cursor:pointer}
 .btn.primary:hover{background:var(--blue-hover);border-color:var(--blue-hover)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
 .btn.sm{padding:5px 10px;font-size:12.5px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .panel-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
@@ -117,7 +132,7 @@ tr:last-child td{border-bottom:0}
 tbody tr:hover{background:#FAFBFE}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 
-.meter{height:6px;border-radius:20px;background:#EDF0F6;overflow:hidden}
+.meter{display:block;height:6px;border-radius:20px;background:#EDF0F6;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--blue);border-radius:20px}
 .meter.w i{background:var(--warn)} .meter.r i{background:var(--bad)} .meter.g i{background:var(--ok)}
 
@@ -136,9 +151,9 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
   background:var(--surface);border-radius:20px;padding:1px 7px;color:var(--blue)}
 .col-head .cnt{margin-left:auto;font-size:12px;font-weight:800;color:var(--muted);
   background:var(--surface);border-radius:20px;padding:1px 8px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
-  box-shadow:0 1px 2px rgba(23,36,59,.05)}
-.card:hover{border-color:#BFCDE6;transform:translateY(-1px)}
+.card{display:block;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
+  box-shadow:0 1px 2px rgba(23,36,59,.05);transition:border-color .15s,transform .15s}
+.card:hover,.card:focus-visible{border-color:#BFCDE6;transform:translateY(-1px)}
 .card .id{display:flex;align-items:center;gap:6px;justify-content:space-between;margin-bottom:6px}
 .card .id b{font-size:12px;letter-spacing:.01em}
 .card .cust{font-size:13.5px;font-weight:600;line-height:1.3}
@@ -148,7 +163,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .card .who{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink)}
 .card .who .ref{font-size:11.5px}
 .ava{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;flex:none;
-  background:#E6EDFA;color:var(--blue);font-size:9.5px;font-weight:800;letter-spacing:.02em}
+  background:#E6EDFA;color:var(--blue);font-size:10.5px;font-weight:800;letter-spacing:0}
 .ava.none{background:#FBEAEB;color:var(--bad)}
 .card.warn{border-left:3px solid var(--warn)}
 .col-empty{color:var(--muted-2);font-size:12.5px;text-align:center;padding:14px 0}
@@ -157,7 +172,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 /* ------------------------------ показатели ----------------------------- */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;box-shadow:var(--shadow)}
-.kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
 .kpi .big small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
 .kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:5px}
 .grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
@@ -170,7 +185,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .track{position:relative;height:22px;background:#F1F4F9;border-radius:6px;overflow:hidden}
 .track i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--blue);opacity:.85}
 .track .norm{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
-.track .norm::after{content:'норматив';position:absolute;top:-14px;left:4px;font-size:9.5px;color:var(--muted);white-space:nowrap}
+.track .norm::after{content:'норматив';position:absolute;top:-14px;left:4px;font-size:10.5px;color:var(--muted);white-space:nowrap}
 .bar-row .val{text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .bar-row .val small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
 .hot i{background:var(--bad)} .mid i{background:var(--warn)}
@@ -179,7 +194,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .sheet{position:fixed;inset:0;background:rgba(15,23,40,.35);display:none;z-index:40}
 .sheet.on{display:block}
 .sheet-panel{position:absolute;right:0;top:0;bottom:0;width:min(720px,94vw);background:var(--bg);
-  overflow:auto;box-shadow:-12px 0 40px rgba(15,23,40,.18)}
+  overflow:auto;overscroll-behavior:contain;scroll-padding-top:120px;box-shadow:-12px 0 40px rgba(15,23,40,.18)}
+.sheet-panel:focus{outline:0}
 .sheet-head{background:var(--surface);border-bottom:1px solid var(--line);padding:18px 22px;position:sticky;top:0;z-index:2}
 .sheet-head .row{display:flex;align-items:center;gap:10px}
 .sheet-head h2{font-size:19px}
@@ -207,7 +223,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .hist .e:last-child{border-bottom:0}
 
 /* ------------------------------- правила ------------------------------- */
-.tog{width:34px;height:19px;border-radius:20px;background:#D9DFEA;position:relative;display:inline-block;flex:none}
+.tog{width:34px;height:19px;border-radius:20px;background:#D9DFEA;position:relative;display:inline-block;flex:none;border:0;padding:0;vertical-align:middle}
+button.tog:hover{background:#C9D3E4} button.tog.on:hover{background:var(--blue-hover)}
 .tog::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;
   box-shadow:0 1px 2px rgba(0,0,0,.2)}
 .tog.on{background:var(--blue)} .tog.on::after{left:17px}
@@ -235,7 +252,9 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);
   padding:9px 11px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink)}
 .field textarea{min-height:74px;resize:vertical}
-.field input:focus,.field textarea:focus,.field select:focus{outline:2px solid var(--tint-2);border-color:var(--blue)}
+/* Поле в фокусе: синяя рамка и мягкий ореол — видно и с клавиатуры, и после щелчка. */
+.field input:focus-visible,.field textarea:focus-visible,.field select:focus-visible{outline:2px solid var(--blue);outline-offset:0;
+  border-color:var(--blue);box-shadow:0 0 0 4px var(--tint-2)}
 .field.bad input,.field.bad textarea,.field.bad select{border-color:var(--bad);background:#FFFBFB}
 .field .err{display:none;font-size:11.5px;color:var(--bad);margin-top:4px}
 .field.bad .err{display:block}
@@ -268,7 +287,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 /* --------------------------- реестр АМС и ТВ --------------------------- */
 .tv{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
 @media(max-width:1180px){.tv{grid-template-columns:1fr}}
-.tier{border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.tier{display:block;width:100%;text-align:left;color:inherit;border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.tier:hover{border-color:#BFCDE6}
 .tier.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
 .tier b{font-size:13.5px}
 .tier .ref{display:block;margin:3px 0 7px}
@@ -317,7 +337,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
   border-top-color:var(--blue);display:inline-block;animation:spin .8s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+.toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;
   display:none;align-items:center;gap:9px;max-width:min(680px,92vw);
   background:var(--ink);color:#fff;border-radius:11px;padding:12px 16px;font-size:13.5px;
   box-shadow:0 10px 30px rgba(15,23,40,.28)}
@@ -327,14 +347,16 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .toast.bad{background:#8B2A2F}
 .toast.bad .i{color:#FFD3D5}
 
-.btn:disabled{opacity:.55;cursor:progress}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn[aria-busy="true"]{cursor:progress}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 
 /* ------------------------------ диалог ------------------------------ */
 /* Замена window.prompt: причина, сумма, дата вводятся в форме с проверкой. */
 .dlg{position:fixed;inset:0;background:rgba(15,23,40,.42);display:grid;place-items:center;z-index:70;padding:16px}
+.dlg{overscroll-behavior:contain}
 .dlg-box{background:var(--surface);border-radius:var(--r);box-shadow:0 20px 60px rgba(15,23,40,.3);
-  width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto}
+  width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain}
 .dlg-box header{padding:16px 18px;border-bottom:1px solid var(--line)}
 .dlg-box header h3{font-size:16px}
 .dlg-box header p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
@@ -360,7 +382,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 @media(max-width:760px){
   .app{display:block}
   .side{position:fixed;left:0;top:0;bottom:0;width:260px;z-index:55;transform:translateX(-105%);
-    transition:transform .2s;box-shadow:12px 0 40px rgba(15,23,40,.18)}
+    transition:transform .2s;box-shadow:12px 0 40px rgba(15,23,40,.18);overscroll-behavior:contain;
+    padding-bottom:calc(18px + env(safe-area-inset-bottom))}
   .side.open{transform:none}
   .menu-toggle{display:inline-flex}
   .top{padding:12px 16px;gap:10px;align-items:center}
@@ -412,7 +435,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .bell-n{position:absolute;top:1px;right:1px;min-width:17px;height:17px;border-radius:9px;background:var(--bad);color:#fff;
   font-size:10.5px;font-weight:700;display:grid;place-items:center;padding:0 4px}
 .bell-n[hidden]{display:none}
-.bell-panel{position:absolute;right:0;top:calc(100% + 6px);width:min(380px,92vw);max-height:70vh;overflow:auto;background:var(--surface);
+.bell-panel{position:absolute;right:0;top:calc(100% + 6px);width:min(380px,92vw);max-height:70vh;overflow:auto;overscroll-behavior:contain;background:var(--surface);
   border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(15,23,40,.18);z-index:60}
 .bell-panel[hidden]{display:none}
 .bell-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
@@ -434,13 +457,21 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.45}
 .help-box section + section{border-top:1px solid var(--line);padding-top:12px}
 
+/* Пользователь попросил меньше движения: без вращения, сдвигов и плавных переходов. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}
+  .card:hover,.card:focus-visible{transform:none}
+  .spinner{animation:none;border-top-color:var(--line);border-color:var(--blue) var(--line) var(--line)}
+}
+
 </style>
 </head>
 <body>
+<a class="skip-link" href="#view" onclick="event.preventDefault();document.getElementById('view').focus()">К содержимому</a>
 <div class="app">
   <aside class="side">
     <div class="brand">
-      <img id="brandMark" alt="QTR — АО «Казтелерадио»">
+      <img id="brandMark" alt="QTR — АО «Казтелерадио»" width="46" height="46">
       <div id="brandText"><b>Заявки ОР ПСД</b><small>ТУ, ПСД и СМР на объектах</small></div>
     </div>
     <div class="side-label" id="navLabel">РАБОЧЕЕ ПРОСТРАНСТВО</div>
@@ -457,7 +488,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 
   <main class="main">
     <header class="top">
-      <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
+      <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open');document.querySelector('.side.open .nav button')?.focus()">
         <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
         <div class="eyebrow" id="eyebrow">ЗАЯВКИ НА УСЛУГИ ОР ПСД</div>
@@ -468,13 +499,13 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
       <button class="btn" title="Показать просроченные" aria-label="Просроченные заявки"
         onclick="go('bottlenecks')" id="bellBtn"></button>
       <button class="btn" id="exportBtn" onclick="exportCurrent()"></button>
-      <button class="btn primary" id="newBtn" onclick="wiz=null;go('new')"></button>
+      <button class="btn primary" id="newBtn" onclick="startNewRequest()"></button>
       <div id="helpHost"></div>
       <div class="bell-host" id="bellHost"></div>
       <div class="whoami" id="whoami"></div>
       <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()" title="Выйти из системы">Выйти</button>
     </header>
-    <div class="wrap" id="view"></div>
+    <div class="wrap" id="view" tabindex="-1"></div>
   </main>
 </div>
 
@@ -1615,7 +1646,7 @@ window.QTR_CONFIG = {
  * Принимаются только номера Казахстана: после +7 идёт 7 (мобильные 7XX и
  * городские 7XXX). Та же проверка — на сервере (src/domain/validation.ts).
  *
- * Подключение: <script src="phone.js"></script>, затем QTR_PHONE.attach(input)
+ * Подключение: <script src="phone.js"><\/script>, затем QTR_PHONE.attach(input)
  * либо обработчики onInput/onKeydown/onFocus/onBlur прямо в разметке.
  */
 (function () {
@@ -1776,25 +1807,29 @@ function ask({ title, text = '', fields = [], ok = 'Подтвердить', dan
     const input = (f) => {
       const id = 'dlg-' + f.key;
       const common = `id="${id}" ${f.required ? 'required' : ''}`;
-      if (f.type === 'textarea') return `<textarea ${common} rows="${f.rows || 3}" placeholder="${esc(f.ph || '')}">${esc(f.value || '')}</textarea>`;
+      if (f.type === 'textarea') return `<textarea ${common} name="${esc(f.key)}" rows="${f.rows || 3}" placeholder="${esc(f.ph || '')}">${esc(f.value || '')}</textarea>`;
       if (f.type === 'select') return `<select ${common}>${(f.options || []).map((o) =>
         `<option value="${esc(o.value)}" ${String(o.value) === String(f.value ?? '') ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
-      return `<input ${common} type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
-        ${f.max ? `max="${f.max}"` : ''} ${f.min !== undefined ? `min="${f.min}"` : ''}>`;
+      return `<input ${common} name="${esc(f.key)}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
+        autocomplete="off" ${f.max ? `max="${f.max}"` : ''} ${f.min !== undefined ? `min="${f.min}"` : ''}>`;
     };
-    box.innerHTML = `<div class="dlg-box" role="dialog" aria-modal="true">
-      <header><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
+    const titleId = 'dlg-title-' + (++dialogSeq);
+    // Форма: Enter в поле подтверждает, как кнопка.
+    box.innerHTML = `<form class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="${titleId}" novalidate>
+      <header><h3 id="${titleId}">${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
       <div class="body">${fields.map((f) => `<div class="field" data-key="${f.key}">
-        <label>${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>${input(f)}
+        <label for="dlg-${f.key}">${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>${input(f)}
         ${f.hint ? `<div class="hint">${f.hint}</div>` : ''}<div class="err"></div></div>`).join('')}</div>
-      <footer><button class="btn" data-act="cancel">Отмена</button>
-        <button class="btn ${danger ? '' : 'primary'}" data-act="ok" ${danger ? 'style="border-color:var(--bad);color:var(--bad)"' : ''}>${esc(ok)}</button></footer>
-    </div>`;
-    const close = (value) => { box.remove(); resolve(value); };
+      <footer><button type="button" class="btn" data-act="cancel">Отмена</button>
+        <button type="submit" class="btn ${danger ? '' : 'primary'}" data-act="ok" ${danger ? 'style="border-color:var(--bad);color:var(--bad)"' : ''}>${esc(ok)}</button></footer>
+    </form>`;
+    const release = holdModal(box);
+    const close = (value) => { box.remove(); release(); resolve(value); };
     box.addEventListener('click', (ev) => {
-      const act = ev.target.closest('[data-act]')?.dataset.act;
-      if (ev.target === box || act === 'cancel') close(null);
-      if (act !== 'ok') return;
+      if (ev.target === box || ev.target.closest('[data-act="cancel"]')) close(null);
+    });
+    box.querySelector('form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
       const values = {};
       let bad = false;
       for (const f of fields) {
@@ -1809,12 +1844,14 @@ function ask({ title, text = '', fields = [], ok = 'Подтвердить', dan
         values[f.key] = value;
       }
       if (!bad) close(values);
+      else focusFirstError(box);
     });
-    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(null); });
+    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(null); } });
     document.body.appendChild(box);
     box.querySelector('input,textarea,select')?.focus();
   });
 }
+let dialogSeq = 0;
 
 /* --------------------------- сообщения и ошибки -------------------------- */
 
@@ -1830,15 +1867,32 @@ function describeError(error) {
   return error.message;
 }
 
+/* Сообщение внизу экрана. Область объявлений создаётся заранее и пустой — иначе экранный диктор
+   пропускает первое сообщение. Пока указатель на сообщении, оно не исчезает. */
 let toastTimer = null;
-function toast(text, kind = 'info') {
+function toastBox() {
   let box = document.getElementById('toast');
   if (!box) {
     box = document.createElement('div');
     box.id = 'toast';
+    box.className = 'toast';
+    box.setAttribute('role', 'status');
+    box.setAttribute('aria-live', 'polite');
+    box.setAttribute('aria-atomic', 'true');
+    box.addEventListener('mouseenter', () => clearTimeout(toastTimer));
+    box.addEventListener('mouseleave', () => {
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { box.style.display = 'none'; }, 2500);
+    });
     document.body.appendChild(box);
   }
+  return box;
+}
+function toast(text, kind = 'info') {
+  const box = toastBox();
   box.className = 'toast ' + kind;
+  // Ошибку диктор объявляет сразу, остальное — закончив фразу.
+  box.setAttribute('aria-live', kind === 'bad' ? 'assertive' : 'polite');
   box.innerHTML = `${icon(kind === 'bad' ? 'warn' : 'check', 16)}<span>${esc(text)}</span>`;
   box.style.display = 'flex';
   clearTimeout(toastTimer);
@@ -1854,16 +1908,23 @@ let bellTimer = null;
 function mountBell(host) {
   if (!host) return;
   const api = window.QTR_API;
-  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
-    <div class="bell-panel" hidden></div>`;
+  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления" aria-expanded="false"
+      aria-controls="bellPanel">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
+    <div class="bell-panel" id="bellPanel" role="region" aria-label="Уведомления" hidden></div>`;
   const button = host.querySelector('.bell');
   const badge = host.querySelector('.bell-n');
   const panel = host.querySelector('.bell-panel');
-  const show = (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); };
+  const show = (n) => {
+    badge.hidden = !n;
+    badge.textContent = n > 99 ? '99+' : String(n);
+    button.setAttribute('aria-label', n ? `Уведомления: непрочитанных ${n}` : 'Уведомления');
+  };
+  const hide = () => { panel.hidden = true; button.setAttribute('aria-expanded', 'false'); };
   const refresh = async () => { try { show((await api.call('GET', '/inbox/count')).unread); } catch { /* сеть */ } };
   const when = (v) => new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   async function open() {
     panel.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
     panel.innerHTML = '<div class="ref" style="padding:14px">Загрузка…</div>';
     try {
       const { items, unread } = await api.call('GET', '/inbox?limit=40');
@@ -1877,7 +1938,14 @@ function mountBell(host) {
       panel.innerHTML = `<div class="ref" style="padding:14px">${esc(describeError(error))}</div>`;
     }
   }
-  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : (panel.hidden = true); });
+  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : hide(); });
+  // Escape закрывает список и возвращает фокус на колокольчик.
+  host.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || panel.hidden) return;
+    ev.preventDefault();
+    hide();
+    button.focus();
+  });
   panel.addEventListener('click', async (ev) => {
     ev.stopPropagation();
     if (ev.target.closest('[data-all]')) {
@@ -1887,12 +1955,12 @@ function mountBell(host) {
     const item = ev.target.closest('.bell-item');
     if (!item) return;
     if (item.getAttribute('href') === '#') ev.preventDefault();
-    panel.hidden = true;
+    hide();
     // По ссылке переходит сам браузер; адрес («#ЗК-…», «#ЗД-…») открывает карточку в приложении (popstate).
     // Отметка «прочитано» — в фоне, чтобы не задерживать переход.
     api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] }).then((r) => show(r.unread)).catch(() => {});
   });
-  document.addEventListener('click', () => { panel.hidden = true; });
+  document.addEventListener('click', hide);
   refresh();
   clearInterval(bellTimer);
   bellTimer = setInterval(refresh, 60_000);
@@ -1988,15 +2056,16 @@ function showHelp(me, module, welcome = false) {
   const box = document.createElement('div');
   box.className = 'dlg';
   const name = String(me.fullName || '').split(' ')[1] || me.fullName || '';
-  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true">
-    <header><h3>${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
+  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <header><h3 id="helpTitle">${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
       <p>${welcome ? 'Коротко — с чего начать. Эти подсказки всегда под кнопкой «Справка» в шапке.' : 'Что делать в системе — по вашей роли.'}</p></header>
     <div class="body">${sections.map(([title, steps]) => `<section><h4>${esc(title)}</h4>
       <ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></section>`).join('')}</div>
     <footer><button class="btn primary" data-act="ok">Понятно</button></footer></div>`;
-  const close = () => box.remove();
+  const release = holdModal(box);
+  const close = () => { box.remove(); release(); };
   box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-act]')) close(); });
-  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(); } });
   document.body.appendChild(box);
   box.querySelector('[data-act]').focus();
 }
@@ -2011,6 +2080,147 @@ function mountHelp(host, me, module) {
   try { seen = !!localStorage.getItem(key); localStorage.setItem(key, '1'); } catch { /* хранилище недоступно — без приветствия */ }
   if (!seen) showHelp(me, module, true);
 }
+
+/* ------------------------------ модальные окна ------------------------------
+   Пока открыт диалог или карточка, остальная страница «инертна»: Tab не уходит за окно,
+   экранный диктор не читает фон. После закрытия фокус возвращается туда, откуда открыли. */
+
+function holdModal(el) {
+  const opener = document.activeElement;
+  // Сообщения (toast) не глушим: они должны звучать и поверх окна.
+  const muted = [...document.body.children].filter((x) => x !== el && !x.inert && x.tagName !== 'SCRIPT' && x.id !== 'toast');
+  muted.forEach((x) => { x.inert = true; });
+  return () => {
+    muted.forEach((x) => { x.inert = false; });
+    if (opener && opener !== document.body && opener.isConnected && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
+  };
+}
+
+/** Фокус на первое поле с ошибкой — после неудачной проверки формы. */
+function focusFirstError(root = document) {
+  // Сначала само поле; если в блоке с ошибкой поля нет (список отметок), — весь блок.
+  const bad = root.querySelector('.field.bad input:not([type=hidden]), .field.bad select, .field.bad textarea')
+    || root.querySelector('.field.bad, .blocked');
+  if (!bad) return;
+  if (!bad.matches('input,select,textarea')) bad.setAttribute('tabindex', '-1');
+  bad.focus();
+}
+
+/**
+ * Боковая карточка (#sheet) — модальное окно: имя из заголовка, фокус внутрь при открытии
+ * и обратно при закрытии. Карточку открывают из многих мест добавлением класса «on»,
+ * поэтому за открытием следим здесь, а не в каждом из них.
+ */
+function watchSheet() {
+  const sheet = document.getElementById('sheet');
+  const panel = document.getElementById('sheetPanel');
+  if (!sheet || !panel) return;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.tabIndex = -1;
+  let release = null;
+  new MutationObserver(() => {
+    const open = sheet.classList.contains('on');
+    if (open && !release) {
+      release = holdModal(sheet);
+      panel.scrollTop = 0;
+      panel.focus({ preventScroll: true });
+    } else if (!open && release) {
+      release();
+      release = null;
+    }
+  }).observe(sheet, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver(() => {
+    const heading = panel.querySelector('h2');
+    if (heading) {
+      heading.id ||= 'sheetTitle';
+      panel.setAttribute('aria-labelledby', heading.id);
+    }
+    // Содержимое перерисовано вместе с полем в фокусе — фокус остаётся в карточке, а не уходит на страницу.
+    if (release && (document.activeElement === document.body || !document.activeElement)) panel.focus({ preventScroll: true });
+  }).observe(panel, { childList: true });
+}
+
+/* Escape: сначала закрывается верхнее — меню на телефоне, затем карточка. Диалоги и колокольчик
+   закрываются своими обработчиками и отменяют событие. */
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || ev.defaultPrevented || document.querySelector('.dlg')) return;
+  const side = document.querySelector('.side.open');
+  if (side) {
+    side.classList.remove('open');
+    document.querySelector('.menu-toggle')?.focus();
+    return;
+  }
+  if (document.getElementById('sheet')?.classList.contains('on') && typeof closeSheet === 'function') {
+    ev.preventDefault();
+    closeSheet();
+  }
+});
+
+/* ---------------------------- ссылки и строки ----------------------------
+   Карточка заявки, задача, строка реестра — настоящие ссылки на адрес в приложении:
+   доходят с клавиатуры, Ctrl+щелчок и колесо мыши открывают новую вкладку.
+   Обычный щелчок выполняет действие на месте, без перезагрузки. */
+
+/** Щелчок без клавиш-модификаторов — действие внутри приложения. */
+const plainClick = (ev) => ev.button === 0 && !(ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey);
+
+/** Ссылка с действием: адрес для новой вкладки, `action` — код для обычного щелчка. */
+const appLink = (href, action, inner, attrs = '') =>
+  `<a href="${esc(href)}" ${attrs} onclick="if(plainClick(event)){event.preventDefault();${esc(action)}}">${inner}</a>`;
+
+/* Строка .row-link откликается на щелчок целиком, но действие у неё одно — .row-main в первой ячейке.
+   Щелчок по своим ссылкам и кнопкам строки и выделение текста мышью строку не открывают. */
+document.addEventListener('click', (ev) => {
+  const row = ev.target.closest('.row-link');
+  if (!row || ev.target.closest('a,button,input,select,textarea,label')) return;
+  if (String(window.getSelection?.() || '')) return;
+  row.querySelector('.row-main')?.click();
+});
+
+/* ------------------------------- поля форм -------------------------------
+   Подпись связывается с полем (щелчок по подписи ставит курсор, диктор читает её), ошибка
+   и подсказка — с полем через aria-describedby, поле с ошибкой помечено aria-invalid.
+   Разметку рисуют десятки шаблонов, поэтому связи проставляются после каждой отрисовки. */
+
+let fieldSeq = 0;
+const CONTROL = 'input:not([type=hidden]),select,textarea';
+function linkFields() {
+  for (const label of document.querySelectorAll('label:not([for])')) {
+    if (label.querySelector(CONTROL) || !label.parentElement) continue;
+    const control = [...label.parentElement.querySelectorAll(CONTROL)].find((c) =>
+      label.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING && !c.closest('label'));
+    if (!control) continue;
+    control.id ||= 'fld-' + (++fieldSeq);
+    label.htmlFor = control.id;
+  }
+  for (const field of document.querySelectorAll('.field')) {
+    const control = field.querySelector(CONTROL);
+    if (!control) continue;
+    const bad = field.classList.contains('bad');
+    const notes = [...field.querySelectorAll(':scope > .hint, :scope > .err')].filter((n) => n.classList.contains('hint') || bad);
+    notes.forEach((n) => { n.id ||= 'fld-note-' + (++fieldSeq); });
+    const ids = notes.map((n) => n.id).join(' ');
+    if (ids) control.setAttribute('aria-describedby', ids); else control.removeAttribute('aria-describedby');
+    if (bad) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
+  }
+}
+let fieldsQueued = false;
+function watchFields() {
+  new MutationObserver(() => {
+    if (fieldsQueued) return;
+    fieldsQueued = true;
+    queueMicrotask(() => { fieldsQueued = false; linkFields(); });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  linkFields();
+}
+
+if (document.body) {
+  toastBox();
+  watchSheet();
+  watchFields();
+}
+
 
 </script>
 <script>
@@ -2232,8 +2442,9 @@ async function boot() {
     // Сотрудник начинает с «Моих задач»: то, что лежит именно на нём (п. 102).
     else if (state.live) { view = 'tasks'; api.tasksCount().then((c) => { D.tasksBadge = c; renderNav(); }).catch(() => {}); }
     else if (!viewAllowed(view)) view = [...MENU, ...MENU2, ...MENU3].map(([k]) => k).find(viewAllowed) || 'board';
-    // Адрес из закладки, обновления страницы или письма: «#/board», «#ЗК-2026-0001».
+    // Адрес из закладки, обновления страницы или письма: «#/board», «#/board?who=none», «#ЗК-2026-0001».
     if (initial.view && viewAllowed(initial.view)) view = initial.view;
+    readFilters();
     if (can('documents.approve')) {
       D.pendingVisa = (await api.pendingCount().catch(() => ({ count: 0 }))).count;
     }
@@ -2245,7 +2456,7 @@ async function boot() {
     render();
   }
   if (!state.live) return;
-  history.replaceState(null, '', '#/' + view + (initial.card ? '/' + initial.card : ''));
+  history.replaceState(null, '', '#/' + view + (initial.card ? '/' + initial.card : '') + filterQuery());
   window.addEventListener('popstate', applyRoute);
   if (initial.card) await withRoute(() => openSheet(initial.card));
 }
@@ -2269,7 +2480,7 @@ async function withRoute(fn) {
 
 function pushRoute(card = null) {
   if (routing || !state.live) return;
-  const hash = '#/' + view + (card ? '/' + card : '');
+  const hash = '#/' + view + (card ? '/' + card : '') + filterQuery();
   if (location.hash === hash) return;
   history.pushState(null, '', hash);
   cardInHistory = !!card;
@@ -2278,7 +2489,9 @@ function pushRoute(card = null) {
 async function applyRoute() {
   const r = routeOf();
   await withRoute(async () => {
+    const refilter = readFilters();
     if (r.view && r.view !== view && viewAllowed(r.view)) await go(r.view);
+    else if (refilter) render();
     const open = document.getElementById('sheet').classList.contains('on');
     if (r.card && (!open || sheetRequest?.number !== r.card)) await openSheet(r.card);
     if (!r.card && open) closeSheet();
@@ -2486,7 +2699,7 @@ function renderAccessDenied(error) {
 /** Обёртка действия: блокирует кнопку, показывает результат, обновляет экран. */
 async function act(button, fn, successText) {
   const label = button ? button.innerHTML : null;
-  if (button) { button.disabled = true; button.innerHTML = 'Выполняется…'; }
+  if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = 'Выполняется…'; }
   try {
     const result = await fn();
     if (successText) toast(successText, 'good');
@@ -2500,7 +2713,7 @@ async function act(button, fn, successText) {
     }
     return null;
   } finally {
-    if (button) { button.disabled = false; button.innerHTML = label; }
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = label; }
   }
 }
 
@@ -2538,6 +2751,30 @@ const TITLES = {
 };
 let view = 'board';
 let filters = { branch: '', service: '', party: '', who: '' };
+/* Отбор доски — в адресе («#/board?who=none»): ссылкой на «Без исполнителя» можно поделиться,
+   обновление страницы и «Назад» его сохраняют. */
+const FILTER_KEYS = ['branch', 'service', 'party', 'who'];
+function filterQuery() {
+  if (view !== 'board') return '';
+  const q = new URLSearchParams(FILTER_KEYS.filter((k) => filters[k]).map((k) => [k, filters[k]])).toString();
+  return q ? '?' + q : '';
+}
+function readFilters() {
+  const i = location.hash.indexOf('?');
+  const q = new URLSearchParams(i < 0 ? '' : location.hash.slice(i + 1));
+  const before = JSON.stringify(filters);
+  filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, q.get(k) || '']));
+  return JSON.stringify(filters) !== before;
+}
+function setFilter(key, value) {
+  filters[key] = value;
+  if (state.live) history.replaceState(null, '', '#/' + view + filterQuery());
+  render();
+}
+function resetFilters() {
+  filters = { branch: '', service: '', party: '', who: '' };
+  setFilter('branch', '');
+}
 /** Реестр заявок: действующие / закрытые / все и поиск по номеру, Заказчику, БИН (С10). */
 const registryFilter = { state: 'open', q: '' };
 function setRegistryFilter(key, value) {
@@ -2585,6 +2822,13 @@ const TASK_OPEN = {
   user: () => `go('users')`,
 };
 
+/** Адрес задачи — для Ctrl+щелчка и новой вкладки; обычный щелчок выполняет TASK_OPEN. */
+const TASK_HREF = {
+  request: (t) => `#/tasks/${t.ref}`, registration: (t) => `#/tasks/${t.ref}`,
+  assignment: () => '#/assignments', memo: () => '#/memos', document: () => '#/archive',
+  registry: () => '#/ams', permit: (t) => `/dopusk/#${encodeURIComponent(t.ref)}`, user: () => '#/users',
+};
+
 function taskDue(t) {
   if (!t.dueAt) return '<span class="ref">без срока</span>';
   const n = daysLeft(t.dueAt);
@@ -2605,10 +2849,10 @@ function renderTasks() {
       <div class="kpi"><div class="big" style="color:${data.counts.overdue ? 'var(--bad)' : 'var(--ok)'}">${data.counts.overdue}</div><span>просрочено</span></div>
     </div>
     <section class="panel"><div class="panel-body" style="padding:0">
-      ${tasks.length ? tasks.map((t) => `<div class="task" onclick="${TASK_OPEN[t.kind](t)}">
+      ${tasks.length ? tasks.map((t) => appLink(TASK_HREF[t.kind](t), TASK_OPEN[t.kind](t), `
         <div class="k">${esc(t.kindName)}</div>
         <div class="t"><b>${esc(t.title)}</b><small>${esc(t.ref)} · ${esc(t.detail)}</small></div>
-        <div class="d">${taskDue(t)}</div></div>`).join('')
+        <div class="d">${taskDue(t)}</div>`, 'class="task"')).join('')
         : `<div style="padding:26px;text-align:center;color:var(--muted-2)">${own ? 'Сейчас задач нет. Новые заявки, поручения и записки на вас появятся здесь сами, о каждой придёт письмо.' : 'У сотрудника нет задач.'}</div>`}
     </div></section>
     ${own ? absencePanel() : ''}
@@ -2669,8 +2913,8 @@ function renderTeam() {
   const people = (D.team || []).filter((p) => p.total || true);
   return `<section class="panel"><div class="panel-body" style="padding:0 6px"><div class="scroll-x"><table><thead><tr>
       <th>Сотрудник</th><th>Роли</th><th>Из чего состоит</th><th class="num">Задач</th><th class="num">Просрочено</th></tr></thead><tbody>
-    ${people.map((p) => `<tr onclick="openTasksOf('${p.id}')" style="cursor:pointer">
-      <td><b>${esc(p.name)}</b><br><span class="ref">${esc(p.department || '')}</span></td>
+    ${people.map((p) => `<tr class="row-link">
+      <td><button type="button" class="link-btn row-main" onclick="openTasksOf('${p.id}')"><b>${esc(p.name)}</b></button><br><span class="ref">${esc(p.department || '')}</span></td>
       <td>${p.roles.map((r) => `<span class="chip n">${esc(ROLE_LABEL[r] || r)}</span>`).join(' ')}</td>
       <td>${Object.entries(p.byKind).map(([k, n]) => `${n} ${KIND_SHORT[k]}`).join(' · ') || '<span class="ref">—</span>'}</td>
       <td class="num"><b>${p.total}</b></td>
@@ -2691,7 +2935,7 @@ function renderNav() {
   const late = (D.requests || []).filter(r => daysLeft(r.dueAt) < 0).length;
   const badges = { board: late, archive: D.pendingVisa || 0, tasks: D.tasksBadge?.total || 0 };
   const item = ([k, l, i]) =>
-    `<button class="${view===k?'on':''}" onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
+    `<button class="${view===k?'on':''}" ${view===k?'aria-current="page"':''} onclick="go('${k}')">${icon(i)}<span>${l}</span>` +
     (badges[k] ? `<span class="badge${k === 'tasks' && !D.tasksBadge?.overdue ? ' calm' : ''}" title="${k === 'archive' ? 'Документы ждут визы' : k === 'tasks' ? `Задач: ${badges[k]}, просрочено: ${D.tasksBadge?.overdue || 0}` : 'Просрочено'}">${badges[k]}</span>` : '') + `</button>`;
   // Раздел без пунктов не показывается вовсе: пустые заголовки сбивают с толку.
   const section = (navId, labelId, items) => {
@@ -2713,7 +2957,7 @@ function renderNav() {
   const permits = state.live && (state.me?.modules || []).includes('permits');
   document.getElementById('permitsLabel').style.display = permits ? '' : 'none';
   document.getElementById('navPermits').innerHTML = permits
-    ? `<button onclick="location.href='/dopusk/'">${icon('truck')}<span>Портал допусков</span></button>` : '';
+    ? `<a href="/dopusk/">${icon('truck')}<span>Портал допусков</span></a>` : '';
 }
 async function go(v, keep = false) {
   // Из меню «Мои задачи» открываются свои; чужие — только из «Нагрузки команды».
@@ -2758,27 +3002,27 @@ function executorOptions() {
 function filterBar() {
   const parties = [...new Set(boardStages.map(s => s.ownerParty))];
   return `<div class="filters">
-    <select onchange="filters.branch=this.value;render()">
+    <select aria-label="Филиал" onchange="setFilter('branch', this.value)">
       <option value="">Все филиалы</option>
       ${D.branches.map(b => `<option ${filters.branch===b?'selected':''}>${b}</option>`).join('')}
     </select>
-    <select onchange="filters.service=this.value;render()">
+    <select aria-label="Услуга" onchange="setFilter('service', this.value)">
       <option value="">Все услуги</option>
       ${['ТУ','ПСД','СМР'].map(s => `<option ${filters.service===s?'selected':''}>${s}</option>`).join('')}
     </select>
-    <select onchange="filters.party=this.value;render()">
+    <select aria-label="Ответственная сторона" onchange="setFilter('party', this.value)">
       <option value="">Любая ответственная сторона</option>
       ${parties.map(p => `<option value="${p}" ${filters.party===p?'selected':''}>${C.ownerParties[p]}</option>`).join('')}
     </select>
-    ${state.live ? `<select onchange="filters.who=this.value;render()">
+    ${state.live ? `<select aria-label="Исполнитель" onchange="setFilter('who', this.value)">
       <option value="">Все исполнители</option>
       <option value="me" ${filters.who==='me'?'selected':''}>Мои заявки</option>
       <option value="none" ${filters.who==='none'?'selected':''}>Без исполнителя</option>
       ${executorOptions().map(([id, name]) => `<option value="${id}" ${filters.who===id?'selected':''}>${esc(name)}</option>`).join('')}
     </select>` : ''}
-    <button class="btn ghost" onclick="filters={branch:'',service:'',party:'',who:''};render()">Сбросить</button>
+    <button class="btn ghost" onclick="resetFilters()">Сбросить</button>
     <span class="ref">${filtered().length} из ${D.requests.length} заявок</span>
-    ${D.requests.some(unassigned) ? `<button class="chip r" style="border:0;cursor:pointer" onclick="filters.who='none';render()"
+    ${D.requests.some(unassigned) ? `<button class="chip r" style="border:0;cursor:pointer" onclick="setFilter('who', 'none')"
       title="Открытые заявки без исполнителя — п. 102">без исполнителя: ${D.requests.filter(unassigned).length}</button>` : ''}
   </div>`;
 }
@@ -2811,16 +3055,15 @@ function renderBoard() {
 function cardHtml(r) {
   const n = daysLeft(r.dueAt);
   const cls = n < 0 ? 'late' : n <= 3 ? 'warn' : '';
-  return `<div class="card ${cls}" onclick="openSheet('${r.number}')">
-    <div class="id"><b>${r.number}</b>${slaChip(r)}</div>
+  return appLink(`#/${view}/${r.number}`, `openSheet('${r.number}')`, `
+    <div class="id"><b>${esc(r.number)}</b>${slaChip(r)}</div>
     <div class="cust">${esc(r.customer)}</div>
     <div class="obj">${esc(r.object)} · ${esc(r.branch)}</div>
     ${executorLine(r)}
     <div class="foot">${svcChips(r)}
       ${r.openRemarks ? '<span class="chip w">замечания: ' + r.openRemarks + '</span>' : ''}
       <span class="ref" style="margin-left:auto">${money(r.amount)}</span>
-    </div>
-  </div>`;
+    </div>`, `class="card ${cls}"`);
 }
 const initials = (name) => String(name || '').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 /**
@@ -2968,11 +3211,11 @@ function renderRegistry() {
   const rows = filtered().slice().sort((a, b) => (open(b) - open(a)) ||
     (open(a) ? daysLeft(a.dueAt) - daysLeft(b.dueAt) : String(b.closedAt || '').localeCompare(String(a.closedAt || ''))));
   return `<div class="filters">
-    <select onchange="setRegistryFilter('state', this.value)">
+    <select aria-label="Состояние заявок" onchange="setRegistryFilter('state', this.value)">
       ${[['open', 'Действующие'], ['closed', 'Закрытые'], ['', 'Все']].map(([v, l]) =>
         `<option value="${v}" ${registryFilter.state === v ? 'selected' : ''}>${l}</option>`).join('')}
     </select>
-    <input type="search" placeholder="Номер заявки, вх. номер, Заказчик или БИН" style="min-width:260px"
+    <input type="search" aria-label="Поиск заявок" placeholder="Номер заявки, вх. номер, Заказчик или БИН…" style="min-width:260px"
       value="${esc(registryFilter.q)}" onkeydown="if(event.key==='Enter')setRegistryFilter('q', this.value)">
     <button class="btn sm" onclick="setRegistryFilter('q', this.previousElementSibling.value)">${icon('search', 15)}Найти</button>
     ${can('admin') ? `<button class="btn sm" style="margin-left:auto" onclick="openRequestImport()">${icon('filePlus', 15)}Перенос заявок из таблицы</button>` : ''}
@@ -2981,8 +3224,8 @@ function renderRegistry() {
       <th>Номер</th><th>Заказчик и объект</th><th>Услуги</th><th>Этап</th>
       <th>Исполнитель</th><th>Срок</th><th class="num">Стоимость</th>
     </tr></thead><tbody>
-    ${rows.map(r => { const s = stageBy[r.stageCode]; return `<tr onclick="openSheet('${r.number}')" style="cursor:pointer">
-      <td><b>${r.number}</b><br><span class="ref">вх. ${esc(r.incomingNumber||'—')}</span></td>
+    ${rows.map(r => { const s = stageBy[r.stageCode]; return `<tr class="row-link">
+      <td>${appLink(`#/${view}/${r.number}`, `openSheet('${r.number}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')}<br><span class="ref">вх. ${esc(r.incomingNumber||'—')}</span></td>
       <td><b>${esc(r.customer)}</b><br><span class="ref">${esc(r.object)} · ${esc(r.branch)}</span></td>
       <td>${svcChips(r)}</td>
       <td>${s.order}. ${esc(s.short)}<br><span class="ref pin">${esc(s.regulationRef)}</span></td>
@@ -3039,22 +3282,22 @@ function renderArchive() {
   const kinds = ['Акт приема-передачи', 'Технический АВР', 'АВР', 'ТУ', 'ПСД (РП)', 'Договор', 'КП', 'Распоряжение'];
 
   return `<div class="filters">
-    <input type="search" placeholder="Наименование объекта" value="${esc(docFilters.facility)}"
+    <input type="search" aria-label="Объект" placeholder="Наименование объекта…" value="${esc(docFilters.facility)}"
       style="min-width:220px" oninput="setDocFilter('facility', this.value)"
       onkeydown="if(event.key==='Enter')searchDocuments()">
-    <select onchange="setDocFilter('kind', this.value); searchDocuments()">
+    <select aria-label="Вид документа" onchange="setDocFilter('kind', this.value); searchDocuments()">
       <option value="">Все виды</option>
       ${kinds.map((k) => `<option ${docFilters.kind === k ? 'selected' : ''}>${k}</option>`).join('')}
     </select>
-    <input type="search" placeholder="Собственник оборудования" value="${esc(docFilters.owner)}"
+    <input type="search" aria-label="Собственник оборудования" placeholder="Собственник оборудования…" value="${esc(docFilters.owner)}"
       oninput="setDocFilter('owner', this.value)" onkeydown="if(event.key==='Enter')searchDocuments()">
-    <input type="search" placeholder="Подрядчик" value="${esc(docFilters.contractor)}"
+    <input type="search" aria-label="Подрядчик" placeholder="Подрядчик…" value="${esc(docFilters.contractor)}"
       oninput="setDocFilter('contractor', this.value)" onkeydown="if(event.key==='Enter')searchDocuments()">
-    <input type="date" title="Дата акта с" value="${docFilters.dateFrom}"
+    <input type="date" title="Дата акта с" aria-label="Дата акта с" value="${docFilters.dateFrom}"
       onchange="setDocFilter('dateFrom', this.value); searchDocuments()">
-    <input type="date" title="Дата акта по" value="${docFilters.dateTo}"
+    <input type="date" title="Дата акта по" aria-label="Дата акта по" value="${docFilters.dateTo}"
       onchange="setDocFilter('dateTo', this.value); searchDocuments()">
-    <input type="search" placeholder="Номер заявки" value="${esc(docFilters.request)}" style="min-width:130px"
+    <input type="search" aria-label="Номер заявки" placeholder="Номер заявки…" value="${esc(docFilters.request)}" style="min-width:130px"
       oninput="setDocFilter('request', this.value)" onkeydown="if(event.key==='Enter')searchDocuments()">
     <label style="display:flex;gap:6px;align-items:center;font-size:13px">
       <input type="checkbox" ${docFilters.pending ? 'checked' : ''} onchange="setDocFilter('pending', this.checked ? '1' : ''); searchDocuments()">
@@ -3180,7 +3423,7 @@ function openUpload() {
   document.getElementById('sheetPanel').innerHTML = `
     <div class="sheet-head"><div class="row">
       <div><div class="ref">Архив актов</div><h2>Загрузка документа</h2></div>
-      <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+      <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
     </div></div>
     <div class="sheet-body">
       <section class="panel"><div class="panel-body">
@@ -3265,9 +3508,9 @@ function renderRules() {
     <th style="width:120px">Регламент</th><th style="width:78px">Таймер</th></tr></thead><tbody>
   ${rules.map(r => `<tr>
     <td>${admin
-      ? `<span class="tog ${r.enabled?'on':''}" role="switch" aria-checked="${r.enabled}" style="cursor:pointer"
-          onclick="toggleRule(this, ${r.id}, ${!r.enabled})" title="${r.enabled ? 'Выключить' : 'Включить'}"></span>`
-      : `<span class="tog ${r.enabled?'on':''}"></span>`}</td>
+      ? `<button type="button" class="tog ${r.enabled?'on':''}" role="switch" aria-checked="${r.enabled}"
+          aria-label="${esc(r.event)}" onclick="toggleRule(this, ${r.id}, ${!r.enabled})" title="${r.enabled ? 'Выключить' : 'Включить'}"></button>`
+      : `<span class="tog ${r.enabled?'on':''}" role="img" aria-label="${r.enabled ? 'Включено' : 'Выключено'}"></span>`}</td>
     <td><b>${esc(r.event)}</b><br>${r.implementation === 'partial'
       ? '<span class="chip w">частично</span>' : '<span class="chip g">автоматически</span>'}</td>
     <td style="color:var(--muted)">${esc(r.how || r.description)}
@@ -3282,7 +3525,9 @@ function renderRules() {
 }
 
 async function toggleRule(el, id, enabled) {
+  el.disabled = true;
   const ok = await act(null, () => api.setRule(id, enabled), enabled ? 'Правило включено' : 'Правило выключено');
+  el.disabled = false;
   if (ok) { state.loaded.delete('rules'); await reloadCurrent(); }
 }
 
@@ -3549,7 +3794,7 @@ async function openSheet(number, keepOpen = false) {
     if (!keepOpen) {
       document.getElementById('sheetPanel').innerHTML =
         `<div class="sheet-head"><div class="row"><h2>${esc(number)}</h2>
-          <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+          <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
         </div></div><div class="sheet-body">${skeleton()}</div>`;
     }
     try {
@@ -3643,7 +3888,7 @@ function printBar(r) {
   const tuForms = [[1, 'канал'], [2, 'кабель по территории'], [3, 'кабель в помещении'], [4, 'электроснабжение'], [5, 'размещение']];
   return `<div class="row-actions" style="justify-content:flex-start">
     <a class="btn ghost sm" target="_blank" rel="noopener" href="${url('card')}">${icon('download', 14)}Карточка заявки</a>
-    ${staff && r.services.includes('ТУ') && can('request.edit') ? `<select class="btn ghost sm" onchange="if(this.value){window.open(this.value,'_blank','noopener');this.value=''}">
+    ${staff && r.services.includes('ТУ') && can('request.edit') ? `<select class="btn ghost sm" aria-label="Проект ТУ: открыть форму" onchange="if(this.value){window.open(this.value,'_blank','noopener');this.value=''}">
       <option value="">Проект ТУ…</option>${tuForms.map(([n, t]) => `<option value="${url('tu', '?form=' + n)}">Приложение ${n} — ${t}</option>`).join('')}</select>` : ''}
     ${staff && r.services.includes('СМР') ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${url('avr')}">Технический АВР</a>` : ''}
   </div>`;
@@ -3976,7 +4221,7 @@ function closeSheet() {
   if (routing || !routeOf().card) return;
   // Открыли из системы — «Назад» в истории; пришли по ссылке — просто убираем номер из адреса.
   if (cardInHistory) { cardInHistory = false; history.back(); }
-  else history.replaceState(null, '', '#/' + view);
+  else history.replaceState(null, '', '#/' + view + filterQuery());
 }
 
 /* --------------------- договоры и оплата по услугам (A1, В6, В8) --------------------- */
@@ -4052,7 +4297,7 @@ function contractsBlock(r) {
           <td class="num">${c.amount === null ? '—' : money(Number(c.amount))}</td>
           <td>${c.paid_at ? `<span class="chip g">100 % · ${fmt(c.paid_at)}</span>`
             : closed ? '—' : `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <input type="date" id="pay-${c.id}" value="${today()}" max="${today()}" style="width:150px">
+                <input type="date" id="pay-${c.id}" aria-label="Дата поступления оплаты" value="${today()}" max="${today()}" style="width:150px">
                 <button class="btn primary sm" onclick="payContract(this,'${c.id}')">Оплата поступила</button></div>`}</td>
           <td>${avrCell(c, r)}</td>
           <td>${closed || c.accepted_at ? '' : `<div class="row-actions">
@@ -4359,7 +4604,7 @@ function attachmentsBlock(r) {
         ${open ? `<button class="btn ghost sm" onclick="deleteAttachment(this,'${d.id}')">Удалить</button>` : ''}
       </div>`).join('') : '<div class="ref">Файлов нет.</div>'}
       ${open ? `<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-        <input id="attFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.zip">
+        <input id="attFiles" type="file" multiple aria-label="Файлы для приложения к заявке" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.zip">
         <button class="btn primary sm" onclick="uploadAttachments(this)">Приложить</button>
         <span class="ref">PDF, PNG, JPG, DOCX, XLSX, ZIP — до 20 МБ каждый, не более 10 за раз</span></div>` : ''}
     </div></section>`;
@@ -4675,7 +4920,7 @@ async function openDocument(id) {
   <div class="sheet-head"><div class="row">
     <div><div class="ref">${esc(d.kind)}${d.form_code ? ' · форма ' + esc(d.form_code) : ''}</div><h2>${esc(d.number)}</h2></div>
     <div style="margin-left:auto">${d.approved ? '<span class="chip g">завизирован</span>' : '<span class="chip w">ожидает визы</span>'}</div>
-    <button class="btn ghost" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body">
     <section class="panel"><div class="panel-body"><div class="kv">
@@ -4775,11 +5020,11 @@ function renderRequestReport(r) {
   return `<div class="filters">
     <input type="date" title="С" value="${f.dateFrom}" onchange="reportFilters.dateFrom=this.value">
     <input type="date" title="По" value="${f.dateTo}" onchange="reportFilters.dateTo=this.value">
-    <select onchange="reportFilters.branch=this.value"><option value="">Все филиалы</option>
+    <select aria-label="Филиал" onchange="reportFilters.branch=this.value"><option value="">Все филиалы</option>
       ${(D.branchList || []).map((b) => `<option value="${b.id}" ${f.branch === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
-    <select onchange="reportFilters.service=this.value"><option value="">Все услуги</option>
+    <select aria-label="Услуга" onchange="reportFilters.service=this.value"><option value="">Все услуги</option>
       ${['ТУ', 'ПСД', 'СМР'].map((x) => `<option ${f.service === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
-    <select onchange="reportFilters.status=this.value"><option value="">Любой статус</option>
+    <select aria-label="Статус" onchange="reportFilters.status=this.value"><option value="">Любой статус</option>
       ${statusCodes.map((c, i) => `<option value="${c}" ${f.status === c ? 'selected' : ''}>${statuses[i]}</option>`).join('')}</select>
     <input type="search" placeholder="Заказчик или БИН" value="${esc(f.counterparty)}" onchange="reportFilters.counterparty=this.value">
     <button class="btn sm" onclick="state.loaded.delete('reports');reloadCurrent()">Сформировать</button>
@@ -4796,8 +5041,8 @@ function renderRequestReport(r) {
   </div>
   <section class="panel"><div class="panel-body" style="padding:0 6px">
     <table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>
-    ${rows.length ? rows.map((x) => `<tr onclick="go('registry').then(() => openSheet('${esc(x.number)}'))" style="cursor:pointer">
-      <td><b>${esc(x.number)}</b></td><td>${x.registeredAt ? fmt(x.registeredAt) : '—'}</td>
+    ${rows.length ? rows.map((x) => `<tr class="row-link">
+      <td>${appLink(`#/registry/${x.number}`, `go('registry').then(() => openSheet('${x.number}'))`, `<b>${esc(x.number)}</b>`, 'class="row-main"')}</td><td>${x.registeredAt ? fmt(x.registeredAt) : '—'}</td>
       <td>${esc(x.counterparty)}<br><span class="ref">БИН ${esc(x.bin)}</span></td><td>${esc(x.facility)}</td><td>${esc(x.branch)}</td>
       <td>${esc(x.services)}</td><td>${esc(stageBy[x.stageCode]?.short || x.stageCode)}</td>
       <td class="num">${money(x.estimate)}</td><td class="num">${money(x.paidAmount)}</td>
@@ -4822,7 +5067,7 @@ function renderBranchReport(r) {
   const canSubmit = can('reports.branch') && !r.submission && r.period <= lastMonth &&
     (hasRole('admin') || state.me?.branchId === r.branch.id);
   return `<div class="filters">
-    ${can('reports.view') ? `<select onchange="reportBranch.branch=this.value">
+    ${can('reports.view') ? `<select aria-label="Филиал" onchange="reportBranch.branch=this.value">
       ${(D.branchList || []).map((b) => `<option value="${b.id}" ${r.branch.id === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>` : `<b>${esc(r.branch.name)}</b>`}
     <input type="month" value="${r.period}" onchange="reportBranch.period=this.value">
     <button class="btn sm" onclick="state.loaded.delete('reports');reloadCurrent()">Сформировать</button>
@@ -4910,7 +5155,7 @@ function renderUsers() {
   if (!state.live) return '<div class="note">Управление пользователями доступно в рабочем режиме.</div>';
   const rows = D.users || [];
   return `<div class="filters">
-    <input type="search" placeholder="Почта или фамилия" value="${esc(userQuery)}" style="min-width:260px"
+    <input type="search" aria-label="Поиск пользователей" placeholder="Почта или фамилия…" value="${esc(userQuery)}" style="min-width:260px"
       oninput="userQuery=this.value" onkeydown="if(event.key==='Enter'){state.loaded.delete('users');reloadCurrent()}">
     <button class="btn sm" onclick="state.loaded.delete('users');reloadCurrent()">${icon('search', 15)}Найти</button>
     <span class="ref">Пользователей: ${rows.length}</span>
@@ -4960,7 +5205,7 @@ async function openUser(id) {
   document.getElementById('sheetPanel').innerHTML = `
   <div class="sheet-head"><div class="row">
     <div><div class="ref">Пользователи</div><h2>${u ? esc(u.full_name) : 'Новый сотрудник'}</h2></div>
-    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body"><section class="panel"><div class="panel-body">
     <div class="form-grid">
@@ -5038,7 +5283,7 @@ function renderRequestImport() {
   document.getElementById('sheetPanel').innerHTML = `
   <div class="sheet-head"><div class="row">
     <div><div class="ref">Реестр заявок</div><h2>Перенос действующих заявок</h2></div>
-    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body">
     <section class="panel"><div class="panel-body">
@@ -5089,7 +5334,7 @@ function renderUserImport() {
   document.getElementById('sheetPanel').innerHTML = `
   <div class="sheet-head"><div class="row">
     <div><div class="ref">Пользователи</div><h2>Импорт из кадровой выгрузки</h2></div>
-    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body">
     <section class="panel"><div class="panel-body">
@@ -5148,11 +5393,11 @@ function renderAudit() {
     ${input('dateTo', 'type="date" title="По"')}
     ${input('actor', 'type="search" placeholder="Пользователь"')}
     ${input('q', 'type="search" placeholder="Действие, файл, номер заявки" style="min-width:230px"')}
-    <select onchange="auditFilters.entity=this.value;searchAudit()">
+    <select aria-label="Объект журнала" onchange="auditFilters.entity=this.value;searchAudit()">
       <option value="">Все объекты</option>
       ${Object.entries(AUDIT_ENTITY).map(([k, l]) => `<option value="${k}" ${f.entity === k ? 'selected' : ''}>${l}</option>`).join('')}
     </select>
-    <select onchange="auditFilters.result=this.value;searchAudit()">
+    <select aria-label="Результат" onchange="auditFilters.result=this.value;searchAudit()">
       <option value="">Любой результат</option>
       <option value="denied" ${f.result === 'denied' ? 'selected' : ''}>Только отказы</option>
       <option value="success" ${f.result === 'success' ? 'selected' : ''}>Выполнено</option>
@@ -5211,12 +5456,13 @@ function renderMonitoring() {
     <section class="panel">
       <div class="panel-head"><div><h2>Последние эскалации</h2><p>Эскалируются только сроки филиала</p></div></div>
       <div class="panel-body">
-        ${esc2.escalations.slice(0, 30).map((x) => `<div class="remark" style="border-color:var(--line);cursor:pointer"
-            onclick="go('registry').then(() => openSheet('${esc(x.request_number)}'))">
+        ${esc2.escalations.slice(0, 30).map((x) => `<a class="remark" style="border-color:var(--line);color:inherit"
+            href="#/registry/${esc(x.request_number)}"
+            onclick="if(plainClick(event)){event.preventDefault();go('registry').then(() => openSheet('${esc(x.request_number)}'))}">
           <span class="chip ${x.level === 2 ? 'r' : 'w'}">${x.level}</span>
           <span style="flex:1"><b>${esc(x.request_number)}</b> · ${esc(x.branch_name)}<br>
             <span class="ref">${esc(x.reason)}</span></span>
-          <span class="ref">${fmt(String(x.created_at).slice(0, 10))}</span></div>`).join('') || '<div class="ref">Нет записей.</div>'}
+          <span class="ref">${fmt(String(x.created_at).slice(0, 10))}</span></a>`).join('') || '<div class="ref">Нет записей.</div>'}
       </div></section>
   </div>
   ${n ? `<section class="panel" style="margin-top:16px">
@@ -5256,7 +5502,7 @@ function renderAssignments() {
   }
   const rows = D.assignments || [];
   return `<div class="filters">
-    <select onchange="assignmentFilter=this.value;state.loaded.delete('assignments');reloadCurrent()">
+    <select aria-label="Состояние поручений" onchange="assignmentFilter=this.value;state.loaded.delete('assignments');reloadCurrent()">
       ${[['active', 'Действующие'], ['done', 'Исполненные'], ['all', 'Все']].map(([v, l]) =>
         `<option value="${v}" ${assignmentFilter === v ? 'selected' : ''}>${l}</option>`).join('')}
     </select>
@@ -5271,7 +5517,7 @@ function renderAssignments() {
       const [label, cls] = ASSIGNMENT_STATUS[a.status] || [a.status, 'n'];
       const overdue = ['open', 'in_progress'].includes(a.status) && a.due_at && a.due_at < today();
       return `<tr>
-        <td><a href="#" onclick="event.preventDefault();openSheet('${esc(a.request_number)}')"><b>${esc(a.request_number)}</b></a><br><span class="ref">${p.registeredAt ? fmt(String(p.registeredAt).slice(0, 10)) : ''}</span></td>
+        <td>${appLink(`#/${view}/${a.request_number}`, `openSheet('${a.request_number}')`, `<b>${esc(a.request_number)}</b>`)}<br><span class="ref">${p.registeredAt ? fmt(String(p.registeredAt).slice(0, 10)) : ''}</span></td>
         <td><b>${esc(p.customer?.name_full || '—')}</b><br><span class="ref">БИН ${esc(p.customer?.bin || '—')} · ${esc(p.facility?.name || '')}</span></td>
         <td>${(p.services || []).map((s) => `<span class="chip svc-${({'ТУ':'tu','ПСД':'psd','СМР':'smr'})[s.service]}">${esc(s.service)}</span>`).join('')}
           <br><span class="ref">${p.estimate ? money(Number(p.estimate)) : 'стоимость по смете'}</span></td>
@@ -5325,7 +5571,7 @@ function renderMemos() {
   }
   const rows = D.memos || [];
   return `<div class="filters">
-    <select onchange="memoFilter=this.value;state.loaded.delete('memos');reloadCurrent()">
+    <select aria-label="Состояние записок" onchange="memoFilter=this.value;state.loaded.delete('memos');reloadCurrent()">
       <option value="open" ${memoFilter === 'open' ? 'selected' : ''}>Ожидают ответа</option>
       <option value="all" ${memoFilter === 'all' ? 'selected' : ''}>Все</option>
     </select>
@@ -5401,7 +5647,7 @@ function renderAmend() {
   document.getElementById('sheetPanel').innerHTML = `
   <div class="sheet-head"><div class="row">
     <div><div class="ref">Требуются уточнения · ТЗ №11</div><h2>${esc(sheetRequest.number)}</h2></div>
-    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body">
     <section class="panel"><div class="panel-head"><div><h2>Замечания ОР ПСД</h2>
@@ -5587,7 +5833,28 @@ function wizNext() {
   wiz.errors = e;
   if (Object.keys(e).length === 0) wiz.step++;
   render();
+  // Ошибки — фокус на первое поле с ошибкой; следующий шаг — на его заголовок.
+  if (Object.keys(e).length) focusFirstError(document.getElementById('view'));
+  else document.getElementById('view').focus({ preventScroll: true });
 }
+
+/* Незаконченная заявка не теряется молча: ни при «Новой заявке», ни при «Отмене», ни при закрытии вкладки. */
+const wizDirty = () => !!wiz && !wiz.submitted && !!wiz.dirty;
+function discardWizard() {
+  if (wizDirty() && !confirm('Незаконченная заявка будет потеряна. Сохранить её можно кнопкой «Сохранить черновик». Продолжить?')) return false;
+  wiz = null;
+  return true;
+}
+function startNewRequest() {
+  if (discardWizard()) go('new');
+}
+document.getElementById('view').addEventListener('input', () => { if (view === 'new' && wiz) wiz.dirty = true; }, true);
+document.getElementById('view').addEventListener('change', () => { if (view === 'new' && wiz) wiz.dirty = true; }, true);
+window.addEventListener('beforeunload', (ev) => {
+  if (!wizDirty()) return;
+  ev.preventDefault();
+  ev.returnValue = '';
+});
 function wizBack() { wiz.step--; wiz.errors = {}; render(); }
 
 /** Тело заявки для сервера: параметры сценария копируются в каждую услугу. */
@@ -5633,6 +5900,7 @@ async function wizSaveDraft(button) {
   wiz.draftId = result.request.uuid;
   wiz.draftNumber = result.request.number;
   wiz.version = result.request.version;
+  wiz.dirty = false;
   state.loaded.delete('requests');
   render();
 }
@@ -5910,7 +6178,7 @@ function renderWizard() {
     <div class="wizard">
       <div>${body}
         <div class="wiz-actions">
-          <button class="btn" onclick="${wiz.step ? 'wizBack()' : `wiz=null;go('${isCustomerUser() ? 'mine' : 'registry'}')`}">
+          <button class="btn" onclick="${wiz.step ? 'wizBack()' : `if(discardWizard())go('${isCustomerUser() ? 'mine' : 'registry'}')`}">
             ${wiz.step ? '← Назад' : 'Отмена'}</button>
           <div class="sp-grow" style="flex:1"></div>
           ${state.live ? '<button class="btn" onclick="wizSaveDraft(this)">Сохранить черновик</button>' : ''}
@@ -6012,9 +6280,10 @@ function renderMine() {
       <th>Что происходит</th><th class="num">Стоимость</th></tr></thead><tbody>
     ${mine.map(r => { const s = stageBy[r.stageCode];
       const status = r.openRemarks ? 'Требуются уточнения' : s.customerStatusName;
-      const open = !state.live ? '' : `onclick="openSheet('${esc(r.number)}')" style="cursor:pointer"`;
-      return `<tr ${open}>
-        <td style="white-space:nowrap"><b>${esc(r.number)}</b><br><span class="ref">от ${fmt(r.createdAt)}</span>
+      const number = state.live ? appLink(`#/${view}/${r.number}`, `openSheet('${r.number}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')
+        : `<b>${esc(r.number)}</b>`;
+      return `<tr ${state.live ? 'class="row-link"' : ''}>
+        <td style="white-space:nowrap">${number}<br><span class="ref">от ${fmt(r.createdAt)}</span>
           ${r.openRemarks && state.live ? '<br><span class="chip w">исправить</span>' : ''}</td>
         <td><span class="chip ${r.openRemarks?'w':s.customerStatus==='done'?'g':s.customerStatus==='rejected'?'r':'n'}">${status}</span></td>
         <td>${esc(r.object)}</td><td>${svcChips(r)}</td>
@@ -6147,9 +6416,9 @@ function renderAms() {
       <section class="panel" style="margin-bottom:16px"><div class="panel-body" style="padding:0 6px"><div class="scroll-x">
         <table><thead><tr><th>Инв. №</th><th>Объект</th><th>Тип, высота</th>
           <th>Паспортная нагрузка, кг</th><th>Ввод мощности, кВт</th></tr></thead><tbody>
-        ${D.facilities.map((x) => `<tr onclick="selectFacility('${esc(String(x.inv))}')"
-            style="cursor:pointer;${String(x.inv) === String(f.inv) ? 'background:#F0F4FC' : ''}">
-            <td><b>${esc(String(x.inv))}</b></td>
+        ${D.facilities.map((x) => `<tr class="row-link" ${String(x.inv) === String(f.inv) ? 'style="background:#F0F4FC"' : ''}>
+            <td><button type="button" class="link-btn row-main" aria-pressed="${String(x.inv) === String(f.inv)}"
+              onclick="selectFacility('${esc(String(x.inv))}')"><b>${esc(String(x.inv))}</b></button></td>
             <td>${esc(x.name)}<br><span class="ref">${esc(x.branch)}</span></td>
             <td>${esc(x.kind)}${x.height ? `, ${x.height} м` : ''}</td>
             <td>${x.passportLoad ? x.passportLoad.toLocaleString('ru-RU') : '<span class="ref">не заполнено</span>'}</td>
@@ -6161,12 +6430,13 @@ function renderAms() {
         ${can('registry.request') ? `<button class="btn sm" style="margin-left:auto" onclick="requestRegistryChange(this)">Запросить изменение</button>` : ''}</div>
         <div class="panel-body">
           ${!loadKnown ? skeleton() : tiers.length ? `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-bottom:16px">
-            ${tiers.map((t) => `<div class="tier ${String(t.id ?? t.h) === String(tv.tier) ? 'on' : ''}" onclick="setTv('tier','${esc(String(t.id ?? t.h))}');tv.placement='ams';render()">
+            ${tiers.map((t) => `<button type="button" class="tier ${String(t.id ?? t.h) === String(tv.tier) ? 'on' : ''}"
+              aria-pressed="${String(t.id ?? t.h) === String(tv.tier)}" onclick="setTv('tier','${esc(String(t.id ?? t.h))}');tv.placement='ams';render()">
               <b>Ярус ${t.h} м</b>
               <span class="ref">${t.load.toLocaleString('ru-RU')} / ${t.cap ? t.cap.toLocaleString('ru-RU') + ' кг' : '[не заполнено]'}</span>
-              ${t.cap ? `<div class="meter ${t.load / t.cap >= .95 ? 'r' : t.load / t.cap >= .85 ? 'w' : ''}">
-                <i style="width:${Math.min(100, Math.round(t.load / t.cap * 100))}%"></i></div>` : ''}
-            </div>`).join('')}
+              ${t.cap ? `<span class="meter ${t.load / t.cap >= .95 ? 'r' : t.load / t.cap >= .85 ? 'w' : ''}">
+                <i style="width:${Math.min(100, Math.round(t.load / t.cap * 100))}%"></i></span>` : ''}
+            </button>`).join('')}
           </div>` : '<div class="note" style="margin-bottom:14px">Ярусов у объекта нет: оценка ведётся по свободной площади и мощности (п. 17).</div>'}
           ${loadKnown ? `<div class="scroll-x"><table><thead><tr><th>Арендатор</th><th>Оборудование</th><th class="num">кг</th>
             <th class="num">м²</th><th class="num">кВт</th><th>ТУ</th></tr></thead><tbody>
@@ -6408,7 +6678,7 @@ function renderBranchImport() {
   document.getElementById('sheetPanel').innerHTML = `
   <div class="sheet-head"><div class="row">
     <div><div class="ref">Справочники</div><h2>Импорт Приложения 7</h2></div>
-    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()">${icon('close', 16)}</button>
+    <button class="btn ghost" style="margin-left:auto" onclick="closeSheet()" aria-label="Закрыть">${icon('close', 16)}</button>
   </div></div>
   <div class="sheet-body">
     <section class="panel"><div class="panel-body">
@@ -6489,7 +6759,7 @@ function renderDirCalendar() {
     <button class="btn sm" onclick="reloadDirectory()">Показать</button>
     <span class="ref">Заполнены годы: ${c.years.map((y) => `${y.year} (${y.holidays} нерабочих, ${y.working} переносов)`).join(', ') || '—'}</span>
     <span style="margin-left:auto;display:flex;gap:8px">
-      <label class="btn sm" style="cursor:pointer">${icon('filePlus', 15)}Импорт CSV<input type="file" accept=".csv" hidden onchange="importCalendar(this)"></label>
+      <label class="btn sm" style="cursor:pointer">${icon('filePlus', 15)}Импорт CSV<input type="file" accept=".csv" class="file-pick" onchange="importCalendar(this)"></label>
       <button class="btn primary sm" onclick="editCalendarDay()">${icon('plus', 15)}День</button></span>
   </div>
   ${c.missingNextYear ? `<div class="blocked" style="margin-bottom:14px"><b>Календарь на ${new Date().getFullYear() + 1} год не заполнен.</b>
@@ -6589,9 +6859,9 @@ const CP_STATUS = { pending: ['на проверке', 'w'], active: ['пров�
 function renderDirCounterparties() {
   const rows = D.dirCounterparties || [];
   return `<div class="filters">
-    <input type="search" placeholder="БИН или наименование" value="${esc(counterpartyQuery.q)}" style="min-width:240px"
+    <input type="search" aria-label="Поиск контрагента" placeholder="БИН или наименование…" value="${esc(counterpartyQuery.q)}" style="min-width:240px"
       onkeydown="if(event.key==='Enter'){counterpartyQuery.q=this.value;reloadDirectory()}">
-    <select onchange="counterpartyQuery.status=this.value;reloadDirectory()">
+    <select aria-label="Статус проверки" onchange="counterpartyQuery.status=this.value;reloadDirectory()">
       ${[['pending', 'На проверке'], ['active', 'Проверенные'], ['blocked', 'Заблокированные'], ['', 'Все']].map(([v, l]) =>
         `<option value="${v}" ${counterpartyQuery.status === v ? 'selected' : ''}>${l}</option>`).join('')}
     </select>

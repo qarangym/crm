@@ -39,10 +39,11 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#view" onclick="event.preventDefault();document.getElementById('view').focus()">К содержимому</a>
 <div class="app">
   <aside class="side">
     <div class="brand">
-      <img id="brandMark" alt="QTR — АО «Казтелерадио»">
+      <img id="brandMark" alt="QTR — АО «Казтелерадио»" width="46" height="46">
       <div><b>Портал допусков</b><small>Служба управления активами</small></div>
     </div>
     <div class="side-label">ДОПУСК НА ОБЪЕКТЫ</div>
@@ -53,7 +54,7 @@
 
   <main class="main">
     <header class="top">
-      <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open')">
+      <button class="btn ghost menu-toggle" aria-label="Меню" onclick="document.querySelector('.side').classList.toggle('open');document.querySelector('.side.open .nav button')?.focus()">
         <svg class="i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
         <div class="eyebrow">ПОРТАЛ ДОПУСКОВ · АО «КАЗТЕЛЕРАДИО»</div>
@@ -66,7 +67,7 @@
       <div class="bell-host" id="bellHost"></div>
       <button class="btn primary" id="newBtn" style="display:none" onclick="startWizard()"></button>
     </header>
-    <div class="wrap" id="view"><div style="display:flex;gap:10px;align-items:center;color:var(--muted)">
+    <div class="wrap" id="view" tabindex="-1"><div style="display:flex;gap:10px;align-items:center;color:var(--muted)">
       <span class="spinner"></span>Загрузка…</div></div>
   </main>
 </div>

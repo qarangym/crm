@@ -209,6 +209,7 @@ async function act(button, fn, successText) {
  * Диалог с полями, включая файл, выбор и список отметок. Обязательные поля
  * проверяются до отправки. Возвращает значения или null.
  */
+let permitDialogSeq = 0;
 function dialog({ title, text = '', fields = [], ok = 'Сохранить', wide = false }) {
   return new Promise((resolve) => {
     const box = document.createElement('div');
@@ -221,24 +222,27 @@ function dialog({ title, text = '', fields = [], ok = 'Сохранить', wide
         return `<select id="${id}">${(f.options || []).map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(f.value ?? '') ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
       }
       if (f.type === 'checks') {
-        return `<div class="pick-list" id="${id}" style="max-height:260px">${(f.options || []).map((o) => `<label>
+        return `<div class="pick-list" id="${id}" role="group" aria-labelledby="pd-${f.key}-label" style="max-height:260px">${(f.options || []).map((o) => `<label>
           <input type="checkbox" value="${esc(o.value)}" ${(f.value || []).includes(o.value) ? 'checked' : ''}>
           <span>${esc(o.label)}${o.sub ? `<span class="sub">${o.sub}</span>` : ''}</span></label>`).join('')
           || '<div class="ref" style="padding:12px">Список пуст</div>'}</div>`;
       }
       if (f.type === 'checkbox') return `<label class="consent"><input id="${id}" type="checkbox" ${f.value ? 'checked' : ''}><span>${f.text || ''}</span></label>`;
-      return `<input id="${id}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
-        ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} ${f.inputmode ? `inputmode="${f.inputmode}"` : ''}>`;
+      return `<input id="${id}" name="${esc(f.key)}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
+        autocomplete="off" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} ${f.inputmode ? `inputmode="${f.inputmode}"` : ''}>`;
     };
-    box.innerHTML = `<div class="dlg-box" role="dialog" aria-modal="true" ${wide ? 'style="width:min(760px,96vw)"' : ''}>
-      <header><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
+    const titleId = 'pd-title-' + (++permitDialogSeq);
+    // Форма: Enter в поле подтверждает, как кнопка.
+    box.innerHTML = `<form class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="${titleId}" novalidate ${wide ? 'style="width:min(760px,96vw)"' : ''}>
+      <header><h3 id="${titleId}">${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
       <div class="body ${wide ? 'form-grid' : ''}">${fields.map((f) => `<div class="field ${f.span ? 'span2' : ''}" data-key="${f.key}" ${f.hidden ? 'hidden' : ''}>
-        ${f.type === 'checkbox' ? '' : `<label>${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>`}${input(f)}
+        ${f.type === 'checkbox' ? '' : `<label ${f.type === 'checks' ? `id="pd-${f.key}-label"` : `for="pd-${f.key}"`}>${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>`}${input(f)}
         ${f.hint ? `<div class="hint">${f.hint}</div>` : ''}<div class="err"></div></div>`).join('')}</div>
-      <footer><button class="btn" data-act="cancel">Отмена</button>
-        <button class="btn primary" data-act="ok">${esc(ok)}</button></footer>
-    </div>`;
-    const close = (value) => { box.remove(); resolve(value); };
+      <footer><button type="button" class="btn" data-act="cancel">Отмена</button>
+        <button type="submit" class="btn primary" data-act="ok">${esc(ok)}</button></footer>
+    </form>`;
+    const release = holdModal(box);
+    const close = (value) => { box.remove(); release(); resolve(value); };
     const read = () => {
       const values = {};
       for (const f of fields) {
@@ -257,9 +261,10 @@ function dialog({ title, text = '', fields = [], ok = 'Сохранить', wide
       }
     });
     box.addEventListener('click', (ev) => {
-      const action = ev.target.closest('[data-act]')?.dataset.act;
-      if (ev.target === box || action === 'cancel') close(null);
-      if (action !== 'ok') return;
+      if (ev.target === box || ev.target.closest('[data-act="cancel"]')) close(null);
+    });
+    box.querySelector('form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
       const values = read();
       let bad = false;
       for (const f of fields) {
@@ -274,8 +279,9 @@ function dialog({ title, text = '', fields = [], ok = 'Сохранить', wide
         if (problem) bad = true;
       }
       if (!bad) close(values);
+      else focusFirstError(box);
     });
-    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(null); });
+    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(null); } });
     document.body.appendChild(box);
     box.dispatchEvent(new Event('change'));
     box.querySelector('input:not([type=checkbox]),textarea,select')?.focus();
@@ -420,16 +426,16 @@ const UNIT_NAME = {
 
 function renderNav() {
   const count = { approvals: state.meta?.me?.pendingApprovals || 0 };
-  const item = ([k, label, i]) => `<button class="${state.view === k ? 'on' : ''}" onclick="${k === 'new' ? 'startWizard()' : `go('${k}')`}">${icon(i)}<span>${label}</span>${count[k] ? `<span class="badge">${count[k]}</span>` : ''}</button>`;
+  const item = ([k, label, i]) => `<button class="${state.view === k ? 'on' : ''}" ${state.view === k ? 'aria-current="page"' : ''} onclick="${k === 'new' ? 'startWizard()' : `go('${k}')`}">${icon(i)}<span>${label}</span>${count[k] ? `<span class="badge">${count[k]}</span>` : ''}</button>`;
   document.getElementById('nav').innerHTML = [...MENU_CONTRACTOR, ...MENU_STAFF].filter(([k]) => viewAllowed(k)).map(item).join('');
   const orpsd = (state.me.modules || []).includes('orpsd');
   document.getElementById('otherLabel').style.display = orpsd ? '' : 'none';
   document.getElementById('navOther').innerHTML = orpsd
-    ? `<button onclick="location.href='/'">${icon('archive')}<span>Заявки ОР ПСД и архив актов</span></button>` : '';
+    ? `<a href="/">${icon('archive')}<span>Заявки ОР ПСД и архив актов</span></a>` : '';
   const org = state.meta?.counterparty;
   const unit = ['permits', 'branch', 'admin', 'oko', 'management', 'orpsd', 'auditor'].find((r) => (state.me.roles || []).includes(r));
   document.getElementById('who').innerHTML = `<b>${esc(state.me.fullName)}</b>${esc(org ? org.name_full : UNIT_NAME[unit] || '')}
-    <br><a href="#" onclick="event.preventDefault();logout()" class="ref">Выйти</a>`;
+    <br><button type="button" class="link-btn ref" onclick="logout()">Выйти</button>`;
   const newBtn = document.getElementById('newBtn');
   newBtn.style.display = isContractor() && state.view !== 'new' ? '' : 'none';
   newBtn.innerHTML = `${icon('plus', 16)}<span>Новая заявка</span>`;
@@ -473,8 +479,8 @@ function renderMine() {
   </section>
   <section class="panel"><div class="panel-body scroll-x" style="padding:0 6px">
     <table class="stack-sm"><thead><tr><th>Заявка</th><th>Цель и объект</th><th>Период работ</th><th>Бригада</th><th>Статус</th><th></th></tr></thead><tbody>
-    ${state.list.length ? state.list.map((r) => `<tr style="cursor:pointer" onclick="openCard('${r.id}')">
-      <td><b>${esc(r.number)}</b> ${urgentChip(r)}<br><span class="ref">${r.submittedAt ? 'отправлена ' + ts(r.submittedAt) : 'черновик от ' + ts(r.createdAt)}</span>
+    ${state.list.length ? state.list.map((r) => `<tr class="row-link">
+      <td>${appLink(`#/${state.view}/${r.number}`, `openCard('${r.id}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')} ${urgentChip(r)}<br><span class="ref">${r.submittedAt ? 'отправлена ' + ts(r.submittedAt) : 'черновик от ' + ts(r.createdAt)}</span>
         ${r.extendsNumber ? `<br><span class="ref">продление ${esc(r.extendsNumber)}</span>` : ''}</td>
       <td>${esc(r.workTypeName || '—')}${r.onAms ? ' · АМС' : ''}<br><span class="ref">${esc(r.facilityName || '—')} · ${esc(r.branchName || '')}</span></td>
       <td>${period(r)}<br><span class="ref">${hours(r)}</span></td>
@@ -919,7 +925,7 @@ function wizardStep() {
         <button class="btn" onclick="printLetter(this)">${icon('download', 15)}Сформировать запрос с Приложением 1</button>
         ${r?.letterFileId ? `<span class="chip g">${icon('check', 13)}${esc(r.letterFileName)}</span>` : ''}
         <label class="btn">${icon('upload', 15)}${r?.letterFileId ? 'Заменить скан' : 'Приложить подписанный скан'}
-          <input type="file" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="uploadLetter(this)"></label>
+          <input type="file" accept=".pdf,.png,.jpg,.jpeg" class="file-pick" onchange="uploadLetter(this)"></label>
       </div>
       ${wizardNav()}
     </div></section>`;
@@ -1167,8 +1173,8 @@ function requestTable(rows, emptyText) {
   const staff = !isContractor();
   return `<section class="panel"><div class="panel-body scroll-x" style="padding:0 6px"><table>
     <thead><tr><th>Заявка</th><th>Организация</th><th>Цель и объект</th><th>Период работ</th><th>Основание</th><th>Бригада</th><th>Статус</th>${staff ? '<th>Рассматривает</th>' : ''}</tr></thead><tbody>
-    ${rows.length ? rows.map((r) => `<tr style="cursor:pointer" onclick="openCard('${r.id}')">
-      <td><b>${esc(r.number)}</b> ${urgentChip(r)}<br><span class="ref">${ts(r.submittedAt)}</span></td>
+    ${rows.length ? rows.map((r) => `<tr class="row-link">
+      <td>${appLink(`#/${state.view}/${r.number}`, `openCard('${r.id}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')} ${urgentChip(r)}<br><span class="ref">${ts(r.submittedAt)}</span></td>
       <td>${esc(r.counterpartyName)}<br><span class="ref">БИН ${esc(r.counterpartyBin)}</span></td>
       <td>${esc(r.workTypeName || '—')}${r.onAms ? ' · АМС' : ''}<br><span class="ref">${esc(r.facilityName || '—')} · ${esc(r.branchName || '')}</span></td>
       <td>${period(r)}<br><span class="ref">${hours(r)}</span></td>
@@ -1203,22 +1209,22 @@ const allFilter = { status: '', q: '', branchId: '', workType: '', urgent: false
 function setAll(key, value) { allFilter[key] = value; reload(); }
 
 function workTypeSelect(current, onchange) {
-  return `<select onchange="${onchange}"><option value="">Все цели работ</option>
+  return `<select aria-label="Цель работ" onchange="${onchange}"><option value="">Все цели работ</option>
     ${Object.entries(state.meta.workTypes).map(([k, n]) => `<option value="${k}" ${current === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
 }
 
 function branchSelect(current, onchange) {
   if (!isCentral() && !isAdmin()) return '';
-  return `<select onchange="${onchange}"><option value="">Все филиалы</option>
+  return `<select aria-label="Филиал" onchange="${onchange}"><option value="">Все филиалы</option>
     ${state.meta.branches.map((b) => `<option value="${b.id}" ${current === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>`;
 }
 
 function renderAll() {
   const statuses = Object.entries(state.meta.statuses).filter(([k]) => k !== 'draft');
   return `<div class="filters">
-    <input type="search" placeholder="Номер, организация, БИН, объект, основание, код, работник" value="${esc(allFilter.q)}" style="min-width:300px"
+    <input type="search" aria-label="Поиск заявок" placeholder="Номер, организация, БИН, объект, основание, код, работник…" value="${esc(allFilter.q)}" style="min-width:300px"
       onkeydown="if(event.key==='Enter')setAll('q',this.value)" onchange="setAll('q',this.value)">
-    <select onchange="setAll('status',this.value)"><option value="">Все статусы</option>
+    <select aria-label="Статус" onchange="setAll('status',this.value)"><option value="">Все статусы</option>
       ${statuses.map(([k, n]) => `<option value="${k}" ${allFilter.status === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
     ${workTypeSelect(allFilter.workType, "setAll('workType',this.value)")}
     ${branchSelect(allFilter.branchId, "setAll('branchId',this.value)")}
@@ -1239,8 +1245,8 @@ function renderActive() {
   </div>
   <section class="panel"><div class="panel-body scroll-x" style="padding:0 6px"><table>
     <thead><tr><th>Допуск</th><th>Организация</th><th>Объект</th><th>Срок и время</th><th>Цель</th><th>Людей</th><th>Ответственный на объекте</th></tr></thead><tbody>
-    ${state.list.length ? state.list.map((r) => `<tr style="cursor:pointer" onclick="openCard('${r.id}')">
-      <td><b>${esc(r.number)}</b> ${urgentChip(r)}<br><span class="ref">код ${esc(r.permitCode || '—')}</span></td>
+    ${state.list.length ? state.list.map((r) => `<tr class="row-link">
+      <td>${appLink(`#/${state.view}/${r.number}`, `openCard('${r.id}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')} ${urgentChip(r)}<br><span class="ref">код ${esc(r.permitCode || '—')}</span></td>
       <td>${esc(r.counterpartyName)}</td>
       <td>${esc(r.facilityName || '—')}<br><span class="ref">${esc(r.branchName || '')}</span></td>
       <td>${period(r)}<br><span class="ref">${hours(r)}</span></td>
@@ -1265,9 +1271,10 @@ function renderSite() {
       <button class="btn primary sm" onclick="verifyPermit(document.getElementById('verifyQ').value)">${icon('search', 15)}Проверить</button>
       <span class="ref">Проверка по электронному допуску: действует ли допуск, кто в нём и на какой объект.</span>
     </div>
-    ${v ? `<div style="margin-top:12px">${v.results.length ? v.results.map((r) => `<div class="verdict ${r.status === 'approved' && r.validity === 'active' ? 'g' : 'r'}" style="cursor:pointer" onclick="openCard('${r.id}')">
+    ${v ? `<div style="margin-top:12px">${v.results.length ? v.results.map((r) => appLink(`#/${state.view}/${r.number}`, `openCard('${r.id}')`, `
       <b>${esc(r.number)} · код ${esc(r.permitCode || '—')} · ${esc(r.statusName)}${r.validity ? ' · ' + ({ active: 'действует сейчас', upcoming: 'ещё не начался', expired: 'срок истёк' }[r.validity]) : ''}</b>
-      ${esc(r.counterpartyName)} · ${esc(r.facilityName || '')} · ${period(r)}, ${hours(r)}${r.matchedWorkers?.length ? `<br>Работник: ${esc(r.matchedWorkers.join(', '))}` : ''}</div>`).join('')
+      ${esc(r.counterpartyName)} · ${esc(r.facilityName || '')} · ${period(r)}, ${hours(r)}${r.matchedWorkers?.length ? `<br>Работник: ${esc(r.matchedWorkers.join(', '))}` : ''}`,
+      `class="verdict ${r.status === 'approved' && r.validity === 'active' ? 'g' : 'r'}" style="display:block;color:inherit"`)).join('')
       : '<div class="verdict r"><b>Допуск не найден</b>Без действующего допуска на объект не пропускать.</div>'}</div>` : ''}
   </div></section>
   <div class="filters">
@@ -1277,8 +1284,8 @@ function renderSite() {
   </div>
   <section class="panel"><div class="panel-body scroll-x" style="padding:0 6px"><table>
     <thead><tr><th>Допуск</th><th>Организация</th><th>Объект</th><th>Время</th><th>Людей</th><th>Отметки за день</th><th>Ответственный</th></tr></thead><tbody>
-    ${s.requests.length ? s.requests.map((r) => `<tr style="cursor:pointer" onclick="openCard('${r.id}')">
-      <td><b>${esc(r.number)}</b> ${urgentChip(r)}<br><span class="ref">код ${esc(r.permitCode || '—')}</span></td>
+    ${s.requests.length ? s.requests.map((r) => `<tr class="row-link">
+      <td>${appLink(`#/${state.view}/${r.number}`, `openCard('${r.id}')`, `<b>${esc(r.number)}</b>`, 'class="row-main"')} ${urgentChip(r)}<br><span class="ref">код ${esc(r.permitCode || '—')}</span></td>
       <td>${esc(r.counterpartyName)}</td><td>${esc(r.facilityName || '—')}</td><td>${hours(r)}</td>
       <td>${r.workersCount}${r.vehiclesCount ? ` · ${r.vehiclesCount} авто` : ''}</td>
       <td>${r.today.admitted ? `<span class="chip g">допущено ${r.today.admitted}</span>` : ''} ${r.today.refused ? `<span class="chip r">не допущено ${r.today.refused}</span>` : ''}
@@ -1493,7 +1500,7 @@ function renderSheet() {
       <div class="ref" style="margin-bottom:8px">Аварийный допуск предоставлен по устному согласованию. Подписанный запрос со списком
         работников по Приложению 1 — до ${ts(r.followupDueAt)}.</div>
       <div class="row"><a class="btn sm" target="_blank" rel="noopener" href="${P.printUrl(r.id, 'letter')}">Сформировать запрос</a>
-        <label class="btn sm primary">${icon('upload', 14)}Приложить скан<input type="file" hidden accept=".pdf,.png,.jpg,.jpeg" onchange="uploadLetterLater(this)"></label>
+        <label class="btn sm primary">${icon('upload', 14)}Приложить скан<input type="file" class="file-pick" accept=".pdf,.png,.jpg,.jpeg" onchange="uploadLetterLater(this)"></label>
         ${r.letterFileName ? `<span class="chip g">${esc(r.letterFileName)}</span>` : ''}</div></section>` : ''}
     ${reviewPanel(c)}
     ${contractorActions ? `<div class="row-actions" style="justify-content:flex-start">${contractorActions}</div>` : ''}
@@ -1685,7 +1692,7 @@ function renderLeases() {
       onchange="setLease('expiring', this.checked ? 30 : '')"> истекают в ближайшие 30 дней</label>
     <span class="ref">Договоров: ${state.leases.length}</span>
     ${editable ? `<button class="btn primary sm" style="margin-left:auto" onclick="editLease(null)">${icon('plus', 15)}Договор</button>
-      <label class="btn sm">${icon('upload', 15)}Загрузить из таблицы<input type="file" hidden accept=".csv,text/csv" onchange="readLeaseImport(this)"></label>` : ''}
+      <label class="btn sm">${icon('upload', 15)}Загрузить из таблицы<input type="file" class="file-pick" accept=".csv,text/csv" onchange="readLeaseImport(this)"></label>` : ''}
   </div>
   ${res ? `<section class="panel" style="margin-bottom:16px">
     <div class="panel-head"><div><h2>${res.preview ? 'Предпросмотр загрузки' : 'Загрузка выполнена'}</h2>
@@ -1758,10 +1765,10 @@ function renderReport() {
     <label class="ref">с <input type="date" value="${reportFilter.dateFrom}" onchange="setReport('dateFrom',this.value)"></label>
     <label class="ref">по <input type="date" value="${reportFilter.dateTo}" onchange="setReport('dateTo',this.value)"></label>
     ${branchSelect(reportFilter.branchId, "setReport('branchId',this.value)")}
-    <select onchange="setReport('facilityId',this.value)"><option value="">Все объекты</option>
+    <select aria-label="Объект" onchange="setReport('facilityId',this.value)"><option value="">Все объекты</option>
       ${state.meta.facilities.map((f) => `<option value="${f.id}" ${reportFilter.facilityId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select>
     ${workTypeSelect(reportFilter.workType, "setReport('workType',this.value)")}
-    <select onchange="setReport('status',this.value)"><option value="">Все статусы</option>
+    <select aria-label="Статус" onchange="setReport('status',this.value)"><option value="">Все статусы</option>
       ${statuses.map(([k, n]) => `<option value="${k}" ${reportFilter.status === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
     <label class="ref" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${reportFilter.urgent ? 'checked' : ''}
       onchange="setReport('urgent', this.checked ? 1 : false)"> срочные</label>
@@ -1798,7 +1805,7 @@ function renderSettings() {
       const where = { tu: 'ТУ в архиве модуля ОР ПСД', smr_contract: 'договоры модуля ОР ПСД', transfer_act: 'архив актов',
         lease: 'реестр договоров аренды СУА', order: 'распоряжения в архиве актов' }[k];
       return `<tr><td><b>${esc(name)}</b></td><td>${where}</td><td>${admin
-        ? `<select data-mode="${k}"><option value="soft" ${s.modes[k] === 'soft' ? 'selected' : ''}>мягкий</option>
+        ? `<select data-mode="${k}" aria-label="Режим проверки: ${esc(name)}"><option value="soft" ${s.modes[k] === 'soft' ? 'selected' : ''}>мягкий</option>
             <option value="strict" ${s.modes[k] === 'strict' ? 'selected' : ''}>строгий</option></select>`
         : `<span class="chip ${s.modes[k] === 'strict' ? 'r' : 'w'}">${s.modes[k] === 'strict' ? 'строгий' : 'мягкий'}</span>`}</td></tr>`;
     }).join('')}

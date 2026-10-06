@@ -21,9 +21,25 @@ body{margin:0;background:var(--bg);color:var(--ink);
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
 a{color:var(--blue);text-decoration:none}
 button{font:inherit;cursor:pointer}
+/* Касание без задержки двойного нажатия и с фирменной подсветкой вместо серой. */
+a,button,input,select,textarea,label,summary{touch-action:manipulation;-webkit-tap-highlight-color:rgba(0,51,153,.12)}
 /* Фокус с клавиатуры виден на любом элементе управления. */
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.nav button.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
+.nav button.on:focus-visible,.nav a.on:focus-visible,.btn.primary:focus-visible{outline-color:var(--yellow)}
+/* Переход к содержимому — первым по Tab, виден только при фокусе. */
+.skip-link{position:fixed;left:12px;top:-60px;z-index:90;background:var(--blue);color:#fff;font-weight:600;
+  padding:9px 14px;border-radius:var(--r-sm)}
+.skip-link:focus{top:12px}
+#view:focus{outline:0}
+/* Действие строки таблицы: ссылка или кнопка в первой ячейке, щелчок по строке — то же самое (shell.js). */
+.row-link{cursor:pointer}
+.row-main{color:inherit}
+.row-main:hover b,.row-main:focus-visible b{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+.link-btn{border:0;background:none;padding:0;color:inherit;text-align:left}
+/* Выбор файла под кнопкой-подписью: поле скрыто визуально, но доступно с клавиатуры. */
+label.btn{position:relative;cursor:pointer}
+.file-pick{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+label.btn:focus-within{outline:2px solid var(--blue);outline-offset:2px}
 
 /* ------------------------------- каркас ------------------------------- */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -34,18 +50,18 @@ button{font:inherit;cursor:pointer}
 .brand small{color:var(--muted);font-size:11.5px}
 .side-label{font-size:11.5px;letter-spacing:.08em;color:var(--muted-2);font-weight:700;padding:14px 8px 6px}
 .nav{display:flex;flex-direction:column;gap:2px}
-.nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
+.nav button,.nav a{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:var(--r-sm);
   background:transparent;color:var(--ink);text-align:left;font-size:14px}
-.nav button:hover{background:var(--tint)}
+.nav button:hover,.nav a:hover{background:var(--tint)}
 .nav button.on{background:var(--blue);color:#fff}
-.nav button .i{flex:none;color:var(--muted)}
-.nav button:hover .i{color:var(--blue)}
+.nav button .i,.nav a .i{flex:none;color:var(--muted)}
+.nav button:hover .i,.nav a:hover .i{color:var(--blue)}
 .nav button.on .i{color:var(--yellow)}
 .nav button .badge{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--bad);color:#fff;
   border-radius:20px;padding:1px 7px}
 .nav button.on .badge{background:rgba(255,255,255,.22)}
 .nav button .badge.calm{background:#DCE5F6;color:var(--blue)}
-.task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer}
+.task{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #F1F4F9;cursor:pointer;color:inherit}
 .task:last-child{border-bottom:0}
 .task:hover{background:#FAFBFE}
 .task .k{flex:none;min-width:118px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
@@ -80,7 +96,6 @@ button{font:inherit;cursor:pointer}
 .btn.primary:hover{background:var(--blue-hover);border-color:var(--blue-hover)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
 .btn.sm{padding:5px 10px;font-size:12.5px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .panel-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
@@ -109,7 +124,7 @@ tr:last-child td{border-bottom:0}
 tbody tr:hover{background:#FAFBFE}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 
-.meter{height:6px;border-radius:20px;background:#EDF0F6;overflow:hidden}
+.meter{display:block;height:6px;border-radius:20px;background:#EDF0F6;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--blue);border-radius:20px}
 .meter.w i{background:var(--warn)} .meter.r i{background:var(--bad)} .meter.g i{background:var(--ok)}
 
@@ -128,9 +143,9 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
   background:var(--surface);border-radius:20px;padding:1px 7px;color:var(--blue)}
 .col-head .cnt{margin-left:auto;font-size:12px;font-weight:800;color:var(--muted);
   background:var(--surface);border-radius:20px;padding:1px 8px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
-  box-shadow:0 1px 2px rgba(23,36,59,.05)}
-.card:hover{border-color:#BFCDE6;transform:translateY(-1px)}
+.card{display:block;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;
+  box-shadow:0 1px 2px rgba(23,36,59,.05);transition:border-color .15s,transform .15s}
+.card:hover,.card:focus-visible{border-color:#BFCDE6;transform:translateY(-1px)}
 .card .id{display:flex;align-items:center;gap:6px;justify-content:space-between;margin-bottom:6px}
 .card .id b{font-size:12px;letter-spacing:.01em}
 .card .cust{font-size:13.5px;font-weight:600;line-height:1.3}
@@ -140,7 +155,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .card .who{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink)}
 .card .who .ref{font-size:11.5px}
 .ava{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;flex:none;
-  background:#E6EDFA;color:var(--blue);font-size:9.5px;font-weight:800;letter-spacing:.02em}
+  background:#E6EDFA;color:var(--blue);font-size:10.5px;font-weight:800;letter-spacing:0}
 .ava.none{background:#FBEAEB;color:var(--bad)}
 .card.warn{border-left:3px solid var(--warn)}
 .col-empty{color:var(--muted-2);font-size:12.5px;text-align:center;padding:14px 0}
@@ -149,7 +164,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 /* ------------------------------ показатели ----------------------------- */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;box-shadow:var(--shadow)}
-.kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.kpi .big{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
 .kpi .big small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
 .kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:5px}
 .grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
@@ -162,7 +177,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .track{position:relative;height:22px;background:#F1F4F9;border-radius:6px;overflow:hidden}
 .track i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--blue);opacity:.85}
 .track .norm{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
-.track .norm::after{content:'норматив';position:absolute;top:-14px;left:4px;font-size:9.5px;color:var(--muted);white-space:nowrap}
+.track .norm::after{content:'норматив';position:absolute;top:-14px;left:4px;font-size:10.5px;color:var(--muted);white-space:nowrap}
 .bar-row .val{text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .bar-row .val small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
 .hot i{background:var(--bad)} .mid i{background:var(--warn)}
@@ -171,7 +186,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .sheet{position:fixed;inset:0;background:rgba(15,23,40,.35);display:none;z-index:40}
 .sheet.on{display:block}
 .sheet-panel{position:absolute;right:0;top:0;bottom:0;width:min(720px,94vw);background:var(--bg);
-  overflow:auto;box-shadow:-12px 0 40px rgba(15,23,40,.18)}
+  overflow:auto;overscroll-behavior:contain;scroll-padding-top:120px;box-shadow:-12px 0 40px rgba(15,23,40,.18)}
+.sheet-panel:focus{outline:0}
 .sheet-head{background:var(--surface);border-bottom:1px solid var(--line);padding:18px 22px;position:sticky;top:0;z-index:2}
 .sheet-head .row{display:flex;align-items:center;gap:10px}
 .sheet-head h2{font-size:19px}
@@ -199,7 +215,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .hist .e:last-child{border-bottom:0}
 
 /* ------------------------------- правила ------------------------------- */
-.tog{width:34px;height:19px;border-radius:20px;background:#D9DFEA;position:relative;display:inline-block;flex:none}
+.tog{width:34px;height:19px;border-radius:20px;background:#D9DFEA;position:relative;display:inline-block;flex:none;border:0;padding:0;vertical-align:middle}
+button.tog:hover{background:#C9D3E4} button.tog.on:hover{background:var(--blue-hover)}
 .tog::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;
   box-shadow:0 1px 2px rgba(0,0,0,.2)}
 .tog.on{background:var(--blue)} .tog.on::after{left:17px}
@@ -227,7 +244,9 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);
   padding:9px 11px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink)}
 .field textarea{min-height:74px;resize:vertical}
-.field input:focus,.field textarea:focus,.field select:focus{outline:2px solid var(--tint-2);border-color:var(--blue)}
+/* Поле в фокусе: синяя рамка и мягкий ореол — видно и с клавиатуры, и после щелчка. */
+.field input:focus-visible,.field textarea:focus-visible,.field select:focus-visible{outline:2px solid var(--blue);outline-offset:0;
+  border-color:var(--blue);box-shadow:0 0 0 4px var(--tint-2)}
 .field.bad input,.field.bad textarea,.field.bad select{border-color:var(--bad);background:#FFFBFB}
 .field .err{display:none;font-size:11.5px;color:var(--bad);margin-top:4px}
 .field.bad .err{display:block}
@@ -260,7 +279,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 /* --------------------------- реестр АМС и ТВ --------------------------- */
 .tv{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
 @media(max-width:1180px){.tv{grid-template-columns:1fr}}
-.tier{border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.tier{display:block;width:100%;text-align:left;color:inherit;border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.tier:hover{border-color:#BFCDE6}
 .tier.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
 .tier b{font-size:13.5px}
 .tier .ref{display:block;margin:3px 0 7px}
@@ -309,7 +329,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
   border-top-color:var(--blue);display:inline-block;animation:spin .8s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+.toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;
   display:none;align-items:center;gap:9px;max-width:min(680px,92vw);
   background:var(--ink);color:#fff;border-radius:11px;padding:12px 16px;font-size:13.5px;
   box-shadow:0 10px 30px rgba(15,23,40,.28)}
@@ -319,14 +339,16 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .toast.bad{background:#8B2A2F}
 .toast.bad .i{color:#FFD3D5}
 
-.btn:disabled{opacity:.55;cursor:progress}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn[aria-busy="true"]{cursor:progress}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 
 /* ------------------------------ диалог ------------------------------ */
 /* Замена window.prompt: причина, сумма, дата вводятся в форме с проверкой. */
 .dlg{position:fixed;inset:0;background:rgba(15,23,40,.42);display:grid;place-items:center;z-index:70;padding:16px}
+.dlg{overscroll-behavior:contain}
 .dlg-box{background:var(--surface);border-radius:var(--r);box-shadow:0 20px 60px rgba(15,23,40,.3);
-  width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto}
+  width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain}
 .dlg-box header{padding:16px 18px;border-bottom:1px solid var(--line)}
 .dlg-box header h3{font-size:16px}
 .dlg-box header p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
@@ -352,7 +374,8 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 @media(max-width:760px){
   .app{display:block}
   .side{position:fixed;left:0;top:0;bottom:0;width:260px;z-index:55;transform:translateX(-105%);
-    transition:transform .2s;box-shadow:12px 0 40px rgba(15,23,40,.18)}
+    transition:transform .2s;box-shadow:12px 0 40px rgba(15,23,40,.18);overscroll-behavior:contain;
+    padding-bottom:calc(18px + env(safe-area-inset-bottom))}
   .side.open{transform:none}
   .menu-toggle{display:inline-flex}
   .top{padding:12px 16px;gap:10px;align-items:center}
@@ -404,7 +427,7 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .bell-n{position:absolute;top:1px;right:1px;min-width:17px;height:17px;border-radius:9px;background:var(--bad);color:#fff;
   font-size:10.5px;font-weight:700;display:grid;place-items:center;padding:0 4px}
 .bell-n[hidden]{display:none}
-.bell-panel{position:absolute;right:0;top:calc(100% + 6px);width:min(380px,92vw);max-height:70vh;overflow:auto;background:var(--surface);
+.bell-panel{position:absolute;right:0;top:calc(100% + 6px);width:min(380px,92vw);max-height:70vh;overflow:auto;overscroll-behavior:contain;background:var(--surface);
   border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(15,23,40,.18);z-index:60}
 .bell-panel[hidden]{display:none}
 .bell-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
@@ -425,3 +448,10 @@ select,input[type=search],input[type=date],input[type=month]{border:1px solid va
 .help-box h4{font-size:14px;margin:0 0 6px}
 .help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.45}
 .help-box section + section{border-top:1px solid var(--line);padding-top:12px}
+
+/* Пользователь попросил меньше движения: без вращения, сдвигов и плавных переходов. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}
+  .card:hover,.card:focus-visible{transform:none}
+  .spinner{animation:none;border-top-color:var(--line);border-color:var(--blue) var(--line) var(--line)}
+}

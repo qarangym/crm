@@ -23,7 +23,9 @@ ${read('shell.css')}
 for (const name of ['assets.js', 'config.js', 'demo-data.js', 'api.js', 'phone.js', 'shell.js']) {
   const tag = `<script src="${name}"></script>`;
   if (!html.includes(tag)) throw new Error(`В index.html нет подключения ${name}`);
-  html = html.replace(tag, `<script>\n/* inline: ${name} */\n${read(name)}\n</script>`);
+  // «</script» внутри кода (например, в комментарии phone.js) закрыл бы встроенный скрипт раньше времени.
+  const code = read(name).replace(/<\/script/gi, '<\\/script');
+  html = html.replace(tag, () => `<script>\n/* inline: ${name} */\n${code}\n</script>`);
 }
 
 const out = join(here, 'prototype.html');

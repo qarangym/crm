@@ -79,25 +79,29 @@ function ask({ title, text = '', fields = [], ok = 'Подтвердить', dan
     const input = (f) => {
       const id = 'dlg-' + f.key;
       const common = `id="${id}" ${f.required ? 'required' : ''}`;
-      if (f.type === 'textarea') return `<textarea ${common} rows="${f.rows || 3}" placeholder="${esc(f.ph || '')}">${esc(f.value || '')}</textarea>`;
+      if (f.type === 'textarea') return `<textarea ${common} name="${esc(f.key)}" rows="${f.rows || 3}" placeholder="${esc(f.ph || '')}">${esc(f.value || '')}</textarea>`;
       if (f.type === 'select') return `<select ${common}>${(f.options || []).map((o) =>
         `<option value="${esc(o.value)}" ${String(o.value) === String(f.value ?? '') ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
-      return `<input ${common} type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
-        ${f.max ? `max="${f.max}"` : ''} ${f.min !== undefined ? `min="${f.min}"` : ''}>`;
+      return `<input ${common} name="${esc(f.key)}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" placeholder="${esc(f.ph || '')}"
+        autocomplete="off" ${f.max ? `max="${f.max}"` : ''} ${f.min !== undefined ? `min="${f.min}"` : ''}>`;
     };
-    box.innerHTML = `<div class="dlg-box" role="dialog" aria-modal="true">
-      <header><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
+    const titleId = 'dlg-title-' + (++dialogSeq);
+    // Форма: Enter в поле подтверждает, как кнопка.
+    box.innerHTML = `<form class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="${titleId}" novalidate>
+      <header><h3 id="${titleId}">${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}</header>
       <div class="body">${fields.map((f) => `<div class="field" data-key="${f.key}">
-        <label>${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>${input(f)}
+        <label for="dlg-${f.key}">${esc(f.label)}${f.required ? '' : ' <span class="ref">необязательно</span>'}</label>${input(f)}
         ${f.hint ? `<div class="hint">${f.hint}</div>` : ''}<div class="err"></div></div>`).join('')}</div>
-      <footer><button class="btn" data-act="cancel">Отмена</button>
-        <button class="btn ${danger ? '' : 'primary'}" data-act="ok" ${danger ? 'style="border-color:var(--bad);color:var(--bad)"' : ''}>${esc(ok)}</button></footer>
-    </div>`;
-    const close = (value) => { box.remove(); resolve(value); };
+      <footer><button type="button" class="btn" data-act="cancel">Отмена</button>
+        <button type="submit" class="btn ${danger ? '' : 'primary'}" data-act="ok" ${danger ? 'style="border-color:var(--bad);color:var(--bad)"' : ''}>${esc(ok)}</button></footer>
+    </form>`;
+    const release = holdModal(box);
+    const close = (value) => { box.remove(); release(); resolve(value); };
     box.addEventListener('click', (ev) => {
-      const act = ev.target.closest('[data-act]')?.dataset.act;
-      if (ev.target === box || act === 'cancel') close(null);
-      if (act !== 'ok') return;
+      if (ev.target === box || ev.target.closest('[data-act="cancel"]')) close(null);
+    });
+    box.querySelector('form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
       const values = {};
       let bad = false;
       for (const f of fields) {
@@ -112,12 +116,14 @@ function ask({ title, text = '', fields = [], ok = 'Подтвердить', dan
         values[f.key] = value;
       }
       if (!bad) close(values);
+      else focusFirstError(box);
     });
-    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(null); });
+    box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(null); } });
     document.body.appendChild(box);
     box.querySelector('input,textarea,select')?.focus();
   });
 }
+let dialogSeq = 0;
 
 /* --------------------------- сообщения и ошибки -------------------------- */
 
@@ -133,15 +139,32 @@ function describeError(error) {
   return error.message;
 }
 
+/* Сообщение внизу экрана. Область объявлений создаётся заранее и пустой — иначе экранный диктор
+   пропускает первое сообщение. Пока указатель на сообщении, оно не исчезает. */
 let toastTimer = null;
-function toast(text, kind = 'info') {
+function toastBox() {
   let box = document.getElementById('toast');
   if (!box) {
     box = document.createElement('div');
     box.id = 'toast';
+    box.className = 'toast';
+    box.setAttribute('role', 'status');
+    box.setAttribute('aria-live', 'polite');
+    box.setAttribute('aria-atomic', 'true');
+    box.addEventListener('mouseenter', () => clearTimeout(toastTimer));
+    box.addEventListener('mouseleave', () => {
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { box.style.display = 'none'; }, 2500);
+    });
     document.body.appendChild(box);
   }
+  return box;
+}
+function toast(text, kind = 'info') {
+  const box = toastBox();
   box.className = 'toast ' + kind;
+  // Ошибку диктор объявляет сразу, остальное — закончив фразу.
+  box.setAttribute('aria-live', kind === 'bad' ? 'assertive' : 'polite');
   box.innerHTML = `${icon(kind === 'bad' ? 'warn' : 'check', 16)}<span>${esc(text)}</span>`;
   box.style.display = 'flex';
   clearTimeout(toastTimer);
@@ -157,16 +180,23 @@ let bellTimer = null;
 function mountBell(host) {
   if (!host) return;
   const api = window.QTR_API;
-  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
-    <div class="bell-panel" hidden></div>`;
+  host.innerHTML = `<button class="btn ghost bell" aria-label="Уведомления" title="Уведомления" aria-expanded="false"
+      aria-controls="bellPanel">${icon('bell', 18)}<span class="bell-n" hidden></span></button>
+    <div class="bell-panel" id="bellPanel" role="region" aria-label="Уведомления" hidden></div>`;
   const button = host.querySelector('.bell');
   const badge = host.querySelector('.bell-n');
   const panel = host.querySelector('.bell-panel');
-  const show = (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); };
+  const show = (n) => {
+    badge.hidden = !n;
+    badge.textContent = n > 99 ? '99+' : String(n);
+    button.setAttribute('aria-label', n ? `Уведомления: непрочитанных ${n}` : 'Уведомления');
+  };
+  const hide = () => { panel.hidden = true; button.setAttribute('aria-expanded', 'false'); };
   const refresh = async () => { try { show((await api.call('GET', '/inbox/count')).unread); } catch { /* сеть */ } };
   const when = (v) => new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   async function open() {
     panel.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
     panel.innerHTML = '<div class="ref" style="padding:14px">Загрузка…</div>';
     try {
       const { items, unread } = await api.call('GET', '/inbox?limit=40');
@@ -180,7 +210,14 @@ function mountBell(host) {
       panel.innerHTML = `<div class="ref" style="padding:14px">${esc(describeError(error))}</div>`;
     }
   }
-  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : (panel.hidden = true); });
+  button.addEventListener('click', (ev) => { ev.stopPropagation(); panel.hidden ? open() : hide(); });
+  // Escape закрывает список и возвращает фокус на колокольчик.
+  host.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || panel.hidden) return;
+    ev.preventDefault();
+    hide();
+    button.focus();
+  });
   panel.addEventListener('click', async (ev) => {
     ev.stopPropagation();
     if (ev.target.closest('[data-all]')) {
@@ -190,12 +227,12 @@ function mountBell(host) {
     const item = ev.target.closest('.bell-item');
     if (!item) return;
     if (item.getAttribute('href') === '#') ev.preventDefault();
-    panel.hidden = true;
+    hide();
     // По ссылке переходит сам браузер; адрес («#ЗК-…», «#ЗД-…») открывает карточку в приложении (popstate).
     // Отметка «прочитано» — в фоне, чтобы не задерживать переход.
     api.call('POST', '/inbox/read', { ids: [Number(item.dataset.id)] }).then((r) => show(r.unread)).catch(() => {});
   });
-  document.addEventListener('click', () => { panel.hidden = true; });
+  document.addEventListener('click', hide);
   refresh();
   clearInterval(bellTimer);
   bellTimer = setInterval(refresh, 60_000);
@@ -291,15 +328,16 @@ function showHelp(me, module, welcome = false) {
   const box = document.createElement('div');
   box.className = 'dlg';
   const name = String(me.fullName || '').split(' ')[1] || me.fullName || '';
-  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true">
-    <header><h3>${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
+  box.innerHTML = `<div class="dlg-box help-box" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <header><h3 id="helpTitle">${welcome ? `Добро пожаловать${name ? ', ' + esc(name) : ''}!` : 'Справка'}</h3>
       <p>${welcome ? 'Коротко — с чего начать. Эти подсказки всегда под кнопкой «Справка» в шапке.' : 'Что делать в системе — по вашей роли.'}</p></header>
     <div class="body">${sections.map(([title, steps]) => `<section><h4>${esc(title)}</h4>
       <ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></section>`).join('')}</div>
     <footer><button class="btn primary" data-act="ok">Понятно</button></footer></div>`;
-  const close = () => box.remove();
+  const release = holdModal(box);
+  const close = () => { box.remove(); release(); };
   box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-act]')) close(); });
-  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(); } });
   document.body.appendChild(box);
   box.querySelector('[data-act]').focus();
 }
@@ -314,3 +352,144 @@ function mountHelp(host, me, module) {
   try { seen = !!localStorage.getItem(key); localStorage.setItem(key, '1'); } catch { /* хранилище недоступно — без приветствия */ }
   if (!seen) showHelp(me, module, true);
 }
+
+/* ------------------------------ модальные окна ------------------------------
+   Пока открыт диалог или карточка, остальная страница «инертна»: Tab не уходит за окно,
+   экранный диктор не читает фон. После закрытия фокус возвращается туда, откуда открыли. */
+
+function holdModal(el) {
+  const opener = document.activeElement;
+  // Сообщения (toast) не глушим: они должны звучать и поверх окна.
+  const muted = [...document.body.children].filter((x) => x !== el && !x.inert && x.tagName !== 'SCRIPT' && x.id !== 'toast');
+  muted.forEach((x) => { x.inert = true; });
+  return () => {
+    muted.forEach((x) => { x.inert = false; });
+    if (opener && opener !== document.body && opener.isConnected && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
+  };
+}
+
+/** Фокус на первое поле с ошибкой — после неудачной проверки формы. */
+function focusFirstError(root = document) {
+  // Сначала само поле; если в блоке с ошибкой поля нет (список отметок), — весь блок.
+  const bad = root.querySelector('.field.bad input:not([type=hidden]), .field.bad select, .field.bad textarea')
+    || root.querySelector('.field.bad, .blocked');
+  if (!bad) return;
+  if (!bad.matches('input,select,textarea')) bad.setAttribute('tabindex', '-1');
+  bad.focus();
+}
+
+/**
+ * Боковая карточка (#sheet) — модальное окно: имя из заголовка, фокус внутрь при открытии
+ * и обратно при закрытии. Карточку открывают из многих мест добавлением класса «on»,
+ * поэтому за открытием следим здесь, а не в каждом из них.
+ */
+function watchSheet() {
+  const sheet = document.getElementById('sheet');
+  const panel = document.getElementById('sheetPanel');
+  if (!sheet || !panel) return;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.tabIndex = -1;
+  let release = null;
+  new MutationObserver(() => {
+    const open = sheet.classList.contains('on');
+    if (open && !release) {
+      release = holdModal(sheet);
+      panel.scrollTop = 0;
+      panel.focus({ preventScroll: true });
+    } else if (!open && release) {
+      release();
+      release = null;
+    }
+  }).observe(sheet, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver(() => {
+    const heading = panel.querySelector('h2');
+    if (heading) {
+      heading.id ||= 'sheetTitle';
+      panel.setAttribute('aria-labelledby', heading.id);
+    }
+    // Содержимое перерисовано вместе с полем в фокусе — фокус остаётся в карточке, а не уходит на страницу.
+    if (release && (document.activeElement === document.body || !document.activeElement)) panel.focus({ preventScroll: true });
+  }).observe(panel, { childList: true });
+}
+
+/* Escape: сначала закрывается верхнее — меню на телефоне, затем карточка. Диалоги и колокольчик
+   закрываются своими обработчиками и отменяют событие. */
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || ev.defaultPrevented || document.querySelector('.dlg')) return;
+  const side = document.querySelector('.side.open');
+  if (side) {
+    side.classList.remove('open');
+    document.querySelector('.menu-toggle')?.focus();
+    return;
+  }
+  if (document.getElementById('sheet')?.classList.contains('on') && typeof closeSheet === 'function') {
+    ev.preventDefault();
+    closeSheet();
+  }
+});
+
+/* ---------------------------- ссылки и строки ----------------------------
+   Карточка заявки, задача, строка реестра — настоящие ссылки на адрес в приложении:
+   доходят с клавиатуры, Ctrl+щелчок и колесо мыши открывают новую вкладку.
+   Обычный щелчок выполняет действие на месте, без перезагрузки. */
+
+/** Щелчок без клавиш-модификаторов — действие внутри приложения. */
+const plainClick = (ev) => ev.button === 0 && !(ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey);
+
+/** Ссылка с действием: адрес для новой вкладки, `action` — код для обычного щелчка. */
+const appLink = (href, action, inner, attrs = '') =>
+  `<a href="${esc(href)}" ${attrs} onclick="if(plainClick(event)){event.preventDefault();${esc(action)}}">${inner}</a>`;
+
+/* Строка .row-link откликается на щелчок целиком, но действие у неё одно — .row-main в первой ячейке.
+   Щелчок по своим ссылкам и кнопкам строки и выделение текста мышью строку не открывают. */
+document.addEventListener('click', (ev) => {
+  const row = ev.target.closest('.row-link');
+  if (!row || ev.target.closest('a,button,input,select,textarea,label')) return;
+  if (String(window.getSelection?.() || '')) return;
+  row.querySelector('.row-main')?.click();
+});
+
+/* ------------------------------- поля форм -------------------------------
+   Подпись связывается с полем (щелчок по подписи ставит курсор, диктор читает её), ошибка
+   и подсказка — с полем через aria-describedby, поле с ошибкой помечено aria-invalid.
+   Разметку рисуют десятки шаблонов, поэтому связи проставляются после каждой отрисовки. */
+
+let fieldSeq = 0;
+const CONTROL = 'input:not([type=hidden]),select,textarea';
+function linkFields() {
+  for (const label of document.querySelectorAll('label:not([for])')) {
+    if (label.querySelector(CONTROL) || !label.parentElement) continue;
+    const control = [...label.parentElement.querySelectorAll(CONTROL)].find((c) =>
+      label.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING && !c.closest('label'));
+    if (!control) continue;
+    control.id ||= 'fld-' + (++fieldSeq);
+    label.htmlFor = control.id;
+  }
+  for (const field of document.querySelectorAll('.field')) {
+    const control = field.querySelector(CONTROL);
+    if (!control) continue;
+    const bad = field.classList.contains('bad');
+    const notes = [...field.querySelectorAll(':scope > .hint, :scope > .err')].filter((n) => n.classList.contains('hint') || bad);
+    notes.forEach((n) => { n.id ||= 'fld-note-' + (++fieldSeq); });
+    const ids = notes.map((n) => n.id).join(' ');
+    if (ids) control.setAttribute('aria-describedby', ids); else control.removeAttribute('aria-describedby');
+    if (bad) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
+  }
+}
+let fieldsQueued = false;
+function watchFields() {
+  new MutationObserver(() => {
+    if (fieldsQueued) return;
+    fieldsQueued = true;
+    queueMicrotask(() => { fieldsQueued = false; linkFields(); });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  linkFields();
+}
+
+if (document.body) {
+  toastBox();
+  watchSheet();
+  watchFields();
+}
+
